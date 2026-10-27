@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     META_AI_MODEL: str = Field(default="meta-llama/Llama-3.3-70B-Instruct", description="Exact model name or ID")
     META_AI_TEMPERATURE: float = Field(default=0.1, description="Sampling temperature")
     META_AI_MAX_TOKENS: int = Field(default=3000, description="Max completion tokens")
+    META_AI_MAX_RETRIES: int = Field(default=2, ge=0, le=5, description="Retries after transient inference failures")
+    META_AI_RETRY_BACKOFF_SECONDS: float = Field(default=0.5, ge=0, le=10, description="Initial retry delay")
 
     model_config = SettingsConfigDict(
         env_file=".env",

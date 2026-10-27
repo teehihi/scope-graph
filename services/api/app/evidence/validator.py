@@ -1,10 +1,21 @@
-import os
 import logging
+from pathlib import Path
 from typing import Any
 from sqlalchemy.orm import Session
-from app.db.models import IndexedFile, IndexedSymbol, DependencyEdge
+from app.db.models import IndexedFile, IndexedSymbol
 
 logger = logging.getLogger(__name__)
+
+
+def _is_safe_relative_path(path: str) -> bool:
+    parts = path.split("/")
+    return (
+        bool(path)
+        and all(part not in ("", ".", "..") for part in parts)
+        and ":" not in parts[0]
+        and "\x00" not in path
+    )
+
 
 class ValidatedImpactItem:
     def __init__(
@@ -28,6 +39,9 @@ class ValidatedImpactItem:
         self.reason = reason
         self.confidence = confidence
         self.is_verified_fact = is_verified_fact
+        self.existence_verified = is_verified_fact
+        # An indexed file/symbol proves existence, not the model's impact reasoning.
+        self.impact_supported = False
         self.evidence_snippet = evidence_snippet
         self.line_start = line_start
         self.line_end = line_end
@@ -42,6 +56,8 @@ class ValidatedImpactItem:
             "reason": self.reason,
             "confidence": self.confidence,
             "is_verified_fact": self.is_verified_fact,
+            "existence_verified": self.existence_verified,
+            "impact_supported": self.impact_supported,
             "evidence_snippet": self.evidence_snippet,
             "line_start": self.line_start,
             "line_end": self.line_end,
@@ -54,18 +70,23 @@ class EvidenceValidator:
         self.workspace_root = workspace_root
 
     def _extract_source_snippet(self, rel_path: str, line_start: int | None, line_end: int | None) -> str | None:
-        if not self.workspace_root or not os.path.exists(self.workspace_root):
+        if not self.workspace_root:
             return None
-        abs_path = os.path.join(self.workspace_root, rel_path)
-        if not os.path.exists(abs_path):
+        root = Path(self.workspace_root).resolve()
+        abs_path = (root / rel_path).resolve()
+        try:
+            abs_path.relative_to(root)
+        except ValueError:
+            return None
+        if not abs_path.is_file():
             return None
 
         try:
-            with open(abs_path, "r", encoding="utf-8", errors="replace") as f:
+            with abs_path.open("r", encoding="utf-8", errors="replace") as f:
                 lines = f.readlines()
 
             if line_start is not None and 1 <= line_start <= len(lines):
-                end = line_end if (line_end and line_end <= len(lines)) else min(line_start + 15, len(lines))
+                end = line_end if (line_end and line_start <= line_end <= len(lines)) else min(line_start + 15, len(lines))
                 # Return snippet with line numbers
                 snippet_lines = []
                 for idx in range(line_start - 1, end):
@@ -84,67 +105,70 @@ class EvidenceValidator:
         Validates every claim returned by Meta AI against the repository index.
         Disallows hallucinations, verifies symbols and files, attaches source snippets.
         """
-        db_files = {f.path: f for f in self.db.query(IndexedFile).filter(IndexedFile.repository_id == repository_id).all()}
+        db_files = [
+            f for f in self.db.query(IndexedFile).filter(IndexedFile.repository_id == repository_id).all()
+            if _is_safe_relative_path(f.path.replace("\\", "/"))
+        ]
         db_symbols = self.db.query(IndexedSymbol).filter(IndexedSymbol.repository_id == repository_id).all()
 
-        # Map by (file_path, symbol_name) and by symbol_name
-        symbols_by_file_and_name: dict[tuple[str, str], IndexedSymbol] = {}
-        symbols_by_name: dict[str, list[IndexedSymbol]] = {}
+        symbols_by_file_and_name: dict[tuple[str, str], list[IndexedSymbol]] = {}
         for s in db_symbols:
-            f_rec = next((f for f in db_files.values() if f.id == s.file_id), None)
-            if f_rec:
-                symbols_by_file_and_name[(f_rec.path, s.name)] = s
-            symbols_by_name.setdefault(s.name, []).append(s)
+            symbols_by_file_and_name.setdefault((s.file_id, s.name), []).append(s)
 
         raw_items = raw_impact_data.get("affected_items", [])
         verified_items: list[dict[str, Any]] = []
         rejected_hallucinations: list[dict[str, Any]] = []
 
         for item in raw_items:
-            candidate_path = item.get("file_path", "").strip()
+            claimed_path = item.get("file_path")
             candidate_symbol = item.get("symbol")
 
-            # Check if file exists in index
-            matched_file = db_files.get(candidate_path)
-            if not matched_file:
-                # Attempt suffix match in case model omitted leading path
-                for path, f_rec in db_files.items():
-                    if path.endswith(candidate_path) or candidate_path.endswith(path):
-                        matched_file = f_rec
-                        candidate_path = path
-                        break
+            if not isinstance(claimed_path, str):
+                candidate_path = ""
+            else:
+                candidate_path = claimed_path.strip().replace("\\", "/")
 
-            if not matched_file:
+            if not _is_safe_relative_path(candidate_path):
                 rejected_hallucinations.append({
-                    "claimed_path": candidate_path,
+                    "claimed_path": claimed_path,
                     "claimed_symbol": candidate_symbol,
-                    "reason": "File does not exist in indexed repository"
+                    "reason": "Invalid or empty file path"
                 })
                 continue
 
-            # Check if symbol exists
-            is_verified = False
+            matches = [f for f in db_files if f.path.replace("\\", "/") == candidate_path]
+            if not matches:
+                matches = [f for f in db_files if f.path.replace("\\", "/").endswith("/" + candidate_path)]
+            if len(matches) != 1:
+                rejected_hallucinations.append({
+                    "claimed_path": claimed_path,
+                    "claimed_symbol": candidate_symbol,
+                    "reason": "Ambiguous file path" if matches else "File does not exist in indexed repository"
+                })
+                continue
+
+            matched_file = matches[0]
+            candidate_path = matched_file.path
             line_start = None
             line_end = None
             symbol_type = None
 
-            if candidate_symbol:
-                key = (candidate_path, candidate_symbol)
-                if key in symbols_by_file_and_name:
-                    sym_rec = symbols_by_file_and_name[key]
-                    is_verified = True
-                    line_start = sym_rec.line_start
-                    line_end = sym_rec.line_end
-                    symbol_type = sym_rec.symbol_type
-                elif candidate_symbol in symbols_by_name:
-                    sym_rec = symbols_by_name[candidate_symbol][0]
-                    is_verified = True
-                    line_start = sym_rec.line_start
-                    line_end = sym_rec.line_end
-                    symbol_type = sym_rec.symbol_type
-            else:
-                # File itself exists
-                is_verified = True
+            if candidate_symbol is not None:
+                symbol_matches = (
+                    symbols_by_file_and_name.get((matched_file.id, candidate_symbol), [])
+                    if isinstance(candidate_symbol, str) and candidate_symbol else []
+                )
+                if len(symbol_matches) != 1:
+                    rejected_hallucinations.append({
+                        "claimed_path": claimed_path,
+                        "claimed_symbol": candidate_symbol,
+                        "reason": "Symbol is missing or ambiguous in the claimed file"
+                    })
+                    continue
+                sym_rec = symbol_matches[0]
+                line_start = sym_rec.line_start
+                line_end = sym_rec.line_end
+                symbol_type = sym_rec.symbol_type
 
             snippet = self._extract_source_snippet(candidate_path, line_start, line_end)
 
@@ -155,7 +179,7 @@ class EvidenceValidator:
                 category=item.get("category", "backend"),
                 reason=item.get("reason", "Identified by impact reasoning engine"),
                 confidence=float(item.get("confidence", 0.7)),
-                is_verified_fact=is_verified,
+                is_verified_fact=True,
                 evidence_snippet=snippet,
                 line_start=line_start,
                 line_end=line_end,
@@ -164,7 +188,7 @@ class EvidenceValidator:
             verified_items.append(val_item.to_dict())
 
         total_claims = len(verified_items) + len(rejected_hallucinations)
-        grounding_score = (len(verified_items) / total_claims) if total_claims > 0 else 1.0
+        grounding_score = (len(verified_items) / total_claims) if total_claims > 0 else 0.0
 
         return {
             "affected_items": verified_items,
@@ -175,6 +199,8 @@ class EvidenceValidator:
             "validation_metrics": {
                 "total_claims": total_claims,
                 "verified_claims": len(verified_items),
+                "existence_verified_claims": len(verified_items),
+                "impact_supported_claims": 0,
                 "rejected_hallucinations": len(rejected_hallucinations),
                 "grounding_ratio": round(grounding_score, 2),
             }

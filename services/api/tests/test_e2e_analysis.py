@@ -1,12 +1,17 @@
 import os
 import json
+import time
+import httpx
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from app.db.database import Base
-from app.db.models import Repository
+from app.db.models import Repository, IndexedFile, IndexedSymbol
 from app.indexing.engine import IndexingEngine
 from app.analysis.orchestrator import AnalysisOrchestrator
+from app.analysis import orchestrator as orchestrator_module
+from app.ai.provider import MetaAIHttpProvider
+from app.core.config import settings
 from app.mcp import server as mcp_server
 
 @pytest.fixture
@@ -56,6 +61,11 @@ def test_full_e2e_indexing_and_analysis(test_db):
     assert report is not None
     assert "affected_items" in report
     assert len(report["affected_items"]) > 0
+    assert run.provider == "offline_demo"
+    assert run.model == "deterministic-semantic-matcher"
+    assert report["operational_metadata"]["model"] == "deterministic-semantic-matcher"
+    assert report["operational_metadata"]["structured_inference_latency_seconds"] >= 0
+    assert report["operational_metadata"]["token_usage"] is None
 
     # Ensure critical files are identified
     affected_paths = [item["file_path"] for item in report["affected_items"]]
@@ -97,3 +107,73 @@ def test_full_e2e_indexing_and_analysis(test_db):
         assert "test_update_user_email_direct" in test_names
     finally:
         mcp_server.SessionLocal = orig_session_local
+
+
+def test_mocked_live_report_records_all_inference_usage(test_db, tmp_path, monkeypatch):
+    source = tmp_path / "app/services/user_service.py"
+    source.parent.mkdir(parents=True)
+    source.write_text("def update_user_email():\n    pass\n", encoding="utf-8")
+    test_db.add(Repository(id="live-repo", name="Live Mock", workspace_path=str(tmp_path), status="ready"))
+    test_db.add(IndexedFile(id="live-file", repository_id="live-repo", path="app/services/user_service.py"))
+    test_db.add(IndexedSymbol(id="live-symbol", repository_id="live-repo", file_id="live-file", name="update_user_email", symbol_type="function", line_start=1, line_end=2))
+    test_db.commit()
+
+    interpretation = {
+        "business_intent": "Verify email changes", "actors": ["user"],
+        "existing_behavior": "Immediate update", "desired_behavior": "Verify first",
+        "preconditions": [], "postconditions": [], "security_implications": [],
+        "validation_requirements": [], "affected_layers": ["service"],
+        "search_keywords": ["email"], "ambiguities": [],
+    }
+    impact = {
+        "affected_items": [{"file_path": "app/services/user_service.py", "symbol": "update_user_email", "impact_type": "direct", "category": "service", "reason": "Email update", "confidence": 0.9}],
+        "risks": [], "suggested_tests": [], "assumptions": [],
+    }
+    review = {"areas_reviewed": ["service"], "is_complete": True, "potential_gaps": [], "additional_files_to_check": []}
+    contents = [json.dumps(interpretation), json.dumps(impact), json.dumps(review), "# Brief"]
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        if len(requests) == 4:
+            time.sleep(0.06)
+        return httpx.Response(200, json={
+            "model": "served-model",
+            "choices": [{"message": {"content": contents[len(requests) - 1]}}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3},
+        })
+
+    provider = MetaAIHttpProvider("test-key", "https://mock.example/v1", "requested-model", "fireworks")
+    provider.client.close()
+    provider.client = httpx.Client(transport=httpx.MockTransport(handler))
+    monkeypatch.setattr(orchestrator_module, "get_ai_provider", lambda: provider)
+    try:
+        run = AnalysisOrchestrator(test_db).run_analysis("live-repo", "Verify email changes")
+    finally:
+        provider.client.close()
+
+    assert run.status == "completed"
+    assert len(requests) == 4
+    assert run.provider == "fireworks"
+    assert run.model == "served-model"
+    metadata = run.result_json["operational_metadata"]
+    assert metadata["provider"] == "fireworks"
+    assert metadata["model"] == "served-model"
+    assert metadata["is_demo_mode"] is False
+    assert metadata["token_usage"] == {"prompt_tokens": 4, "completion_tokens": 8, "total_tokens": 12}
+    assert metadata["inference_latency_seconds"] >= metadata["structured_inference_latency_seconds"]
+    assert metadata["execution_time_seconds"] == round(run.execution_time_seconds, 2)
+
+
+def test_configured_live_provider_without_key_records_failed_run(test_db, tmp_path, monkeypatch):
+    test_db.add(Repository(id="no-key-repo", name="No Key", workspace_path=str(tmp_path), status="ready"))
+    test_db.commit()
+    monkeypatch.setattr(settings, "META_AI_PROVIDER", "fireworks")
+    monkeypatch.setattr(settings, "META_AI_API_KEY", "")
+
+    run = AnalysisOrchestrator(test_db).run_analysis("no-key-repo", "Verify email")
+
+    assert run.status == "failed"
+    assert run.provider == "fireworks"
+    assert "API key" in run.error_message
+    assert not run.result_json

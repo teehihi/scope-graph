@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Repository, IndexedFile, IndexedSymbol, AnalysisRun
 from app.graph.engine import GraphEngine
 from app.ai.provider import get_ai_provider
+from app.core.config import settings
 from app.evidence.validator import EvidenceValidator
 
 logger = logging.getLogger(__name__)
@@ -23,7 +24,6 @@ class AnalysisOrchestrator:
             raise ValueError(f"Repository is not ready for analysis (current status: {repo.status})")
 
         start_time = time.time()
-        provider = get_ai_provider()
 
         # Find or create AnalysisRun record
         if analysis_id:
@@ -36,11 +36,16 @@ class AnalysisOrchestrator:
             self.db.add(run)
 
         run.status = "processing"
-        run.provider = getattr(provider, "provider_name", "offline_demo")
-        run.model = getattr(provider, "model", "semantic-engine")
+        run.provider = settings.META_AI_PROVIDER
+        run.model = settings.META_AI_MODEL
         self.db.commit()
 
         try:
+            provider = get_ai_provider()
+            run.provider = getattr(provider, "provider_name", run.provider)
+            run.model = getattr(provider, "model", run.model)
+            self.db.commit()
+
             # Step 1: Interpret Requirement
             logger.info("Step 1: Interpreting requirement '%s'", requirement[:60])
             interpretation_resp = provider.interpret_requirement(requirement)
@@ -103,6 +108,12 @@ class AnalysisOrchestrator:
                 repository_context=repo_file_map,
             )
             completeness = completeness_resp.data
+            inference_responses = (interpretation_resp, reasoning_resp, completeness_resp)
+            usage_records = [resp.token_usage for resp in inference_responses if resp.token_usage]
+            token_usage = (
+                {key: sum(usage.get(key, 0) for usage in usage_records) for key in set().union(*(usage.keys() for usage in usage_records))}
+                if usage_records else None
+            )
 
             # Step 6: Validate Claims against Actual Repository Index
             logger.info("Step 6: Validating claims against ground-truth index")
@@ -121,9 +132,11 @@ class AnalysisOrchestrator:
                 "validation_metrics": validated["validation_metrics"],
                 "rejected_hallucinations": validated["rejected_hallucinations"],
                 "operational_metadata": {
-                    "provider": getattr(provider, "provider_name", "offline_demo"),
-                    "model": getattr(provider, "model", "meta-llama"),
-                    "is_demo_mode": getattr(reasoning_resp, "is_mock_or_demo", False),
+                    "provider": reasoning_resp.provider,
+                    "model": reasoning_resp.model,
+                    "is_demo_mode": reasoning_resp.is_mock_or_demo,
+                    "structured_inference_latency_seconds": round(sum(resp.latency_seconds for resp in inference_responses), 3),
+                    "token_usage": token_usage,
                     "execution_time_seconds": round(time.time() - start_time, 2),
                     "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 }
@@ -132,10 +145,24 @@ class AnalysisOrchestrator:
             # Step 7: Generate Implementation Brief
             logger.info("Step 7: Generating implementation brief for coding agents")
             brief_md = provider.generate_implementation_brief(requirement, final_report)
+            metadata = final_report["operational_metadata"]
+            brief_latency = getattr(provider, "brief_latency_seconds", 0.0)
+            metadata["inference_latency_seconds"] = round(
+                sum(resp.latency_seconds for resp in inference_responses) + brief_latency, 3
+            )
+            brief_usage = getattr(provider, "brief_token_usage", None)
+            if brief_usage:
+                total_usage = metadata["token_usage"] or {}
+                for key, value in brief_usage.items():
+                    total_usage[key] = total_usage.get(key, 0) + value
+                metadata["token_usage"] = total_usage
 
             # Update database record
             total_duration = time.time() - start_time
+            metadata["execution_time_seconds"] = round(total_duration, 2)
             run.status = "completed"
+            run.provider = reasoning_resp.provider
+            run.model = reasoning_resp.model
             run.result_json = final_report
             run.brief_markdown = brief_md
             run.execution_time_seconds = total_duration

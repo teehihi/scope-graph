@@ -3,6 +3,8 @@ import logging
 import time
 from typing import Any
 import httpx
+from pydantic import BaseModel, ValidationError
+from app.ai.schemas import RequirementInterpretation, ImpactAnalysisResult, CompletenessReview
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -15,7 +17,8 @@ class AIProviderResponse:
         model: str,
         latency_seconds: float,
         is_mock_or_demo: bool = False,
-        raw_response: str | None = None
+        raw_response: str | None = None,
+        token_usage: dict[str, int] | None = None,
     ):
         self.data = data
         self.provider = provider
@@ -23,6 +26,7 @@ class AIProviderResponse:
         self.latency_seconds = latency_seconds
         self.is_mock_or_demo = is_mock_or_demo
         self.raw_response = raw_response
+        self.token_usage = token_usage
 
 class BaseMetaAIProvider:
     def interpret_requirement(self, requirement: str) -> AIProviderResponse:
@@ -62,6 +66,10 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.provider_name = provider_name
+        self.max_retries = settings.META_AI_MAX_RETRIES
+        self.retry_backoff_seconds = settings.META_AI_RETRY_BACKOFF_SECONDS
+        self.brief_latency_seconds = 0.0
+        self.brief_token_usage: dict[str, int] | None = None
         self.client = httpx.Client(
             headers={
                 "Authorization": f"Bearer {self.api_key}",
@@ -70,8 +78,8 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
             timeout=45.0,
         )
 
-    def _call_model(self, system_prompt: str, user_prompt: str, expect_json: bool = True) -> tuple[dict[str, Any] | str, float]:
-        start = time.time()
+    def _call_model(self, system_prompt: str, user_prompt: str, expect_json: bool = True) -> tuple[dict[str, Any] | str, float, str, dict[str, int] | None]:
+        start = time.perf_counter()
         url = f"{self.base_url}/chat/completions"
         payload = {
             "model": self.model,
@@ -85,18 +93,51 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
         if expect_json:
             payload["response_format"] = {"type": "json_object"}
 
-        response = self.client.post(url, json=payload)
-        latency = time.time() - start
+        for attempt in range(self.max_retries + 1):
+            try:
+                response = self.client.post(url, json=payload)
+            except httpx.TimeoutException:
+                if attempt == self.max_retries:
+                    raise ValueError(f"Meta AI request timeout on {self.provider_name}") from None
+            except httpx.TransportError:
+                if attempt == self.max_retries:
+                    raise ValueError(f"Meta AI connection failed on {self.provider_name}") from None
+            else:
+                if response.status_code == 429 or 500 <= response.status_code < 600:
+                    if attempt == self.max_retries:
+                        raise ValueError(f"Meta AI inference failed with status {response.status_code} on {self.provider_name}")
+                elif response.status_code in (401, 403):
+                    raise ValueError(f"Meta AI authentication failed on {self.provider_name}")
+                elif response.status_code >= 400:
+                    raise ValueError(f"Meta AI inference failed with status {response.status_code} on {self.provider_name}")
+                else:
+                    break
+            if self.retry_backoff_seconds:
+                time.sleep(self.retry_backoff_seconds * (2 ** attempt))
 
-        if response.status_code == 401:
-            raise ValueError(f"Meta AI authentication failed: Invalid or missing API key for {self.provider_name}")
-        elif response.status_code == 429:
-            raise ValueError(f"Meta AI rate limit exceeded or quota exhausted on {self.provider_name}")
-        elif response.status_code >= 400:
-            raise ValueError(f"Meta AI inference failed with status {response.status_code}: {response.text[:200]}")
+        try:
+            resp_json = response.json()
+        except ValueError:
+            raise ValueError("Meta AI returned malformed response JSON") from None
+        if not isinstance(resp_json, dict):
+            raise ValueError("Meta AI returned invalid response structure")
+        choices = resp_json.get("choices")
+        if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
+            raise ValueError("Meta AI response is missing choices")
+        message = choices[0].get("message")
+        content = message.get("content") if isinstance(message, dict) else None
+        if not isinstance(content, str) or not content.strip():
+            raise ValueError("Meta AI response is missing message content")
+        actual_model = resp_json.get("model")
+        if not isinstance(actual_model, str) or not actual_model.strip():
+            raise ValueError("Meta AI response is missing model identity")
 
-        resp_json = response.json()
-        content = resp_json["choices"][0]["message"]["content"]
+        raw_usage = resp_json.get("usage")
+        token_usage = (
+            {key: value for key, value in raw_usage.items() if isinstance(key, str) and type(value) is int and value >= 0}
+            if isinstance(raw_usage, dict) else None
+        )
+        latency = time.perf_counter() - start
 
         if expect_json:
             try:
@@ -109,12 +150,24 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
                 if clean_content.endswith("```"):
                     clean_content = clean_content[:-3]
                 parsed = json.loads(clean_content.strip())
-                return parsed, latency
-            except json.JSONDecodeError as err:
-                logger.error("Failed to decode model JSON: %s. Raw: %s", err, content[:300])
-                raise ValueError(f"Meta AI returned non-JSON response: {str(err)}")
+                if not isinstance(parsed, dict):
+                    raise ValueError("Meta AI returned a non-object JSON response")
+                return parsed, latency, actual_model, token_usage
+            except json.JSONDecodeError:
+                raise ValueError("Meta AI returned malformed model JSON") from None
 
-        return content, latency
+        return content, latency, actual_model, token_usage
+
+    def _validated_response(self, schema: type[BaseModel], system_prompt: str, user_prompt: str) -> AIProviderResponse:
+        data, latency, model, token_usage = self._call_model(system_prompt, user_prompt)
+        try:
+            validated = schema.model_validate(data)
+        except ValidationError:
+            raise ValueError(f"Meta AI returned invalid {schema.__name__} schema") from None
+        return AIProviderResponse(
+            data=validated.model_dump(), provider=self.provider_name, model=model,
+            latency_seconds=latency, token_usage=token_usage,
+        )
 
     def interpret_requirement(self, requirement: str) -> AIProviderResponse:
         system_prompt = (
@@ -132,8 +185,7 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
             "- 'search_keywords': list[str] (names of functions, models, or tokens likely to be involved)\n"
             "- 'ambiguities': list[str]"
         )
-        data, latency = self._call_model(system_prompt, f"Requirement: {requirement}")
-        return AIProviderResponse(data=data, provider=self.provider_name, model=self.model, latency_seconds=latency)
+        return self._validated_response(RequirementInterpretation, system_prompt, f"Requirement: {requirement}")
 
     def reason_about_impact(
         self,
@@ -168,8 +220,7 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
             f"Indexed Files Context: {json.dumps(retrieved_files)}\n\n"
             f"Graph Dependency Context: {json.dumps(dependency_context)}"
         )
-        data, latency = self._call_model(system_prompt, user_prompt)
-        return AIProviderResponse(data=data, provider=self.provider_name, model=self.model, latency_seconds=latency)
+        return self._validated_response(ImpactAnalysisResult, system_prompt, user_prompt)
 
     def review_completeness(
         self,
@@ -193,8 +244,7 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
             f"Proposed Impact: {json.dumps(proposed_impact)}\n\n"
             f"Repository Files: {json.dumps(list(repository_context.keys()))}"
         )
-        data, latency = self._call_model(system_prompt, user_prompt)
-        return AIProviderResponse(data=data, provider=self.provider_name, model=self.model, latency_seconds=latency)
+        return self._validated_response(CompletenessReview, system_prompt, user_prompt)
 
     def generate_implementation_brief(
         self,
@@ -213,7 +263,9 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
             "6. Regression Risks & Pre-flight Checklist"
         )
         user_prompt = f"Requirement: {requirement}\n\nValidated Impact: {json.dumps(validated_impact, indent=2)}"
-        content, _ = self._call_model(system_prompt, user_prompt, expect_json=False)
+        content, latency, _, token_usage = self._call_model(system_prompt, user_prompt, expect_json=False)
+        self.brief_latency_seconds = latency
+        self.brief_token_usage = token_usage
         return content
 
 
@@ -223,8 +275,11 @@ class OfflineDemoProvider(BaseMetaAIProvider):
     Grounds its analysis in the actual indexed symbols, AST parser results, and graph dependencies.
     Transparently labels itself to adhere to non-negotiable hackathon integrity requirements.
     """
+    provider_name = "offline_demo"
+    model = "deterministic-semantic-matcher"
 
     def interpret_requirement(self, requirement: str) -> AIProviderResponse:
+        start = time.perf_counter()
         req_lower = requirement.lower()
         keywords = []
         for word in ["email", "verification", "verify", "token", "user", "auth", "login", "password", "update"]:
@@ -246,9 +301,9 @@ class OfflineDemoProvider(BaseMetaAIProvider):
         }
         return AIProviderResponse(
             data=data,
-            provider="offline_demo",
-            model="deterministic-semantic-matcher",
-            latency_seconds=0.05,
+            provider=self.provider_name,
+            model=self.model,
+            latency_seconds=time.perf_counter() - start,
             is_mock_or_demo=True,
         )
 
@@ -258,6 +313,7 @@ class OfflineDemoProvider(BaseMetaAIProvider):
         retrieved_files: list[dict[str, Any]],
         dependency_context: dict[str, Any],
     ) -> AIProviderResponse:
+        start = time.perf_counter()
         keywords = set(requirement_interpretation.get("search_keywords", ["email", "user"]))
         affected_items = []
         suggested_tests = []
@@ -327,9 +383,9 @@ class OfflineDemoProvider(BaseMetaAIProvider):
         }
         return AIProviderResponse(
             data=data,
-            provider="offline_demo",
-            model="deterministic-semantic-matcher",
-            latency_seconds=0.08,
+            provider=self.provider_name,
+            model=self.model,
+            latency_seconds=time.perf_counter() - start,
             is_mock_or_demo=True,
         )
 
@@ -339,6 +395,7 @@ class OfflineDemoProvider(BaseMetaAIProvider):
         proposed_impact: dict[str, Any],
         repository_context: dict[str, Any],
     ) -> AIProviderResponse:
+        start = time.perf_counter()
         affected_files = [item["file_path"] for item in proposed_impact.get("affected_items", [])]
         has_test = any("test" in p for p in affected_files)
         has_api = any("api" in p for p in affected_files)
@@ -359,9 +416,9 @@ class OfflineDemoProvider(BaseMetaAIProvider):
         }
         return AIProviderResponse(
             data=data,
-            provider="offline_demo",
-            model="deterministic-semantic-matcher",
-            latency_seconds=0.02,
+            provider=self.provider_name,
+            model=self.model,
+            latency_seconds=time.perf_counter() - start,
             is_mock_or_demo=True,
         )
 
@@ -437,14 +494,20 @@ def get_ai_provider() -> BaseMetaAIProvider:
     provider_type = settings.META_AI_PROVIDER.lower().strip()
     api_key = settings.META_AI_API_KEY.strip()
 
-    if api_key and provider_type not in ("offline_demo", "none"):
-        logger.info("Initializing Meta AI HTTP Provider (%s, model=%s)", provider_type, settings.META_AI_MODEL)
-        return MetaAIHttpProvider(
-            api_key=api_key,
-            base_url=settings.META_AI_BASE_URL,
-            model=settings.META_AI_MODEL,
-            provider_name=provider_type,
-        )
+    if provider_type in ("offline_demo", "none"):
+        logger.info("Running ScopeGraph with OfflineDemoProvider")
+        return OfflineDemoProvider()
 
-    logger.info("Running ScopeGraph with OfflineDemoProvider (no external API key configured)")
-    return OfflineDemoProvider()
+    supported = {"meta_model_api", "fireworks", "baseten", "modal", "together", "groq", "generic_openai_compat"}
+    if provider_type not in supported:
+        raise ValueError(f"Unsupported Meta AI provider: {provider_type}")
+    if not api_key:
+        raise ValueError(f"Meta AI API key is required for configured provider {provider_type}")
+
+    logger.info("Initializing Meta AI HTTP Provider (%s, model=%s)", provider_type, settings.META_AI_MODEL)
+    return MetaAIHttpProvider(
+        api_key=api_key,
+        base_url=settings.META_AI_BASE_URL,
+        model=settings.META_AI_MODEL,
+        provider_name=provider_type,
+    )
