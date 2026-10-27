@@ -2,7 +2,7 @@ import os
 import sys
 import logging
 from redis import Redis
-from rq import Worker, Queue, Connection
+from rq import Worker, Queue
 from app.core.config import settings
 from app.core.logging import setup_logging
 
@@ -19,10 +19,9 @@ def start_worker():
         sys.exit(1)
 
     listen_queues = ["scopegraph_jobs"]
-    with Connection(redis_conn):
-        worker = Worker(map(Queue, listen_queues))
-        logger.info("ScopeGraph Worker ready and listening on queues: %s", listen_queues)
-        worker.work()
+    logger.info("ScopeGraph Worker ready and listening on queues: %s", listen_queues)
+    worker = Worker(listen_queues, connection=redis_conn)
+    worker.work()
 
 if __name__ == "__main__":
     start_worker()
