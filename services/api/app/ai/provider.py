@@ -197,6 +197,11 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
             "You are a principal engineer conducting a code impact analysis.\n"
             "Given a requirement and real indexed repository files with symbols and dependencies,\n"
             "identify which files and symbols are directly or indirectly affected.\n"
+            "Graph edges run from an importing/calling file to its dependency: upstream means dependencies, "
+            "downstream means callers/dependents. Use the supplied paths to explain any cascade.\n"
+            "A graph connection alone is only a potential impact. Mark direct only for a requirement-specific "
+            "change target; mark indirect only when the dependency path and requirement support a plausible "
+            "cascade. Put uncertain possibilities in risks or assumptions.\n"
             "CRITICAL: Do NOT invent file paths or symbols. Only reference items provided in the repository context.\n"
             "Respond ONLY with a JSON object matching:\n"
             "{\n"
@@ -349,14 +354,26 @@ class OfflineDemoProvider(BaseMetaAIProvider):
 
         # Add downstream dependents from dependency context
         for downstream_path in dependency_context.get("downstream", []):
+            # A dependency edge alone is a candidate, not proof of impact.
+            if not any(k in downstream_path.lower() for k in keywords):
+                continue
             if not any(item["file_path"] == downstream_path for item in affected_items):
+                lower_path = downstream_path.lower()
+                category = (
+                    "test" if "test" in lower_path else
+                    "api" if "api" in lower_path or "route" in lower_path else
+                    "model" if "model" in lower_path else
+                    "service" if "service" in lower_path else "module"
+                )
+                route = dependency_context.get("paths", {}).get("downstream", {}).get(downstream_path)
                 affected_items.append({
                     "file_path": downstream_path,
                     "symbol": None,
                     "impact_type": "indirect",
-                    "category": "service",
-                    "reason": "Direct caller of affected service layer in dependency graph",
-                    "confidence": 0.75,
+                    "category": category,
+                    "reason": "Requirement-matched downstream file via dependency path: " +
+                              (" -> ".join(route) if route else downstream_path),
+                    "confidence": 0.65,
                 })
 
         risks = [

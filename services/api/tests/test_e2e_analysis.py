@@ -6,11 +6,11 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from app.db.database import Base
-from app.db.models import Repository, IndexedFile, IndexedSymbol
+from app.db.models import Repository, IndexedFile, IndexedSymbol, DependencyEdge
 from app.indexing.engine import IndexingEngine
 from app.analysis.orchestrator import AnalysisOrchestrator
 from app.analysis import orchestrator as orchestrator_module
-from app.ai.provider import MetaAIHttpProvider
+from app.ai.provider import MetaAIHttpProvider, OfflineDemoProvider
 from app.core.config import settings
 from app.mcp import server as mcp_server
 
@@ -177,3 +177,58 @@ def test_configured_live_provider_without_key_records_failed_run(test_db, tmp_pa
     assert run.provider == "fireworks"
     assert "API key" in run.error_message
     assert not run.result_json
+
+
+def test_review_suggestions_are_grounded_and_graph_neighbors_stay_potential(test_db, tmp_path, monkeypatch):
+    for path in ("app/services/email.py", "app/api/routes.py", "app/config.py"):
+        source = tmp_path / path
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_text("# indexed source\n", encoding="utf-8")
+    test_db.add_all([
+        Repository(id="impact-repo", name="Impact", workspace_path=str(tmp_path), status="ready"),
+        Repository(id="other-repo", name="Other", workspace_path=str(tmp_path), status="ready"),
+        IndexedFile(id="impact-service", repository_id="impact-repo", path="app/services/email.py"),
+        IndexedFile(id="impact-route", repository_id="impact-repo", path="app/api/routes.py"),
+        IndexedFile(id="impact-config", repository_id="impact-repo", path="app/config.py"),
+        IndexedFile(id="other-secret", repository_id="other-repo", path="other/secret.py"),
+        DependencyEdge(repository_id="impact-repo", source_file_id="impact-route",
+                       target_file_id="impact-service", edge_type="imports"),
+    ])
+    test_db.commit()
+
+    class ReviewProvider(OfflineDemoProvider):
+        def reason_about_impact(self, requirement_interpretation, retrieved_files, dependency_context):
+            result = super().reason_about_impact(requirement_interpretation, retrieved_files, dependency_context)
+            result.data["affected_items"] = [{
+                "file_path": "app/services/email.py", "symbol": None, "impact_type": "direct",
+                "category": "service", "reason": "Email behavior changes here", "confidence": 0.9,
+            }]
+            return result
+
+        def review_completeness(self, requirement, proposed_impact, repository_context):
+            result = super().review_completeness(requirement, proposed_impact, repository_context)
+            result.data["is_complete"] = True
+            result.data["additional_files_to_check"] = [
+                "app/config.py", "missing.py", "../outside.py", "other/secret.py"
+            ]
+            return result
+
+    monkeypatch.setattr(orchestrator_module, "get_ai_provider", ReviewProvider)
+    run = AnalysisOrchestrator(test_db).run_analysis("impact-repo", "Verify email changes")
+
+    assert run.status == "completed"
+    report = run.result_json
+    assert [item["file_path"] for item in report["affected_items"]] == ["app/services/email.py"]
+    assert report["coverage_review"]["additional_files_to_check"] == ["app/config.py"]
+    assert report["coverage_review"]["is_complete"] is False
+    assert {item["claimed_path"] for item in report["coverage_review"]["rejected_file_suggestions"]} == {
+        "missing.py", "../outside.py", "other/secret.py",
+    }
+    potential = {item["file_path"]: item for item in report["potential_impacts"]}
+    assert set(potential) == {"app/api/routes.py", "app/config.py"}
+    assert potential["app/api/routes.py"]["dependency_paths"]["downstream"] == [
+        "app/services/email.py", "app/api/routes.py",
+    ]
+    assert potential["app/config.py"]["sources"] == ["completeness_review"]
+    assert all(item["impact_status"] == "potential" and item["impact_supported"] is False
+               for item in potential.values())

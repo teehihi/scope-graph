@@ -105,6 +105,68 @@ def test_http_provider_returns_validated_data_and_actual_metadata(provider_with_
     assert json.loads(requests[0].content)["model"] == "requested-model"
 
 
+def test_impact_prompt_explains_dependency_direction_and_uncertainty(provider_with_transport):
+    requests = []
+
+    def handler(request):
+        requests.append(json.loads(request.content))
+        return model_response(json.dumps(IMPACT))
+
+    context = {
+        "direct": ["app/services/user_service.py"],
+        "upstream": [],
+        "downstream": ["app/api/users.py"],
+        "paths": {"upstream": {}, "downstream": {
+            "app/api/users.py": ["app/services/user_service.py", "app/api/users.py"]
+        }},
+    }
+    provider_with_transport(handler).reason_about_impact(INTERPRETATION, [], context)
+
+    system_prompt, user_prompt = (message["content"] for message in requests[0]["messages"])
+    assert "upstream" in system_prompt and "downstream" in system_prompt
+    assert "potential" in system_prompt.lower()
+    assert context["paths"]["downstream"]["app/api/users.py"] == json.loads(
+        user_prompt.split("Graph Dependency Context: ", 1)[1]
+    )["paths"]["downstream"]["app/api/users.py"]
+
+
+def test_offline_provider_describes_transitive_dependent_as_indirect():
+    context = {
+        "direct": ["app/services/email.py"], "upstream": [],
+        "downstream": ["tests/test_email.py"],
+        "paths": {"upstream": {}, "downstream": {
+            "tests/test_email.py": ["app/services/email.py", "app/api/routes.py", "tests/test_email.py"]
+        }},
+    }
+    response = OfflineDemoProvider().reason_about_impact(
+        {"search_keywords": ["email"]},
+        [{"path": "app/services/email.py", "symbols": []}], context,
+    )
+
+    dependent = next(item for item in response.data["affected_items"]
+                     if item["file_path"] == "tests/test_email.py")
+    assert dependent["impact_type"] == "indirect"
+    assert dependent["category"] == "test"
+    assert "app/services/email.py -> app/api/routes.py -> tests/test_email.py" in dependent["reason"]
+    assert "Direct caller" not in dependent["reason"]
+
+
+def test_offline_provider_keeps_unrelated_graph_neighbor_as_potential_only():
+    context = {
+        "direct": ["app/services/email.py"], "upstream": [],
+        "downstream": ["app/api/health.py"],
+        "paths": {"upstream": {}, "downstream": {
+            "app/api/health.py": ["app/services/email.py", "app/api/health.py"]
+        }},
+    }
+    response = OfflineDemoProvider().reason_about_impact(
+        {"search_keywords": ["email"]},
+        [{"path": "app/services/email.py", "symbols": []}], context,
+    )
+
+    assert [item["file_path"] for item in response.data["affected_items"]] == ["app/services/email.py"]
+
+
 @pytest.mark.parametrize("bad_impact", [
     {**IMPACT, "affected_items": [{**IMPACT["affected_items"][0], "confidence": 1.2}]},
     {**IMPACT, "affected_items": [{**IMPACT["affected_items"][0], "impact_type": "certain"}]},

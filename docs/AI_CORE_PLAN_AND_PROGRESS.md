@@ -4,9 +4,9 @@
 - **Workstream:** Meta Global AI Developer Hackathon 2026, AI Core
 - **Working branch:** [`ai/evidence-grounding-v2`](https://github.com/teehihi/scope-graph/tree/ai/evidence-grounding-v2)
 - **SG-AI-02 code checkpoint:** `d511b340b19e8dc77e54488554b19114fc00abde`
-- **Current checkpoint:** SG-AI-02 delivered; awaiting review before SG-AI-03.
+- **Current checkpoint:** SG-AI-04 delivered for review; SG-AI-03 remains planned because the team requested SG-AI-04 first.
 
-This is the team handoff for the AI Core workstream. It records completed code, the remaining plan, and evidence for the current checkpoint. [AI_CORE_BASELINE.md](AI_CORE_BASELINE.md) is the **historical Phase 0 snapshot**; its environment and bug-status sections do not describe the code after SG-AI-01 and SG-AI-02.
+This is the team handoff for the AI Core workstream. It records completed code, the remaining plan, and evidence for the current checkpoint. [AI_CORE_BASELINE.md](AI_CORE_BASELINE.md) is the **historical Phase 0 snapshot**; its environment and bug-status sections do not describe the code after SG-AI-01/02/04.
 
 ## Project context
 
@@ -20,9 +20,9 @@ Python AST symbol resolution, ZIP ingestion, SQLAlchemy persistence, and graph t
 | --- | --- | --- | --- |
 | Phase 0 — audit | Complete | Mapped the existing pipeline, defects, contracts, environment, and implementation order. No production code changed. | `a0eecc7` |
 | SG-AI-01 — evidence grounding v2 | Complete | Exact indexed file/symbol association; safe path and snippet handling; separate existence from impact support; honest grounding counts. | `9347718` |
-| SG-AI-02 — structured provider | Complete; review checkpoint | Pydantic v2 response validation, bounded transient retries, explicit provider failure, response-reported metadata, and mocked HTTP tests. | `d511b34` |
+| SG-AI-02 — structured provider | Complete | Pydantic v2 response validation, bounded transient retries, explicit provider failure, response-reported metadata, and mocked HTTP tests. | `d511b34` |
 | SG-AI-03 — hybrid retrieval | Planned | Deterministic ranking, graph neighbors, top-k and context budget; compare Recall@K and latency with the same baseline fixtures. | — |
-| SG-AI-04 — graph-aware reasoning | Planned | Correct edge direction and depth, cycle handling, explainable paths, validated completeness suggestions. | — |
+| SG-AI-04 — graph-aware reasoning | Complete; review checkpoint | Symmetric bounded traversal, stable explanation paths, potential-impact separation, and validated review file suggestions. | Latest branch commit |
 | SG-AI-05 — authorized Meta integration | Planned; depends on verified access | Confirm endpoint/model and team credentials; run an explicitly opted-in live smoke test. | — |
 | SG-AI-06 — evaluation harness | Planned | Human-labeled fixtures, reproducible metrics with denominators, machine-readable results, and qualified documentation. | — |
 
@@ -43,7 +43,14 @@ No PR has been opened and nothing has been merged into `main` as part of this wo
 - A configured live provider without an API key records a failed analysis run instead of silently producing an offline report. `OfflineDemoProvider` remains available and is labeled as a demo.
 - `services/api/app/analysis/orchestrator.py` stores the selected provider, model identity reported by the response, measured inference latency, and token usage when supplied. The report duration includes brief generation. Tests in `test_ai_provider.py` and `test_e2e_analysis.py` use mocked HTTP responses; they do not exercise a paid endpoint.
 
-These changes preserve the existing REST/MCP report envelope and frontend-consumed impact fields. The added operational metadata fields are additive. Frontend, authentication, database schema, and deployment were not changed.
+### SG-AI-04: graph-aware impact reasoning
+
+- `graph/engine.py` treats an edge as **caller/importer → dependency**. It now follows both upstream dependencies and downstream dependents through the requested `max_depth`, returns stable sorted results and shortest explanation paths, and handles cycles, duplicate/missing seeds, and repository isolation.
+- The HTTP provider prompt explains the edge direction and treats a graph connection alone as a *potential* impact. Offline reasoning no longer promotes unrelated graph neighbors to indirect impacts or calls transitive dependents direct callers.
+- The report keeps `affected_items` for claims that pass `EvidenceValidator` and adds `potential_impacts` for indexed graph neighbors or review candidates not established as affected. Each potential item carries its source, any dependency path, and `impact_supported=false`.
+- Completeness-review `additional_files_to_check` is passed through `EvidenceValidator`. Invalid, unsafe, and other-repository suggestions are removed from that list and recorded in `coverage_review.rejected_file_suggestions`; rejected suggestions also force `is_complete=false`. These candidates are never promoted to `affected_items` merely because the path exists.
+
+These changes preserve the existing REST/MCP report envelope and frontend-consumed impact fields. New metadata, potential-impact, and review-validation fields are additive. Frontend, authentication, database schema, and deployment were not changed.
 
 ## Verification and limits
 
@@ -51,11 +58,12 @@ These changes preserve the existing REST/MCP report envelope and frontend-consum
 | --- | --- |
 | Python runtime | Local `.venv` uses Python **3.13.13**, matching the project target. Backend requirements are installed locally; `.venv` is ignored by Git. |
 | Backend suite after SG-AI-02 | **50 passed in 6.70s** on 2026-10-27. PowerShell command: `$env:PYTHONPATH='services/api'; $env:PYTHONDONTWRITEBYTECODE='1'; .\.venv\Scripts\python.exe -m pytest services/api/tests/ -v -p no:cacheprovider --basetemp <fresh-workspace-path> --tb=short`. |
-| Source hygiene | `git diff --cached --check` passed before the SG-AI-02 commit. The pushed remote branch and local HEAD were both verified at `d511b340b19e8dc77e54488554b19114fc00abde`; the working tree was clean. |
+| Backend suite after SG-AI-04 | **57 passed in 4.02s** on 2026-10-27 using the same command with a fresh workspace basetemp. Graph, mocked provider, offline, indexing, evidence, and MCP end-to-end tests are included. |
+| Source hygiene | `git diff --check` passed for SG-AI-04. The change set is limited to the AI Core graph, orchestrator, provider, their tests, and this handoff. |
 | Live Meta inference | **Unverified.** No authorized endpoint/model, credential, paid request, or live benchmark has been confirmed. Mocked HTTP success is adapter verification only. |
 | Performance/quality benchmarks | **Not yet measured.** Numerical claims in existing README/evaluation material lack a reproducible run record; treat them as unverified until SG-AI-06. |
 
-The Phase 0 audit initially found only Python 3.14 and missing backend packages. Python 3.13 and the existing requirements were installed later with user authorization; this resolves that *local test-environment* blocker. The backend suite does not validate a real inference service, frontend build, or Redis-backed cache behavior. No frontend files changed in SG-AI-01/02.
+The Phase 0 audit initially found only Python 3.14 and missing backend packages. Python 3.13 and the existing requirements were installed later with user authorization; this resolves that *local test-environment* blocker. The backend suite does not validate a real inference service, frontend build, or Redis-backed cache behavior. No frontend files changed in SG-AI-01/02/04. `potential_impacts` is available in the REST/MCP report JSON; the current frontend does not display that new field. Free-text risks and test suggestions remain hypotheses; file existence checks do not prove the model's causal impact reasoning.
 
 ## Remaining plan and ownership boundaries
 
@@ -64,16 +72,15 @@ Work remains sequential so that each result can be reviewed before the next task
 | Next task | Planned change and acceptance evidence | Main files / boundaries |
 | --- | --- | --- |
 | **SG-AI-03** | Add a separate deterministic retriever using path, symbol, metadata, layer, and graph-neighbor signals. Stable ties, deduplicated paths, configurable `top_k` and context budget, repository isolation, safe weak-match behavior. Remove the unconditional first-eight-file fallback. Test ranking, ties, cycles, no matches, and isolation; compare Recall@K and latency on identical fixtures. | New `analysis/retriever.py`; focused integration in `analysis/orchestrator.py`; `graph/engine.py` only if graph access needs adjustment; `tests/test_retriever.py`. No embeddings/vector database. |
-| **SG-AI-04** | Verify stored edge direction, depth and cycles; return deterministic impact context and dependency paths where feasible. Keep direct, indirect, and potential impacts distinct. Validate completeness-review candidates before including them in a report. | `graph/engine.py`, `analysis/orchestrator.py`, provider context, graph/e2e tests. Keep `EvidenceValidator` in the report path. |
 | **SG-AI-05** | Verify an officially supported model endpoint/identifier and authorized team access, then test the full pipeline with an explicitly opted-in live smoke test. Record actual provider/model and sanitized metrics. | Provider/config, `.env.example`, e2e smoke test, architecture docs. Credentials stay in environment variables; any paid call needs explicit approval. |
 | **SG-AI-06** | Create human-labeled retrieval and impact fixtures; measure Precision@K, Recall@K, MRR, impact precision/recall/F1, grounding error rates, latency, tokens, and context reduction with denominators. Separate offline and live results; revise unsupported claims in existing docs. | `services/api/tests/evaluation/`, `scripts/evaluate_ai_core.py`, `docs/EVALUATION.md`, `docs/DEMO_SCRIPT.md`. |
 
-`analysis/orchestrator.py` is shared by SG-AI-03/04; `ai/provider.py` by SG-AI-04/05. Coordinate edits to those files with the active task owner. The REST routes, MCP tool envelopes, frontend types, database schema, and sandbox rules are compatibility boundaries. Changes outside the named AI Core scope need a demonstrated need and explicit approval.
+`analysis/orchestrator.py` is shared by SG-AI-03/04; `ai/provider.py` by SG-AI-04/05. Coordinate edits to those files with the active task owner. The REST routes, MCP tool envelopes, frontend types, database schema, and sandbox rules are compatibility boundaries. Changes outside the named AI Core scope need a demonstrated need and explicit approval. The indexer's repository-wide call-symbol name map can still confuse same-named symbols across files; SG-AI-04 changes traversal over persisted edges, not edge construction.
 
 ## Team handoff: next action
 
-1. Review SG-AI-02 at `d511b34`, especially strict schema fields and the added metadata in analysis reports.
-2. Start SG-AI-03 only after that review. Capture the existing keyword retrieval behavior as a measured baseline on the same small fixtures used for the new retriever; do not use numbers from current documentation as measured results.
+1. Review SG-AI-04 on this branch, especially `potential_impacts`, review-candidate rejection, and graph path semantics.
+2. Return to SG-AI-03 after that review. Capture the existing keyword retrieval behavior as a measured baseline on the same small fixtures used for the new retriever; do not use numbers from current documentation as measured results.
 3. For each task, add a failing regression test where practical, make the focused change, run targeted and full backend tests, inspect `git diff --check`, report actual results and limitations, then pause for review.
 
 For local verification on Windows, set `PYTHONPATH=services/api` and use `.venv/Scripts/python.exe`. Use a **new** `--basetemp` directory inside the workspace for each pytest run because pytest replaces an existing basetemp directory. Do not put API keys in tests, logs, commits, or this document.

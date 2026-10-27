@@ -1,4 +1,5 @@
 import networkx as nx
+from collections import deque
 from typing import Any
 from sqlalchemy.orm import Session
 from app.db.models import IndexedFile, IndexedSymbol, DependencyEdge
@@ -177,37 +178,47 @@ class GraphEngine:
             }
         }
 
-    def find_connected_files(self, repository_id: str, seed_file_paths: list[str], max_depth: int = 2) -> dict[str, list[str]]:
+    def find_connected_files(self, repository_id: str, seed_file_paths: list[str], max_depth: int = 2) -> dict[str, Any]:
         """
-        Finds all directly and indirectly connected files through dependency paths.
+        Finds dependency neighbors and shortest explanation paths up to max_depth.
+        Stored edges point from the importing/calling file to its dependency.
         Returns:
-            "direct": seed files
+            "direct": indexed seed files
             "downstream": files that depend on seeds (callers/importers)
             "upstream": files that seeds depend on
+            "paths": shortest seed-to-neighbor paths in each direction
         """
-        G = self.build_repository_graph(repository_id)
-        path_to_node = {data["path"]: node_id for node_id, data in G.nodes(data=True)}
+        graph = self.build_repository_graph(repository_id)
+        path_to_node = {data["path"]: node_id for node_id, data in graph.nodes(data=True)}
+        direct_paths = sorted(set(seed_file_paths) & path_to_node.keys())
+        seed_nodes = [path_to_node[path] for path in direct_paths]
+        seed_set = set(seed_nodes)
 
-        seed_nodes = [path_to_node[p] for p in seed_file_paths if p in path_to_node]
+        def walk(connected_graph: nx.DiGraph) -> dict[str, list[str]]:
+            paths_by_node = {node: [node] for node in seed_nodes}
+            queue = deque(seed_nodes)
+            while queue:
+                node = queue.popleft()
+                route = paths_by_node[node]
+                if len(route) - 1 >= max_depth:
+                    continue
+                for neighbor in sorted(connected_graph.successors(node), key=lambda n: graph.nodes[n]["path"]):
+                    if neighbor not in paths_by_node:
+                        paths_by_node[neighbor] = [*route, neighbor]
+                        queue.append(neighbor)
+            return {
+                graph.nodes[node]["path"]: [graph.nodes[step]["path"] for step in route]
+                for node, route in paths_by_node.items() if node not in seed_set
+            }
 
-        upstream_nodes = set()
-        downstream_nodes = set()
-
-        for s_node in seed_nodes:
-            # Files that seed imports/calls (upstream dependencies)
-            for target in nx.descendants_at_distance(G, s_node, 1):
-                upstream_nodes.add(target)
-            if max_depth > 1:
-                for target in nx.descendants_at_distance(G, s_node, 2):
-                    upstream_nodes.add(target)
-
-            # Files that import/call seed (downstream dependents)
-            # Use reverse graph to traverse incoming edges
-            for source in G.predecessors(s_node):
-                downstream_nodes.add(source)
-
+        upstream_paths = walk(graph)
+        downstream_paths = walk(graph.reverse(copy=False))
         return {
-            "direct": seed_file_paths,
-            "upstream": [G.nodes[n]["path"] for n in upstream_nodes if n not in seed_nodes],
-            "downstream": [G.nodes[n]["path"] for n in downstream_nodes if n not in seed_nodes],
+            "direct": direct_paths,
+            "upstream": sorted(upstream_paths),
+            "downstream": sorted(downstream_paths),
+            "paths": {
+                "upstream": dict(sorted(upstream_paths.items())),
+                "downstream": dict(sorted(downstream_paths.items())),
+            },
         }

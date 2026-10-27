@@ -119,6 +119,49 @@ class AnalysisOrchestrator:
             logger.info("Step 6: Validating claims against ground-truth index")
             validator = EvidenceValidator(self.db, repo.workspace_path or "")
             validated = validator.validate_ai_claims(repository_id, raw_impact)
+            review_candidates = validator.validate_ai_claims(repository_id, {
+                "affected_items": [
+                    {"file_path": path, "symbol": None, "impact_type": "indirect",
+                     "category": "module", "reason": "Completeness review candidate", "confidence": 0.0}
+                    for path in completeness.get("additional_files_to_check", [])
+                ]
+            })
+            verified_review_paths = list(dict.fromkeys(
+                item["file_path"] for item in review_candidates["affected_items"]
+            ))
+            coverage_review = {
+                **completeness,
+                "additional_files_to_check": verified_review_paths,
+                "rejected_file_suggestions": review_candidates["rejected_hallucinations"],
+            }
+            if review_candidates["rejected_hallucinations"]:
+                coverage_review["is_complete"] = False
+                coverage_review["potential_gaps"] = [
+                    *completeness.get("potential_gaps", []),
+                    "Some suggested files could not be verified against the repository index",
+                ]
+
+            affected_paths = {item["file_path"] for item in validated["affected_items"]}
+            potential_by_path: dict[str, dict[str, Any]] = {}
+            for direction in ("upstream", "downstream"):
+                for path, route in dependency_context["paths"][direction].items():
+                    if path in affected_paths:
+                        continue
+                    candidate = potential_by_path.setdefault(path, {
+                        "file_path": path, "impact_status": "potential",
+                        "existence_verified": True, "impact_supported": False,
+                        "sources": ["dependency_graph"], "dependency_paths": {},
+                    })
+                    candidate["dependency_paths"][direction] = route
+            for path in verified_review_paths:
+                if path in affected_paths:
+                    continue
+                candidate = potential_by_path.setdefault(path, {
+                    "file_path": path, "impact_status": "potential",
+                    "existence_verified": True, "impact_supported": False,
+                    "sources": [], "dependency_paths": {},
+                })
+                candidate["sources"].append("completeness_review")
 
             # Combine into final structured report
             final_report = {
@@ -128,7 +171,8 @@ class AnalysisOrchestrator:
                 "risks": validated["risks"],
                 "suggested_tests": validated["suggested_tests"],
                 "assumptions": validated["assumptions"],
-                "coverage_review": completeness,
+                "coverage_review": coverage_review,
+                "potential_impacts": [potential_by_path[path] for path in sorted(potential_by_path)],
                 "validation_metrics": validated["validation_metrics"],
                 "rejected_hallucinations": validated["rejected_hallucinations"],
                 "operational_metadata": {
