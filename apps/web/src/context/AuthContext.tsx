@@ -4,14 +4,29 @@ export interface User {
   name: string;
   email: string;
   isDemo: boolean;
+  avatarUrl?: string;
+  username?: string;
+  provider?: 'email' | 'github' | 'google' | 'demo';
+  workspace?: string;
+  role?: string;
+  onboarded?: boolean;
 }
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, name?: string, isDemo?: boolean) => void;
+  login: (
+    email: string,
+    name?: string,
+    isDemo?: boolean,
+    avatarUrl?: string,
+    provider?: 'email' | 'github' | 'google' | 'demo',
+    username?: string,
+    onboarded?: boolean
+  ) => void;
   loginAsDemo: () => void;
+  updateUser: (updates: Partial<User>) => void;
   logout: () => void;
 }
 
@@ -36,18 +51,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const login = (email: string, name?: string, isDemo = false) => {
+  const login = (
+    email: string,
+    name?: string,
+    isDemo = false,
+    avatarUrl?: string,
+    provider: 'email' | 'github' | 'google' | 'demo' = 'email',
+    username?: string,
+    onboarded?: boolean
+  ) => {
+    const hasOnboarded =
+      onboarded !== undefined
+        ? onboarded
+        : isDemo || localStorage.getItem(`scopegraph_onboarded_${email}`) === 'true';
+
     const newUser: User = {
       name: name || (email.split('@')[0] ? email.split('@')[0].replace(/[^a-zA-Z0-9]/g, ' ') : 'Developer'),
       email,
       isDemo,
+      avatarUrl,
+      provider,
+      username,
+      onboarded: hasOnboarded,
     };
     setUser(newUser);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(newUser));
+    if (hasOnboarded) {
+      localStorage.setItem(`scopegraph_onboarded_${email}`, 'true');
+    }
   };
 
   const loginAsDemo = () => {
-    login('demo@scopegraph.dev', 'Demo User', true);
+    login('demo@scopegraph.dev', 'Demo User', true, undefined, 'demo', undefined, true);
+  };
+
+  const updateUser = (updates: Partial<User>) => {
+    setUser((prev) => {
+      if (!prev) return null;
+      const updated = { ...prev, ...updates };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      if (updates.onboarded !== undefined && prev.email) {
+        localStorage.setItem(`scopegraph_onboarded_${prev.email}`, String(updates.onboarded));
+      }
+      return updated;
+    });
   };
 
   const logout = () => {
@@ -63,6 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         login,
         loginAsDemo,
+        updateUser,
         logout,
       }}
     >

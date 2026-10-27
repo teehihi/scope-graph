@@ -43,7 +43,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
             {footerText}{' '}
             <Link
               to={footerLinkTo}
-              className="font-bold text-[#151923] hover:text-[#526BEE] transition-colors underline underline-offset-2"
+              className="font-bold text-[#151923] hover:bg-[#C7F36B] px-1.5 py-0.5 rounded-md transition-all underline underline-offset-2 decoration-[#151923]"
             >
               {footerLinkText}
             </Link>
@@ -53,7 +53,10 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
 
       {/* Back to marketing site */}
       <div className="mt-6 text-center">
-        <Link to="/" className="text-xs text-[#8B929E] hover:text-[#151923] transition-colors">
+        <Link
+          to="/"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-[#8B929E] hover:text-[#151923] hover:bg-[#C7F36B]/25 px-2.5 py-1 rounded-lg transition-all"
+        >
           ← Back to ScopeGraph home
         </Link>
       </div>
