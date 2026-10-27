@@ -1,0 +1,122 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: scopegraph-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-scopegraph}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-scopegraph_dev_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-scopegraph_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-scopegraph} -d ${POSTGRES_DB:-scopegraph_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - scopegraph_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: scopegraph-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - scopegraph_network
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: scopegraph-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-scopegraph}:${POSTGRES_PASSWORD:-scopegraph_dev_secret}@postgres:5432/${POSTGRES_DB:-scopegraph_db}
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_ENABLED=true
+      - WORKSPACE_DIR=/app/data/workspaces
+      - META_AI_PROVIDER=${META_AI_PROVIDER:-offline_demo}
+      - META_AI_API_KEY=${META_AI_API_KEY:-}
+      - META_AI_BASE_URL=${META_AI_BASE_URL:-https://api.meta.com/v1}
+      - META_AI_MODEL=${META_AI_MODEL:-meta-llama/Llama-3.3-70B-Instruct}
+    ports:
+      - "8000:8000"
+    volumes:
+      - workspace_data:/app/data/workspaces
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - scopegraph_network
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: scopegraph-worker
+    restart: unless-stopped
+    command: ["python", "-m", "app.jobs.worker"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-scopegraph}:${POSTGRES_PASSWORD:-scopegraph_dev_secret}@postgres:5432/${POSTGRES_DB:-scopegraph_db}
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_ENABLED=true
+      - WORKSPACE_DIR=/app/data/workspaces
+      - META_AI_PROVIDER=${META_AI_PROVIDER:-offline_demo}
+      - META_AI_API_KEY=${META_AI_API_KEY:-}
+      - META_AI_BASE_URL=${META_AI_BASE_URL:-https://api.meta.com/v1}
+      - META_AI_MODEL=${META_AI_MODEL:-meta-llama/Llama-3.3-70B-Instruct}
+    volumes:
+      - workspace_data:/app/data/workspaces
+    networks:
+      - scopegraph_network
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: scopegraph-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "3000:80"
+    networks:
+      - scopegraph_network
+
+volumes:
+  postgres_data:
+  redis_data:
+  workspace_data:
+
+networks:
+  scopegraph_network:
+    driver: bridge
