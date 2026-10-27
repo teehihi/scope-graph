@@ -93,7 +93,7 @@ ScopeGraph combines **deterministic static code analysis** with **Meta AI semant
 ```mermaid
 flowchart TD
     User["Developer (Web UI)"] -->|HTTP / React Flow| API["FastAPI Application"]
-    Agent["AI Coding Agent (Claude Code / Codex / Cursor)"] -->|Model Context Protocol (MCP)| MCP["FastMCP Server"]
+    Agent["AI Coding Agent (Claude Code / Codex / Cursor)"] -->|MCP Protocol| MCP["FastMCP Server"]
 
     subgraph Core Platform
         API --> JobQueue["Redis RQ Task Queue / Sync Fallback"]
