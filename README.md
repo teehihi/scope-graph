@@ -324,7 +324,7 @@ MIT License. Built for the Meta Global AI Developer Hackathon.
     <td align="center" width="50%" valign="top">
       <br />
       <a href="https://github.com/teehihi">
-        <img src="https://github.com/teehihi.png" width="80" height="80" style="border-radius: 50%;" alt="Nguyễn Nhật Thiên (TEE)" /><br /><br />
+        <img src="docs/brand/avatars/teehihi.png" width="80" height="80" alt="Nguyen Nhat Thien (TEE)" /><br /><br />
         <strong>Nguyen Nhat Thien (TEE)</strong>
       </a>
       <br />
@@ -340,7 +340,7 @@ MIT License. Built for the Meta Global AI Developer Hackathon.
     <td align="center" width="50%" valign="top">
       <br />
       <a href="https://github.com/sai-ctruong">
-        <img src="https://github.com/sai-ctruong.png" width="80" height="80" style="border-radius: 50%;" alt="Pham Cong Truong" /><br /><br />
+        <img src="docs/brand/avatars/sai-ctruong.png" width="80" height="80" alt="Pham Cong Truong" /><br /><br />
         <strong>Pham Cong Truong</strong>
       </a>
       <br />
