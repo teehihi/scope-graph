@@ -31,11 +31,12 @@ The official Meta docs specify the [API base URL](https://dev.meta.ai/docs/api-r
 - SG-AI-03 checkpoint: 63 backend tests passed before SG-AI-05/06 edits.
 - SG-AI-05 provider tests: 30 passed.
 - SG-AI-06 metric/scanner focused tests: 5 passed.
-- Backend suite after the live token-budget fix and concurrent team changes: **74 passed, 1 live-smoke skipped** on 2026-10-27 (`META_AI_PROVIDER=offline_demo`). The separately opted-in live smoke passed **1 test** with the 6,000-token default.
-- Frontend build was attempted as an integration check but could not start: `tsc` is unavailable because frontend packages are not installed in this workspace. No frontend source or TypeScript contract changed in this workstream.
+- Backend suite after the web contract regression tests: **76 passed, 1 live-smoke skipped** on 2026-10-27 (`META_AI_PROVIDER=offline_demo`). The separately opted-in live smoke passed **1 test** with the 6,000-token default.
+- Frontend packages were installed from the existing lockfile and `npm run build` passed on 2026-10-27. No frontend source or TypeScript contract changed in this workstream.
 - Offline labeled evaluation: 3 cases, 14 indexed files, macro Recall@8 0.758 versus 0.532 for the previous selection rule. Impact F1 0.343; 17 of 24 validator-accepted impact claims are unsupported by the manual file/type labels. These are small demo-fixture measurements, not a Meta quality claim.
 - Authorized Meta evaluation: **3/3 cases completed**, model `muse-spark-1.3`, macro impact precision / recall / F1 **0.197 / 0.516 / 0.282**; direct / indirect recall **0.833 / 0.111**. All **38** reported file/symbol claims passed the existence gate, but **27/38** accepted impact claims lack support in the manual file/type labels. This is not production accuracy. The key is kept only in the ignored root `.env`.
 - `potential_impacts` is in REST/MCP JSON but is not displayed by the current frontend. The offline provider remains tailored to the email-change demo; non-email impact quality is weak. Graph edge construction may still conflate same-named symbols across files; traversal uses persisted edges.
+- Web demo integration fix (2026-10-27): the sample-load endpoint now returns the full repository object including `id`, which the frontend needs for graph and analysis calls; cached analysis responses now include the report and brief. Before the fix, API logs showed calls to `/repositories/undefined/graph` and `/repositories/undefined/analyze`. A browser retest confirmed sample reload, 14 graph nodes, node evidence drawer, and an offline analysis report with source evidence. Redis cache behavior is covered by a focused regression test.
 
 ## Reproduce
 
