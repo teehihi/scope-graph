@@ -78,20 +78,27 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
             timeout=45.0,
         )
 
-    def _call_model(self, system_prompt: str, user_prompt: str, expect_json: bool = True) -> tuple[dict[str, Any] | str, float, str, dict[str, int] | None]:
+    def _call_model(self, system_prompt: str, user_prompt: str, expect_json: bool = True, schema: type[BaseModel] | None = None) -> tuple[dict[str, Any] | str, float, str, dict[str, int] | None]:
         start = time.perf_counter()
         url = f"{self.base_url}/chat/completions"
         payload = {
             "model": self.model,
             "messages": [
-                {"role": "system", "content": system_prompt},
+                {"role": "developer" if self.provider_name == "meta_model_api" else "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            "temperature": settings.META_AI_TEMPERATURE,
             "max_tokens": settings.META_AI_MAX_TOKENS,
         }
+        if self.provider_name != "meta_model_api":
+            payload["temperature"] = settings.META_AI_TEMPERATURE
         if expect_json:
-            payload["response_format"] = {"type": "json_object"}
+            if self.provider_name == "meta_model_api" and schema is not None:
+                payload["response_format"] = {
+                    "type": "json_schema",
+                    "json_schema": {"name": schema.__name__, "schema": schema.model_json_schema()},
+                }
+            else:
+                payload["response_format"] = {"type": "json_object"}
 
         for attempt in range(self.max_retries + 1):
             try:
@@ -159,7 +166,7 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
         return content, latency, actual_model, token_usage
 
     def _validated_response(self, schema: type[BaseModel], system_prompt: str, user_prompt: str) -> AIProviderResponse:
-        data, latency, model, token_usage = self._call_model(system_prompt, user_prompt)
+        data, latency, model, token_usage = self._call_model(system_prompt, user_prompt, schema=schema)
         try:
             validated = schema.model_validate(data)
         except ValidationError:
@@ -301,7 +308,7 @@ class OfflineDemoProvider(BaseMetaAIProvider):
             "security_implications": ["Prevent unauthorized account takeover", "Token expiration and single-use enforcement"],
             "validation_requirements": ["Valid email format", "Signature verification on token", "Expiration check"],
             "affected_layers": ["api", "service", "model", "test"],
-            "search_keywords": keywords or ["user", "email"],
+            "search_keywords": keywords,
             "ambiguities": ["Should old email also receive notification of pending change?"]
         }
         return AIProviderResponse(

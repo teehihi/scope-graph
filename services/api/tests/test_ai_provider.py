@@ -4,6 +4,7 @@ import httpx
 import pytest
 
 from app.ai.provider import MetaAIHttpProvider, OfflineDemoProvider, get_ai_provider
+from app.ai.schemas import RequirementInterpretation
 from app.core.config import settings
 
 
@@ -72,6 +73,49 @@ def model_response(content, model="served-model", usage=None):
         "choices": [{"message": {"content": content}}],
         "usage": usage,
     })
+
+
+def test_official_meta_request_uses_documented_endpoint_and_schema():
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        return model_response(json.dumps(INTERPRETATION), model="muse-spark-1.3")
+
+    provider = MetaAIHttpProvider("test-key", "https://api.meta.ai/v1", "muse-spark-1.3")
+    provider.client.close()
+    provider.client = httpx.Client(transport=httpx.MockTransport(handler))
+    try:
+        result = provider.interpret_requirement("Verify email")
+    finally:
+        provider.client.close()
+
+    assert result.model == "muse-spark-1.3"
+    assert requests[0].url.host == "api.meta.ai"
+    assert requests[0].url.path == "/v1/chat/completions"
+    payload = json.loads(requests[0].content)
+    assert payload["messages"][0]["role"] == "developer"
+    assert "temperature" not in payload
+    assert payload["response_format"] == {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "RequirementInterpretation",
+            "schema": RequirementInterpretation.model_json_schema(),
+        },
+    }
+
+
+def test_partner_request_keeps_its_compatible_json_mode(provider_with_transport):
+    requests = []
+
+    def handler(request):
+        requests.append(json.loads(request.content))
+        return model_response(json.dumps(INTERPRETATION))
+
+    provider_with_transport(handler).interpret_requirement("Verify email")
+    assert requests[0]["messages"][0]["role"] == "system"
+    assert requests[0]["response_format"] == {"type": "json_object"}
+    assert requests[0]["temperature"] == settings.META_AI_TEMPERATURE
 
 
 @pytest.mark.parametrize("stage,payload", [
@@ -165,6 +209,11 @@ def test_offline_provider_keeps_unrelated_graph_neighbor_as_potential_only():
     )
 
     assert [item["file_path"] for item in response.data["affected_items"]] == ["app/services/email.py"]
+
+
+def test_offline_interpretation_does_not_invent_email_keywords_for_unrelated_request():
+    result = OfflineDemoProvider().interpret_requirement("Optimize quantum bridge routing")
+    assert result.data["search_keywords"] == []
 
 
 @pytest.mark.parametrize("bad_impact", [

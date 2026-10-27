@@ -12,7 +12,7 @@ Built for the **Meta Global AI Developer Hackathon** (Push the Frontier Track).
 [![React](https://img.shields.io/badge/React-18-61dafb.svg?logo=react)](https://react.dev/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ed.svg?logo=docker)](https://www.docker.com/)
 [![MCP](https://img.shields.io/badge/MCP-Protocol-purple.svg)](https://modelcontextprotocol.io/)
-[![Meta AI](https://img.shields.io/badge/Meta%20AI-Llama%203.3%20%2F%20Muse%20Spark-0668e1.svg)](https://ai.meta.com/)
+[![Meta AI](https://img.shields.io/badge/Meta%20Model%20API-Muse%20Spark%201.3-0668e1.svg)](https://dev.meta.ai/docs/models)
 
 </div>
 
@@ -40,7 +40,7 @@ Today, human engineers perform this investigation manually by grepping files. AI
 ScopeGraph combines **deterministic static code analysis** with **Meta AI semantic reasoning**:
 
 1. **Deterministic Indexing**: Safely parses source code via Python AST, extracting symbols, API routes, database models, and call graphs into **PostgreSQL**.
-2. **Meta AI Semantic Reasoning**: Analyzes business requirements with Meta AI (Llama 3.3 / Muse Spark) to deduce direct targets and downstream implications.
+2. **AI Semantic Reasoning**: Analyzes business requirements with a configured inference provider or the labeled offline demo. The Meta Model API adapter targets Muse Spark 1.3; live integration remains unverified.
 3. **Anti-Hallucination Evidence Gate**: Strictly validates all model-generated claims against the indexed repository facts. Hallucinations are rejected; verified items are linked directly to source line snippets.
 4. **Interactive Graph UI**: Visualizes the codebase layered by architectural tier (API, Service, Model, Core, Test) using **React Flow**, highlighting affected subgraphs in real time.
 5. **Model Context Protocol (MCP)**: Exposes native MCP tools (`analyze_change`, `get_relevant_context`, `suggest_tests`) directly to AI coding agents like Claude Code, Cursor, and Codex.
@@ -72,7 +72,7 @@ flowchart TD
         Indexer --> WorkspaceStorage[("Sandboxed Workspace Storage")]
     end
 
-    MetaAI -->|Inference| MetaModelAPI["Meta Model API / Llama 3.3"]
+    MetaAI -->|Optional inference| MetaModelAPI["Meta Model API / Muse Spark 1.3"]
 ```
 
 ---
@@ -217,12 +217,7 @@ cd apps/web && npm run build
 
 ## 📊 Evaluation & Measured Impact
 
-| Metric | Keyword Search Baseline | ScopeGraph (Static + Meta AI) | Improvement |
-| :--- | :--- | :--- | :--- |
-| **Direct Impact Files Found** | 1 (`users.py`) | 2 (`users.py`, `user_service.py`) | **+100% precision** |
-| **Indirect Dependents Found** | 0 (Missed) | 2 (`verification.py`, `verification_service.py`) | **Critical flow captured** |
-| **False Positive / Hallucinations** | 3 files | 0 files | **100% Grounded Evidence** |
-| **Agent Prompt Token Reduction** | 0% (Dumps all code) | 78% Context Reduction | **Faster, cheaper agent runs** |
+The reproducible [AI Core evaluation](docs/EVALUATION.md) uses three manually labeled cases on the sample repository. In the **offline demo** run, hybrid retrieval reached macro Recall@8 of 0.758 versus 0.532 for the previous keyword selection; mean impact F1 was 0.343. The small fixture and demo provider do not establish live Meta accuracy, latency, or token savings.
 
 ---
 
@@ -271,7 +266,7 @@ scope-graph/
 ## 🏆 Hackathon Submission Alignment
 
 - **Impact (30%)**: Solves a real developer pain point: understanding the blast radius of changes before writing code, saving developer hours and preventing regressions.
-- **Use of Meta AI Tooling (25%)**: Meta AI (Llama 3.3 / Muse Spark) serves as the core runtime intelligence for semantic reasoning, cross-layer inference, and completeness auditing, paired with an anti-hallucination verification layer.
+- **Use of Meta AI Tooling (25%)**: The adapter targets Meta Model API with Muse Spark 1.3 for semantic reasoning and completeness review, paired with an evidence validation layer. Authorized live inference remains to be verified.
 - **Demo (25%)**: 1-click reproducible demo with instant sample repository loading, real-time React Flow visualization, source evidence inspection, and practical coding agent briefs.
 - **Technical Depth & Execution (20%)**: Full-stack engineering with Python 3.13, FastAPI, PostgreSQL, Redis RQ background workers, Alembic migrations, NetworkX, Docker Compose, and native Model Context Protocol (MCP) support.
 

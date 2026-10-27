@@ -66,6 +66,8 @@ def test_full_e2e_indexing_and_analysis(test_db):
     assert report["operational_metadata"]["model"] == "deterministic-semantic-matcher"
     assert report["operational_metadata"]["structured_inference_latency_seconds"] >= 0
     assert report["operational_metadata"]["token_usage"] is None
+    assert report["retrieval_metadata"]["selected_files"] > 0
+    assert report["retrieval_metadata"]["context_token_budget"] >= 1
 
     # Ensure critical files are identified
     affected_paths = [item["file_path"] for item in report["affected_items"]]
@@ -232,3 +234,29 @@ def test_review_suggestions_are_grounded_and_graph_neighbors_stay_potential(test
     assert potential["app/config.py"]["sources"] == ["completeness_review"]
     assert all(item["impact_status"] == "potential" and item["impact_supported"] is False
                for item in potential.values())
+
+
+def test_weak_query_does_not_send_arbitrary_files_to_provider(test_db, tmp_path, monkeypatch):
+    test_db.add(Repository(id="weak-repo", name="Weak", workspace_path=str(tmp_path), status="ready"))
+    test_db.add_all([
+        IndexedFile(id=f"weak-{index}", repository_id="weak-repo", path=f"app/unrelated_{index}.py")
+        for index in range(10)
+    ])
+    test_db.commit()
+
+    class CaptureProvider(OfflineDemoProvider):
+        def __init__(self):
+            self.retrieved_files = None
+
+        def reason_about_impact(self, requirement_interpretation, retrieved_files, dependency_context):
+            self.retrieved_files = retrieved_files
+            return super().reason_about_impact(requirement_interpretation, retrieved_files, dependency_context)
+
+    provider = CaptureProvider()
+    monkeypatch.setattr(orchestrator_module, "get_ai_provider", lambda: provider)
+    run = AnalysisOrchestrator(test_db).run_analysis("weak-repo", "Optimize quantum bridge routing")
+
+    assert run.status == "completed"
+    assert provider.retrieved_files == []
+    assert run.result_json["retrieval_metadata"]["selected_files"] == 0
+    assert run.result_json["affected_items"] == []

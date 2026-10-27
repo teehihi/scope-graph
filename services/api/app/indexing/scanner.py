@@ -76,7 +76,7 @@ def scan_workspace(root_dir: str) -> list[ScannedFile]:
             if file_count > max_files:
                 break
 
-            rel_path = os.path.relpath(full_path, root_path)
+            rel_path = Path(full_path).relative_to(root_path).as_posix()
             lang = get_file_language(rel_path)
             sha = calculate_sha256(full_path)
 

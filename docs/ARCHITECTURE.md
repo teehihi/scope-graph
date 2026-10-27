@@ -27,7 +27,7 @@ flowchart TD
         Indexer --> WorkspaceStorage[("Sandboxed Workspace Storage")]
     end
 
-    MetaAI -->|Inference| MetaModelAPI["Meta Model API / Llama 3.3"]
+    MetaAI -->|Optional inference| MetaModelAPI["Meta Model API / Muse Spark 1.3"]
 ```
 
 ## 2. Component Responsibilities
@@ -47,7 +47,7 @@ flowchart TD
 - **Graph Traversal**: Computes downstream (dependents/callers) and upstream (dependencies) subgraphs.
 
 ### 2.4 Meta AI Semantic Reasoning (`app/ai`)
-- **Provider Adapter**: Seamlessly supports official Meta Model API (Muse Spark / Llama 3.3 70B), partner providers (Fireworks, Baseten, Together, Groq), or offline demonstration mode.
+- **Provider Adapter**: Targets the official Meta Model API chat-completions endpoint (`https://api.meta.ai/v1/chat/completions`) with `muse-spark-1.3` and JSON-schema responses. Partner OpenAI-compatible endpoints remain configurable; offline mode is deterministic and labeled as a demo. Official API compatibility has been checked against [Meta API reference](https://dev.meta.ai/docs/api-reference), [models](https://dev.meta.ai/docs/models), and [structured output](https://dev.meta.ai/docs/structured-output); a real authorized inference call has not yet been run.
 - **Structured Prompts**: Multi-pass orchestration:
   1. Requirement Interpretation
   2. Grounded Impact Reasoning

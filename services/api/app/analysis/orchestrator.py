@@ -3,8 +3,9 @@ import datetime
 import logging
 from typing import Any
 from sqlalchemy.orm import Session
-from app.db.models import Repository, IndexedFile, IndexedSymbol, AnalysisRun
+from app.db.models import Repository, IndexedFile, AnalysisRun
 from app.graph.engine import GraphEngine
+from app.analysis.retriever import HybridRetriever
 from app.ai.provider import get_ai_provider
 from app.core.config import settings
 from app.evidence.validator import EvidenceValidator
@@ -53,37 +54,17 @@ class AnalysisOrchestrator:
 
             # Step 2: Retrieve Relevant Files and Context from Index
             logger.info("Step 2: Retrieving repository evidence based on semantic interpretation")
-            keywords = interpretation.get("search_keywords", ["user", "email"])
+            retrieval = HybridRetriever(self.db).retrieve(
+                repository_id=repository_id,
+                query=requirement,
+                search_keywords=interpretation.get("search_keywords", []),
+                affected_layers=interpretation.get("affected_layers", []),
+                top_k=settings.AI_RETRIEVAL_TOP_K,
+                context_token_budget=settings.AI_CONTEXT_TOKEN_BUDGET,
+            )
+            retrieved_files = retrieval.items
+            seed_paths = retrieval.seed_paths
             db_files = self.db.query(IndexedFile).filter(IndexedFile.repository_id == repository_id).all()
-            all_symbols = self.db.query(IndexedSymbol).filter(IndexedSymbol.repository_id == repository_id).all()
-
-            symbols_by_file: dict[str, list[dict[str, Any]]] = {}
-            for s in all_symbols:
-                symbols_by_file.setdefault(s.file_id, []).append({
-                    "name": s.name,
-                    "type": s.symbol_type,
-                    "line": s.line_start,
-                    "docstring": s.docstring[:100] if s.docstring else ""
-                })
-
-            retrieved_files: list[dict[str, Any]] = []
-            seed_paths: list[str] = []
-
-            for f in db_files:
-                f_syms = symbols_by_file.get(f.id, [])
-                # Check keyword match
-                is_match = any(k.lower() in f.path.lower() for k in keywords) or any(
-                    any(k.lower() in s["name"].lower() for k in keywords) for s in f_syms
-                )
-                if is_match or len(retrieved_files) < 8:
-                    retrieved_files.append({
-                        "file_id": f.id,
-                        "path": f.path,
-                        "language": f.language,
-                        "symbols": f_syms,
-                    })
-                    if is_match:
-                        seed_paths.append(f.path)
 
             # Step 3: Graph Traversal for Downstream / Upstream Connections
             logger.info("Step 3: Traversing dependency graph for seed paths: %s", seed_paths)
@@ -173,6 +154,14 @@ class AnalysisOrchestrator:
                 "assumptions": validated["assumptions"],
                 "coverage_review": coverage_review,
                 "potential_impacts": [potential_by_path[path] for path in sorted(potential_by_path)],
+                "retrieval_metadata": {
+                    "selected_files": len(retrieved_files),
+                    "candidate_files": retrieval.candidate_count,
+                    "estimated_context_tokens": sum(item["estimated_tokens"] for item in retrieved_files),
+                    "latency_seconds": round(retrieval.latency_seconds, 4),
+                    "top_k": settings.AI_RETRIEVAL_TOP_K,
+                    "context_token_budget": settings.AI_CONTEXT_TOKEN_BUDGET,
+                },
                 "validation_metrics": validated["validation_metrics"],
                 "rejected_hallucinations": validated["rejected_hallucinations"],
                 "operational_metadata": {

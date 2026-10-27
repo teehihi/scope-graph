@@ -1,4 +1,15 @@
 from app.indexing.parser import PythonASTParser
+from app.indexing.scanner import scan_workspace
+
+
+def test_scanner_indexes_portable_relative_paths(tmp_path):
+    source = tmp_path / "app" / "api" / "users.py"
+    source.parent.mkdir(parents=True)
+    source.write_text("def users():\n    pass\n", encoding="utf-8")
+
+    paths = [item.rel_path for item in scan_workspace(str(tmp_path))]
+
+    assert paths == ["app/api/users.py"]
 
 SAMPLE_PYTHON_CODE = """
 from fastapi import APIRouter
