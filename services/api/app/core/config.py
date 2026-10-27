@@ -44,6 +44,14 @@ class Settings(BaseSettings):
     META_AI_MAX_RETRIES: int = Field(default=2, ge=0, le=5, description="Retries after transient inference failures")
     META_AI_RETRY_BACKOFF_SECONDS: float = Field(default=0.5, ge=0, le=10, description="Initial retry delay")
 
+    # GitHub OAuth
+    GITHUB_CLIENT_ID: str = Field(default="", description="GitHub OAuth Client ID")
+    GITHUB_CLIENT_SECRET: str = Field(default="", description="GitHub OAuth Client Secret")
+    GITHUB_REDIRECT_URI: str = Field(
+        default="http://localhost:3000/auth/callback/github",
+        description="GitHub OAuth callback URL"
+    )
+
     model_config = SettingsConfigDict(
         env_file=(".env", Path(__file__).resolve().parents[4] / ".env"),
         env_file_encoding="utf-8",

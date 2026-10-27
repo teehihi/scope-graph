@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.logging import setup_logging
 from app.db.database import init_db
-from app.api.routes import health, repositories, analysis
+from app.api.routes import health, repositories, analysis, auth
 
 logger = setup_logging(settings.LOG_LEVEL)
 
@@ -35,6 +35,7 @@ app.add_middleware(
 
 # Include routes
 app.include_router(health.router)
+app.include_router(auth.router, prefix="/api/v1")
 app.include_router(repositories.router, prefix="/api/v1")
 app.include_router(analysis.router, prefix="/api/v1")
 

@@ -4,6 +4,8 @@ import { useAuth } from './context/AuthContext';
 import { Landing } from './pages/Landing';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
+import { AuthCallback } from './pages/AuthCallback';
+import { Onboarding } from './pages/Onboarding';
 import { NotFound } from './pages/NotFound';
 import { Dashboard } from './pages/app/Dashboard';
 import { GraphPage } from './pages/app/Graph';
@@ -25,15 +27,15 @@ export const App: React.FC = () => {
       return;
     }
 
-    // 2. Unauthenticated visits to /app/* redirect to /login
-    if (pathname.startsWith('/app')) {
+    // 2. Unauthenticated visits to /app/* or /onboarding redirect to /login
+    if (pathname.startsWith('/app') || pathname === '/onboarding') {
       if (!isAuthenticated) {
         navigate(`/login?redirect=${encodeURIComponent(pathname)}`);
         return;
       }
     }
 
-    // 3. Authenticated visits to /login or /register redirect to /app/dashboard
+    // 3. Authenticated visits to /login or /register redirect
     if (isAuthenticated && (pathname === '/login' || pathname === '/register')) {
       navigate('/app/dashboard');
       return;
@@ -59,6 +61,17 @@ export const App: React.FC = () => {
 
   if (pathname === '/register') {
     return <Register />;
+  }
+
+  // OAuth Callback Route
+  if (pathname === '/auth/callback/github' || pathname === '/auth/callback/github/') {
+    return <AuthCallback />;
+  }
+
+  // Onboarding Route
+  if (pathname === '/onboarding' || pathname === '/onboarding/') {
+    if (!isAuthenticated) return null;
+    return <Onboarding />;
   }
 
   // Authenticated App Routes

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useRouter } from '../router';
 import { useAuth } from '../context/AuthContext';
 import { AuthLayout } from '../components/layouts/AuthLayout';
-import { UserCheck, ArrowRight, AlertCircle, HelpCircle, Info } from 'lucide-react';
+import { UserCheck, ArrowRight, AlertCircle, HelpCircle, Info, Eye, EyeOff } from 'lucide-react';
 import { GitHubIcon, GoogleIcon } from '../components/BrandIcons';
 import { DemoInfoModal } from '../components/DemoInfoModal';
 
@@ -12,6 +12,7 @@ export const Login: React.FC = () => {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showDemoModal, setShowDemoModal] = useState(false);
@@ -47,7 +48,13 @@ export const Login: React.FC = () => {
   };
 
   const handleOAuthLogin = (provider: 'GitHub' | 'Google') => {
-    // Show educational notice with instant mock simulation
+    if (provider === 'GitHub') {
+      const clientId = import.meta.env.VITE_GITHUB_CLIENT_ID || 'Ov23lifjNq0eAxACh6IW';
+      const redirectUri = `${window.location.origin}/auth/callback/github`;
+      window.location.href = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=read:user%20user:email`;
+      return;
+    }
+    // Show cloud notice for Google
     setOauthNotice(provider);
   };
 
@@ -82,9 +89,9 @@ export const Login: React.FC = () => {
 
         {/* OAuth Notice Modal / Alert */}
         {oauthNotice && (
-          <div className="p-3.5 rounded-xl bg-[#EDF0F7] border border-[#526BEE]/30 text-xs space-y-2 animate-in fade-in duration-150">
+          <div className="p-3.5 rounded-xl bg-[#EDF0F7] border border-[#151923]/15 text-xs space-y-2 animate-in fade-in duration-150">
             <div className="flex items-start gap-2 text-[#151923]">
-              <Info className="w-4 h-4 shrink-0 text-[#526BEE] mt-0.5" />
+              <Info className="w-4 h-4 shrink-0 text-[#151923] mt-0.5" />
               <div className="leading-relaxed">
                 <span className="font-bold">{oauthNotice} OAuth</span> is configured for Cloud Production. For this hackathon demo, you can test with simulated {oauthNotice} credentials or use the 1-click Demo Account.
               </div>
@@ -93,7 +100,7 @@ export const Login: React.FC = () => {
               <button
                 type="button"
                 onClick={() => confirmMockOAuth(oauthNotice as 'GitHub' | 'Google')}
-                className="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-[#526BEE] text-white hover:bg-[#151923] transition-colors cursor-pointer"
+                className="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-[#151923] text-[#F7F8F5] hover:bg-[#C7F36B] hover:text-[#151923] transition-colors cursor-pointer"
               >
                 Sign in as {oauthNotice} user →
               </button>
@@ -149,7 +156,7 @@ export const Login: React.FC = () => {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="developer@company.com"
+              placeholder="thiennn@vng.com"
               required
               className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-[#E4E7E1] bg-[#F7F8F5] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#151923] text-[#151923] transition-all placeholder:text-[#8B929E]"
             />
@@ -157,14 +164,25 @@ export const Login: React.FC = () => {
 
           <div className="space-y-1">
             <label className="text-xs font-semibold text-[#151923]">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-              className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-[#E4E7E1] bg-[#F7F8F5] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#151923] text-[#151923] transition-all placeholder:text-[#8B929E]"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                className="w-full text-xs px-3.5 py-2.5 pr-10 rounded-xl border border-[#E4E7E1] bg-[#F7F8F5] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#151923] text-[#151923] transition-all placeholder:text-[#8B929E]"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8B929E] hover:text-[#151923] p-1 rounded-md transition-colors cursor-pointer"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
           <button
@@ -193,26 +211,28 @@ export const Login: React.FC = () => {
           </div>
         </div>
 
-        {/* Demo Mode Button: Icon and Text change color together seamlessly */}
+        {/* Demo Mode Button: Icon and Text change color together seamlessly with Electric Lime */}
         <button
           type="button"
           onClick={handleDemoLogin}
           disabled={isLoading}
-          className="group w-full flex items-center justify-center gap-2 text-xs font-semibold px-4 py-2.5 rounded-xl bg-[#EBFACD] text-[#151923] border border-[#C7F36B] hover:bg-[#526BEE] hover:text-white hover:border-[#526BEE] hover:shadow-md hover:shadow-[#526BEE]/25 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 shadow-sm cursor-pointer disabled:opacity-50"
+          className="group w-full flex items-center justify-center gap-2 text-xs font-semibold px-4 py-2.5 rounded-xl bg-white text-[#151923] border border-[#E4E7E1] hover:bg-[#C7F36B] hover:text-[#151923] hover:border-[#C7F36B] hover:shadow-md hover:shadow-[#C7F36B]/25 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 shadow-xs cursor-pointer disabled:opacity-50"
         >
           <UserCheck className="w-4 h-4 text-inherit transition-colors" />
-          <span>Continue with demo account (demo@scopegraph.dev)</span>
+          <span>Continue with demo account</span>
         </button>
 
-        {/* Interactive Lead Link to Modal */}
+        {/* Interactive Lead Link to Modal: Soft Lime hover highlight, matching buttons */}
         <div className="text-center pt-0.5">
           <button
             type="button"
             onClick={() => setShowDemoModal(true)}
-            className="group inline-flex items-center gap-1.5 text-[11px] font-medium text-[#8B929E] hover:text-[#526BEE] transition-colors cursor-pointer"
+            className="group inline-flex items-center gap-1.5 text-[11px] font-medium text-[#8B929E] hover:text-[#151923] hover:bg-[#C7F36B]/30 px-2.5 py-1 rounded-lg transition-all cursor-pointer"
           >
-            <HelpCircle className="w-3.5 h-3.5 text-[#8B929E] group-hover:text-[#526BEE] transition-colors" />
-            <span className="underline underline-offset-2">What is Demo Mode? Learn what's included</span>
+            <HelpCircle className="w-3.5 h-3.5 text-[#8B929E] group-hover:text-[#151923] transition-colors" />
+            <span className="underline underline-offset-2 decoration-[#8B929E]/60 group-hover:decoration-[#151923]">
+              What is Demo Mode? Learn what's included
+            </span>
           </button>
         </div>
       </div>
