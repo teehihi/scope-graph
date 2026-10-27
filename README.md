@@ -317,14 +317,6 @@ cd apps/web && npm run build
 
 ---
 
-## 🏆 Hackathon Submission Alignment
-
-- **Impact (30%)**: Solves a major developer pain point: understanding the blast radius of changes before writing code, preventing downstream regressions, and generating actionable briefs for AI agents.
-- **Use of Meta AI Tooling (25%)**: Leverages Meta AI (Llama 3.3 / Muse Spark 1.3) for semantic reasoning, cross-layer inference, and completeness auditing, strictly bounded by an anti-hallucination verification layer.
-- **Demo (25%)**: 1-click reproducible demo with instant sample repository loading, real-time React Flow visualization, source evidence inspection, and practical coding agent briefs.
-- **Technical Depth & Execution (20%)**: Full-stack engineering with Python 3.13, FastAPI, PostgreSQL, Redis RQ background workers, Alembic migrations, NetworkX, Docker Compose, and native Model Context Protocol (MCP) support.
-
----
 
 ## 📄 License
 
@@ -375,7 +367,7 @@ MIT License. Built for the Meta Global AI Developer Hackathon.
 <div align="center">
 
 <p align="center">
-  <img src="docs/scopegraph-brand-final/logo/scopegraph-app-icon.svg" alt="ScopeGraph" width="76" /><br />
+  
   <strong>ScopeGraph — Understand the blast radius before you change the code.</strong><br />
   <sub>ScopeGraph was built with the aspiration of engineers from Vietnam 🇻🇳 to bring practical AI Code Intelligence solutions to the global community of programmers and AI Coding Agents at the <strong>Meta Global AI Developer Hackathon 2026</strong>.</sub>
 </p>
