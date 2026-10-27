@@ -13,7 +13,7 @@
 | SG-AI-01 evidence grounding | Complete, pushed | File/symbol association, safe snippets, existence versus causal support, rejection metrics. Commit `9347718`. |
 | SG-AI-02 structured provider | Complete, pushed | Pydantic validation, bounded retry, explicit provider failures, reported model/token metadata, mocked HTTP tests. Commit `d511b34`. |
 | SG-AI-04 graph reasoning | Complete, pushed | Symmetric bounded traversal, stable paths, potential impact separation, validated review suggestions. Commit `111c396`. |
-| SG-AI-03 hybrid retrieval | Implemented; final checkpoint pending | Repository-scoped deterministic path/symbol/metadata/layer/graph ranking, stable ties, top K and context budget, no unconditional first-eight fallback. Labeled comparison in [EVALUATION.md](EVALUATION.md). |
+| SG-AI-03 hybrid retrieval | Complete, pushed | Repository-scoped deterministic path/symbol/metadata/layer/graph ranking, stable ties, top K and context budget, no unconditional first-eight fallback. Labeled comparison in [EVALUATION.md](EVALUATION.md). Commit `125c6be`. |
 | SG-AI-05 Meta integration | Adapter and opt-in smoke prepared; live gate pending | Official URL/model and JSON Schema configured; mocked request/full-pipeline tests pass. No key or paid-call approval is present, so a real Meta call remains unverified. |
 | SG-AI-06 evaluation | Offline harness implemented; live gate pending | Three manually labeled cases, retrieval/impact/grounding/efficiency metrics, JSON run record, revised unsupported benchmark claims. Live metrics require SG-AI-05 access. |
 
