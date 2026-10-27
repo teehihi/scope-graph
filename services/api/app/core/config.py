@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 
@@ -44,7 +45,7 @@ class Settings(BaseSettings):
     META_AI_RETRY_BACKOFF_SECONDS: float = Field(default=0.5, ge=0, le=10, description="Initial retry delay")
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", Path(__file__).resolve().parents[4] / ".env"),
         env_file_encoding="utf-8",
         extra="ignore"
     )
