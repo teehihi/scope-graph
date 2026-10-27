@@ -31,7 +31,7 @@ The official Meta docs specify the [API base URL](https://dev.meta.ai/docs/api-r
 - SG-AI-03 checkpoint: 63 backend tests passed before SG-AI-05/06 edits.
 - SG-AI-05 provider tests: 30 passed.
 - SG-AI-06 metric/scanner focused tests: 5 passed.
-- Final backend suite after SG-AI-03/05/06 code edits: **69 passed, 1 live-smoke skipped** on 2026-10-27. The linked branch records the final pushed SHA; the evaluation JSON records the SHA used for each local run.
+- Backend suite after SG-AI-03/05/06 code edits and `.env` key-loading fix: **70 passed, 1 live-smoke skipped** on 2026-10-27. The linked branch records the pushed SHA; the evaluation JSON records the SHA used for each local run.
 - Frontend build was attempted as an integration check but could not start: `tsc` is unavailable because frontend packages are not installed in this workspace. No frontend source or TypeScript contract changed in this workstream.
 - Offline labeled evaluation: 3 cases, 14 indexed files, macro Recall@8 0.758 versus 0.532 for the previous selection rule. Impact F1 0.343; 17 of 24 validator-accepted impact claims are unsupported by the manual file/type labels. These are small demo-fixture measurements, not a Meta quality claim.
 - A real Meta smoke and live evaluation remain unverified. Neither `META_AI_API_KEY` nor `MODEL_API_KEY` is present in this environment. A paid call needs separate explicit approval.
