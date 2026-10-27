@@ -26,4 +26,4 @@ Open the implementation brief. Show the `analyze_change`, `get_relevant_context`
 
 ## 2:45–3:00 — Evidence and close
 
-Show [EVALUATION.md](EVALUATION.md) or the local JSON result. “On three manually labeled offline cases, hybrid retrieval improved Recall@8 over the previous keyword rule. Impact quality remains limited on this small fixture; the team has not yet measured a live Meta run.”
+Show [EVALUATION.md](EVALUATION.md) or the local JSON result. “On three manually labeled cases, hybrid retrieval improved Recall@8 over the previous keyword rule. The authorized Meta run completed, but its 0.282 impact F1 and 0.111 indirect recall show that impact quality remains limited on this small fixture.”

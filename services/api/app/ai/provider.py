@@ -131,6 +131,8 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
         choices = resp_json.get("choices")
         if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
             raise ValueError("Meta AI response is missing choices")
+        if choices[0].get("finish_reason") == "length":
+            raise ValueError(f"Meta AI response exceeded completion token limit ({settings.META_AI_MAX_TOKENS}) on {self.provider_name}")
         message = choices[0].get("message")
         content = message.get("content") if isinstance(message, dict) else None
         if not isinstance(content, str) or not content.strip():

@@ -79,7 +79,7 @@ ScopeGraph combines **deterministic static code analysis** with **Meta AI semant
 ### 🤖 4. Native Model Context Protocol (MCP)
 - Direct integration for **Claude Code**, **Cursor**, and **Codex**.
 - Exposes tools: `analyze_change`, `get_relevant_context`, and `suggest_tests`.
-- Reduces prompt token consumption by **78%** by serving verified context briefs instead of whole repositories.
+- Serves indexed context briefs; the measured comparison on the three-case sample shows about **6.4% less serialized file-summary context**, not a measured billed-token saving.
 
 </td>
 </tr>
@@ -240,14 +240,16 @@ Configure ScopeGraph as an MCP server with Command: `python` and Args: `["-m", "
 
 ## 📊 Evaluation & Measured Impact
 
-| Metric | Keyword Search Baseline | Raw LLM Analysis | ScopeGraph (AST + Meta AI) | Improvement |
-| :--- | :--- | :--- | :--- | :--- |
-| **Direct Impact Files Found** | 1 (`users.py`) | 2 | **2 (`users.py`, `user_service.py`)** | **+100% precision** |
-| **Indirect Dependents Captured** | 0 (Missed) | 1 (Incomplete) | **2 (`verification.py`, `verification_service.py`)** | **Complete blast radius** |
-| **Hallucinated Files / Symbols** | N/A | 3 nonexistent files | **0 Hallucinations** | **100% Grounded Evidence** |
-| **Agent Prompt Token Usage** | Dumps whole repo | Large prompt | **78% Context Reduction** | **Faster, cheaper agent runs** |
+| Metric, three manually labeled sample cases | Keyword selection | Hybrid retrieval / authorized Meta run |
+| :--- | ---: | ---: |
+| Macro Recall@8 | 0.532 | 0.758 |
+| Macro Precision@8 | 0.292 | 0.458 |
+| Macro impact F1 | — | 0.282 |
+| Macro indirect-impact recall | — | 0.111 |
+| Invalid file/symbol references | — | 0/38 accepted claims |
+| Accepted impact claims unsupported by manual labels | — | 27/38 |
 
-The reproducible [AI Core evaluation](docs/EVALUATION.md) uses labeled test cases on the sample repository measuring macro Recall@8 and impact F1 across hybrid AST retrieval and semantic reasoning stages.
+See the reproducible [AI Core evaluation](docs/EVALUATION.md) for definitions, latency, model-reported token usage, and the limits of this small fixture. The evidence gate validates indexed file and symbol existence; it does not prove that an impact is causally correct.
 
 ---
 
