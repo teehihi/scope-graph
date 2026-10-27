@@ -56,7 +56,7 @@ services:
       - META_AI_PROVIDER=${META_AI_PROVIDER:-offline_demo}
       - META_AI_API_KEY=${META_AI_API_KEY:-}
       - META_AI_BASE_URL=${META_AI_BASE_URL:-https://api.meta.com/v1}
-      - META_AI_MODEL=${META_AI_MODEL:-meta-llama/Llama-3.3-70B-Instruct}
+      - META_AI_MODEL=${META_AI_MODEL:-muse-spark-1.3}
       - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
       - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
       - GITHUB_REDIRECT_URI=${GITHUB_REDIRECT_URI:-http://localhost:3000/auth/callback/github}
@@ -107,8 +107,8 @@ services:
       - WORKSPACE_DIR=/app/data/workspaces
       - META_AI_PROVIDER=${META_AI_PROVIDER:-offline_demo}
       - META_AI_API_KEY=${META_AI_API_KEY:-}
-      - META_AI_BASE_URL=${META_AI_BASE_URL:-https://api.meta.com/v1}
-      - META_AI_MODEL=${META_AI_MODEL:-meta-llama/Llama-3.3-70B-Instruct}
+      - META_AI_BASE_URL=${META_AI_BASE_URL:-https://api.meta.ai/v1}
+      - META_AI_MODEL=${META_AI_MODEL:-muse-spark-1.3}
     volumes:
       - workspace_data:/app/data/workspaces
     networks:

@@ -131,6 +131,10 @@ cd scope-graph
 # 2. Configure environment (optional: add your Meta AI credentials or use zero-config offline mode)
 cp .env.example .env
 
+# For real Meta inference, edit the root .env file:
+# META_AI_PROVIDER=meta_model_api
+# META_AI_API_KEY=<your Meta Model API key>
+
 # 3. Start containers
 docker compose up --build -d
 ```

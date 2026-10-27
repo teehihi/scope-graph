@@ -52,7 +52,7 @@ def run(mode: str, output: Path, allow_paid_request: bool) -> dict:
     if mode == "live":
         if not allow_paid_request:
             raise ValueError("Live evaluation requires --allow-paid-request and explicit team approval")
-        key = os.environ.get("META_AI_API_KEY") or os.environ.get("MODEL_API_KEY")
+        key = os.environ.get("META_AI_API_KEY") or os.environ.get("MODEL_API_KEY") or settings.META_AI_API_KEY
         if not key:
             raise ValueError("META_AI_API_KEY or MODEL_API_KEY is required for live evaluation")
         settings.META_AI_PROVIDER = "meta_model_api"

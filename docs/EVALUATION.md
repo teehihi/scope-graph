@@ -12,7 +12,7 @@ From the repository root with the existing backend requirements installed:
 
 The ignored JSON result records dataset version and size, UTC timestamp, current Git SHA, provider and requested model, config, per-case labels/paths/scores, denominators, latency, and reported token usage. `null` means a denominator is zero or the provider supplied no token count; it does not mean zero tokens. The script creates an in-memory SQLite index and does not modify the sample repository.
 
-For a **separately approved, billable** live run, set an authorized `META_AI_API_KEY` or `MODEL_API_KEY` in the environment and add `--mode live --allow-paid-request`. Live results go to a separate output path; never combine them with offline results. The live run and `test_live_meta_smoke.py` have not been executed because no key or explicit paid-call approval is available.
+For the **approved, billable** live run, put an authorized `META_AI_API_KEY` in the root Git-ignored `.env` (or use an environment variable) and add `--mode live --allow-paid-request`. Live results go to a separate output path; never combine them with offline results. The live run and `test_live_meta_smoke.py` have not been executed because the key has not yet been supplied locally.
 
 ## Observed offline result
 

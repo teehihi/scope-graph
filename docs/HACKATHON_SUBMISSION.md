@@ -22,7 +22,7 @@ The intended live stages are requirement interpretation, impact reasoning, compl
 
 ## Evidence available now
 
-The offline evaluation has three manually labeled cases on the checked-in sample repository. Hybrid retrieval reached macro Recall@8 of 0.758 versus 0.532 for the previous keyword selection rule. Offline impact F1 was 0.343, which is too weak to present as production accuracy. Results and denominators are reproducible with `scripts/evaluate_ai_core.py`. Live evaluation remains pending authorized access and explicit paid-call approval.
+The offline evaluation has three manually labeled cases on the checked-in sample repository. Hybrid retrieval reached macro Recall@8 of 0.758 versus 0.532 for the previous keyword selection rule. Offline impact F1 was 0.343, which is too weak to present as production accuracy. Results and denominators are reproducible with `scripts/evaluate_ai_core.py`. Paid-call approval has been granted; live evaluation remains pending the local API key.
 
 ## Submission checklist
 
