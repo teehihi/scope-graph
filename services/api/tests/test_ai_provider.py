@@ -4,6 +4,7 @@ import httpx
 import pytest
 
 from app.ai.provider import MetaAIHttpProvider, OfflineDemoProvider, get_ai_provider
+from app.ai.schemas import RequirementInterpretation
 from app.core.config import settings
 
 
@@ -74,6 +75,49 @@ def model_response(content, model="served-model", usage=None):
     })
 
 
+def test_official_meta_request_uses_documented_endpoint_and_schema():
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        return model_response(json.dumps(INTERPRETATION), model="muse-spark-1.3")
+
+    provider = MetaAIHttpProvider("test-key", "https://api.meta.ai/v1", "muse-spark-1.3")
+    provider.client.close()
+    provider.client = httpx.Client(transport=httpx.MockTransport(handler))
+    try:
+        result = provider.interpret_requirement("Verify email")
+    finally:
+        provider.client.close()
+
+    assert result.model == "muse-spark-1.3"
+    assert requests[0].url.host == "api.meta.ai"
+    assert requests[0].url.path == "/v1/chat/completions"
+    payload = json.loads(requests[0].content)
+    assert payload["messages"][0]["role"] == "developer"
+    assert "temperature" not in payload
+    assert payload["response_format"] == {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "RequirementInterpretation",
+            "schema": RequirementInterpretation.model_json_schema(),
+        },
+    }
+
+
+def test_partner_request_keeps_its_compatible_json_mode(provider_with_transport):
+    requests = []
+
+    def handler(request):
+        requests.append(json.loads(request.content))
+        return model_response(json.dumps(INTERPRETATION))
+
+    provider_with_transport(handler).interpret_requirement("Verify email")
+    assert requests[0]["messages"][0]["role"] == "system"
+    assert requests[0]["response_format"] == {"type": "json_object"}
+    assert requests[0]["temperature"] == settings.META_AI_TEMPERATURE
+
+
 @pytest.mark.parametrize("stage,payload", [
     ("interpret", INTERPRETATION),
     ("impact", IMPACT),
@@ -103,6 +147,73 @@ def test_http_provider_returns_validated_data_and_actual_metadata(provider_with_
     assert len(requests) == 1
     assert requests[0].url.path == "/v1/chat/completions"
     assert json.loads(requests[0].content)["model"] == "requested-model"
+
+
+def test_impact_prompt_explains_dependency_direction_and_uncertainty(provider_with_transport):
+    requests = []
+
+    def handler(request):
+        requests.append(json.loads(request.content))
+        return model_response(json.dumps(IMPACT))
+
+    context = {
+        "direct": ["app/services/user_service.py"],
+        "upstream": [],
+        "downstream": ["app/api/users.py"],
+        "paths": {"upstream": {}, "downstream": {
+            "app/api/users.py": ["app/services/user_service.py", "app/api/users.py"]
+        }},
+    }
+    provider_with_transport(handler).reason_about_impact(INTERPRETATION, [], context)
+
+    system_prompt, user_prompt = (message["content"] for message in requests[0]["messages"])
+    assert "upstream" in system_prompt and "downstream" in system_prompt
+    assert "potential" in system_prompt.lower()
+    assert context["paths"]["downstream"]["app/api/users.py"] == json.loads(
+        user_prompt.split("Graph Dependency Context: ", 1)[1]
+    )["paths"]["downstream"]["app/api/users.py"]
+
+
+def test_offline_provider_describes_transitive_dependent_as_indirect():
+    context = {
+        "direct": ["app/services/email.py"], "upstream": [],
+        "downstream": ["tests/test_email.py"],
+        "paths": {"upstream": {}, "downstream": {
+            "tests/test_email.py": ["app/services/email.py", "app/api/routes.py", "tests/test_email.py"]
+        }},
+    }
+    response = OfflineDemoProvider().reason_about_impact(
+        {"search_keywords": ["email"]},
+        [{"path": "app/services/email.py", "symbols": []}], context,
+    )
+
+    dependent = next(item for item in response.data["affected_items"]
+                     if item["file_path"] == "tests/test_email.py")
+    assert dependent["impact_type"] == "indirect"
+    assert dependent["category"] == "test"
+    assert "app/services/email.py -> app/api/routes.py -> tests/test_email.py" in dependent["reason"]
+    assert "Direct caller" not in dependent["reason"]
+
+
+def test_offline_provider_keeps_unrelated_graph_neighbor_as_potential_only():
+    context = {
+        "direct": ["app/services/email.py"], "upstream": [],
+        "downstream": ["app/api/health.py"],
+        "paths": {"upstream": {}, "downstream": {
+            "app/api/health.py": ["app/services/email.py", "app/api/health.py"]
+        }},
+    }
+    response = OfflineDemoProvider().reason_about_impact(
+        {"search_keywords": ["email"]},
+        [{"path": "app/services/email.py", "symbols": []}], context,
+    )
+
+    assert [item["file_path"] for item in response.data["affected_items"]] == ["app/services/email.py"]
+
+
+def test_offline_interpretation_does_not_invent_email_keywords_for_unrelated_request():
+    result = OfflineDemoProvider().interpret_requirement("Optimize quantum bridge routing")
+    assert result.data["search_keywords"] == []
 
 
 @pytest.mark.parametrize("bad_impact", [

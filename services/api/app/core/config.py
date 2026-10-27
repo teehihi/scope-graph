@@ -28,12 +28,16 @@ class Settings(BaseSettings):
     MAX_FILE_COUNT: int = Field(default=500, description="Max files to scan")
     MAX_FILE_SIZE_KB: int = Field(default=500, description="Max individual file size to read in KB")
 
+    # AI context retrieval
+    AI_RETRIEVAL_TOP_K: int = Field(default=8, ge=1, le=100, description="Maximum files sent to impact reasoning")
+    AI_CONTEXT_TOKEN_BUDGET: int = Field(default=3000, ge=1, description="Approximate context token budget")
+
     # Meta AI / Inference Provider
     # Options: meta_model_api, fireworks, baseten, modal, together, groq, generic_openai_compat, offline_demo
     META_AI_PROVIDER: str = Field(default="offline_demo", description="Active AI inference provider")
     META_AI_API_KEY: str = Field(default="", description="API key for Meta AI or inference partner")
-    META_AI_BASE_URL: str = Field(default="https://api.meta.com/v1", description="Inference base URL")
-    META_AI_MODEL: str = Field(default="meta-llama/Llama-3.3-70B-Instruct", description="Exact model name or ID")
+    META_AI_BASE_URL: str = Field(default="https://api.meta.ai/v1", description="Inference base URL")
+    META_AI_MODEL: str = Field(default="muse-spark-1.3", description="Exact model name or ID")
     META_AI_TEMPERATURE: float = Field(default=0.1, description="Sampling temperature")
     META_AI_MAX_TOKENS: int = Field(default=3000, description="Max completion tokens")
     META_AI_MAX_RETRIES: int = Field(default=2, ge=0, le=5, description="Retries after transient inference failures")

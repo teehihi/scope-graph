@@ -1,0 +1,28 @@
+{
+  "dataset_version": "2026-10-27-manual-v1",
+  "repository": "examples/sample-repository",
+  "label_policy": "Manual file-level labels from the checked-in source. Direct means likely edit target; indirect means a related regression test or caller to inspect. Relevance means useful retrieval context, which is broader than impact.",
+  "cases": [
+    {
+      "id": "email_confirmation",
+      "requirement": "Require email verification before users can change their email address",
+      "retrieval_relevant": ["app/api/users.py", "app/services/user_service.py", "app/api/verification.py", "app/services/verification_service.py", "app/models/verification_token.py", "tests/test_users.py", "tests/test_verification.py"],
+      "impact": {
+        "direct": ["app/api/users.py", "app/services/user_service.py", "app/api/verification.py", "app/services/verification_service.py"],
+        "indirect": ["app/models/verification_token.py", "tests/test_users.py", "tests/test_verification.py"]
+      }
+    },
+    {
+      "id": "password_hashing",
+      "requirement": "Strengthen password hashing and verification",
+      "retrieval_relevant": ["app/core/security.py", "tests/test_auth.py", "app/api/auth.py"],
+      "impact": {"direct": ["app/core/security.py"], "indirect": ["tests/test_auth.py"]}
+    },
+    {
+      "id": "token_expiry",
+      "requirement": "Shorten email verification token expiry to thirty minutes",
+      "retrieval_relevant": ["app/core/config.py", "app/services/verification_service.py", "app/models/verification_token.py", "tests/test_verification.py"],
+      "impact": {"direct": ["app/core/config.py", "app/services/verification_service.py"], "indirect": ["tests/test_verification.py"]}
+    }
+  ]
+}

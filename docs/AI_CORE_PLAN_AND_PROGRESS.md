@@ -1,79 +1,57 @@
-# AI Core plan and progress
+# ScopeGraph AI Core — plan and progress
 
-- **Updated:** 2026-10-27 (Asia/Bangkok)
-- **Workstream:** Meta Global AI Developer Hackathon 2026, AI Core
-- **Working branch:** [`ai/evidence-grounding-v2`](https://github.com/teehihi/scope-graph/tree/ai/evidence-grounding-v2)
-- **SG-AI-02 code checkpoint:** `d511b340b19e8dc77e54488554b19114fc00abde`
-- **Current checkpoint:** SG-AI-02 delivered; awaiting review before SG-AI-03.
+- Updated: 2026-10-27 (Asia/Bangkok)
+- Branch: [ai/evidence-grounding-v2](https://github.com/teehihi/scope-graph/tree/ai/evidence-grounding-v2)
+- Scope: AI Core workstream only. Frontend, authentication, multi-language parsing, direct Git ingestion, deployment, and the wider product roadmap are separate work.
+- Historical audit: [AI_CORE_BASELINE.md](AI_CORE_BASELINE.md). Its original environment and defect status is superseded by this file.
 
-This is the team handoff for the AI Core workstream. It records completed code, the remaining plan, and evidence for the current checkpoint. [AI_CORE_BASELINE.md](AI_CORE_BASELINE.md) is the **historical Phase 0 snapshot**; its environment and bug-status sections do not describe the code after SG-AI-01 and SG-AI-02.
+## Status
 
-## Project context
-
-ScopeGraph indexes uploaded repositories, builds a Python source/dependency graph, and gives developers or coding agents a change-impact report with source evidence. The existing product has a React dashboard, FastAPI REST routes, and MCP tools (`analyze_change`, `get_relevant_context`, `suggest_tests`). It can run with a deterministic offline demo provider; the HTTP inference adapter has now been tested with mocked responses. See [ARCHITECTURE.md](ARCHITECTURE.md) and [MCP_SETUP.md](MCP_SETUP.md) for system and tool setup.
-
-Python AST symbol resolution, ZIP ingestion, SQLAlchemy persistence, and graph traversal are implemented. TS/JS/Go symbol parsing and backend authentication are partial; direct Git clone ingestion is planned. This document tracks the **AI Core** changes only, not a completion claim for the entire product.
-
-## Progress at a glance
-
-| Stage | Status | Delivered or next acceptance focus | Commit |
-| --- | --- | --- | --- |
-| Phase 0 — audit | Complete | Mapped the existing pipeline, defects, contracts, environment, and implementation order. No production code changed. | `a0eecc7` |
-| SG-AI-01 — evidence grounding v2 | Complete | Exact indexed file/symbol association; safe path and snippet handling; separate existence from impact support; honest grounding counts. | `9347718` |
-| SG-AI-02 — structured provider | Complete; review checkpoint | Pydantic v2 response validation, bounded transient retries, explicit provider failure, response-reported metadata, and mocked HTTP tests. | `d511b34` |
-| SG-AI-03 — hybrid retrieval | Planned | Deterministic ranking, graph neighbors, top-k and context budget; compare Recall@K and latency with the same baseline fixtures. | — |
-| SG-AI-04 — graph-aware reasoning | Planned | Correct edge direction and depth, cycle handling, explainable paths, validated completeness suggestions. | — |
-| SG-AI-05 — authorized Meta integration | Planned; depends on verified access | Confirm endpoint/model and team credentials; run an explicitly opted-in live smoke test. | — |
-| SG-AI-06 — evaluation harness | Planned | Human-labeled fixtures, reproducible metrics with denominators, machine-readable results, and qualified documentation. | — |
-
-No PR has been opened and nothing has been merged into `main` as part of this workstream.
-
-## What is implemented now
-
-### SG-AI-01: grounded impact claims
-
-- `services/api/app/evidence/validator.py` matches a claimed symbol to its **specific indexed file** and rejects missing, empty, unsafe, or ambiguous paths. Snippet extraction checks workspace containment and uses the matched file/symbol lines.
-- Report items retain the existing consumer fields and add `existence_verified` and `impact_supported`. File existence alone does not establish that a proposed change affects the file. Invalid claims go to `rejected_hallucinations`, and grounding metrics do not count those claims as verified.
-- `services/api/tests/test_validator.py` covers wrong-file symbols, suffix ambiguity, absent symbols, file-level claims, snippets, metrics, and escape paths.
-
-### SG-AI-02: structured inference adapter
-
-- `services/api/app/ai/schemas.py` defines strict Pydantic v2 models for requirement interpretation, impact items/results, and completeness review. `services/api/app/ai/provider.py` validates model JSON before handing it to the orchestrator.
-- The HTTP adapter retries bounded 429, 5xx, connection, and timeout failures. Permanent authentication errors fail immediately. Malformed responses and invalid schemas fail explicitly; provider response bodies are not included in error messages.
-- A configured live provider without an API key records a failed analysis run instead of silently producing an offline report. `OfflineDemoProvider` remains available and is labeled as a demo.
-- `services/api/app/analysis/orchestrator.py` stores the selected provider, model identity reported by the response, measured inference latency, and token usage when supplied. The report duration includes brief generation. Tests in `test_ai_provider.py` and `test_e2e_analysis.py` use mocked HTTP responses; they do not exercise a paid endpoint.
-
-These changes preserve the existing REST/MCP report envelope and frontend-consumed impact fields. The added operational metadata fields are additive. Frontend, authentication, database schema, and deployment were not changed.
-
-## Verification and limits
-
-| Check | Observed result |
-| --- | --- |
-| Python runtime | Local `.venv` uses Python **3.13.13**, matching the project target. Backend requirements are installed locally; `.venv` is ignored by Git. |
-| Backend suite after SG-AI-02 | **50 passed in 6.70s** on 2026-10-27. PowerShell command: `$env:PYTHONPATH='services/api'; $env:PYTHONDONTWRITEBYTECODE='1'; .\.venv\Scripts\python.exe -m pytest services/api/tests/ -v -p no:cacheprovider --basetemp <fresh-workspace-path> --tb=short`. |
-| Source hygiene | `git diff --cached --check` passed before the SG-AI-02 commit. The pushed remote branch and local HEAD were both verified at `d511b340b19e8dc77e54488554b19114fc00abde`; the working tree was clean. |
-| Live Meta inference | **Unverified.** No authorized endpoint/model, credential, paid request, or live benchmark has been confirmed. Mocked HTTP success is adapter verification only. |
-| Performance/quality benchmarks | **Not yet measured.** Numerical claims in existing README/evaluation material lack a reproducible run record; treat them as unverified until SG-AI-06. |
-
-The Phase 0 audit initially found only Python 3.14 and missing backend packages. Python 3.13 and the existing requirements were installed later with user authorization; this resolves that *local test-environment* blocker. The backend suite does not validate a real inference service, frontend build, or Redis-backed cache behavior. No frontend files changed in SG-AI-01/02.
-
-## Remaining plan and ownership boundaries
-
-Work remains sequential so that each result can be reviewed before the next task changes shared modules.
-
-| Next task | Planned change and acceptance evidence | Main files / boundaries |
+| Task | Status | Evidence / remaining gate |
 | --- | --- | --- |
-| **SG-AI-03** | Add a separate deterministic retriever using path, symbol, metadata, layer, and graph-neighbor signals. Stable ties, deduplicated paths, configurable `top_k` and context budget, repository isolation, safe weak-match behavior. Remove the unconditional first-eight-file fallback. Test ranking, ties, cycles, no matches, and isolation; compare Recall@K and latency on identical fixtures. | New `analysis/retriever.py`; focused integration in `analysis/orchestrator.py`; `graph/engine.py` only if graph access needs adjustment; `tests/test_retriever.py`. No embeddings/vector database. |
-| **SG-AI-04** | Verify stored edge direction, depth and cycles; return deterministic impact context and dependency paths where feasible. Keep direct, indirect, and potential impacts distinct. Validate completeness-review candidates before including them in a report. | `graph/engine.py`, `analysis/orchestrator.py`, provider context, graph/e2e tests. Keep `EvidenceValidator` in the report path. |
-| **SG-AI-05** | Verify an officially supported model endpoint/identifier and authorized team access, then test the full pipeline with an explicitly opted-in live smoke test. Record actual provider/model and sanitized metrics. | Provider/config, `.env.example`, e2e smoke test, architecture docs. Credentials stay in environment variables; any paid call needs explicit approval. |
-| **SG-AI-06** | Create human-labeled retrieval and impact fixtures; measure Precision@K, Recall@K, MRR, impact precision/recall/F1, grounding error rates, latency, tokens, and context reduction with denominators. Separate offline and live results; revise unsupported claims in existing docs. | `services/api/tests/evaluation/`, `scripts/evaluate_ai_core.py`, `docs/EVALUATION.md`, `docs/DEMO_SCRIPT.md`. |
+| Phase 0 audit | Complete | Pipeline, contracts, risks, and test environment were recorded. |
+| SG-AI-01 evidence grounding | Complete, pushed | File/symbol association, safe snippets, existence versus causal support, rejection metrics. Commit `9347718`. |
+| SG-AI-02 structured provider | Complete, pushed | Pydantic validation, bounded retry, explicit provider failures, reported model/token metadata, mocked HTTP tests. Commit `d511b34`. |
+| SG-AI-04 graph reasoning | Complete, pushed | Symmetric bounded traversal, stable paths, potential impact separation, validated review suggestions. Commit `111c396`. |
+| SG-AI-03 hybrid retrieval | Complete, pushed | Repository-scoped deterministic path/symbol/metadata/layer/graph ranking, stable ties, top K and context budget, no unconditional first-eight fallback. Labeled comparison in [EVALUATION.md](EVALUATION.md). Commit `125c6be`. |
+| SG-AI-05 Meta integration | Adapter and opt-in smoke prepared; live gate pending | Official URL/model and JSON Schema configured; mocked request/full-pipeline tests pass. No key or paid-call approval is present, so a real Meta call remains unverified. |
+| SG-AI-06 evaluation | Offline harness implemented; live gate pending | Three manually labeled cases, retrieval/impact/grounding/efficiency metrics, JSON run record, revised unsupported benchmark claims. Live metrics require SG-AI-05 access. |
 
-`analysis/orchestrator.py` is shared by SG-AI-03/04; `ai/provider.py` by SG-AI-04/05. Coordinate edits to those files with the active task owner. The REST routes, MCP tool envelopes, frontend types, database schema, and sandbox rules are compatibility boundaries. Changes outside the named AI Core scope need a demonstrated need and explicit approval.
+The latest user request authorizes completing the workstream without pausing at each task. No PR has been opened or merged into main.
 
-## Team handoff: next action
+## Architecture and contracts
 
-1. Review SG-AI-02 at `d511b34`, especially strict schema fields and the added metadata in analysis reports.
-2. Start SG-AI-03 only after that review. Capture the existing keyword retrieval behavior as a measured baseline on the same small fixtures used for the new retriever; do not use numbers from current documentation as measured results.
-3. For each task, add a failing regression test where practical, make the focused change, run targeted and full backend tests, inspect `git diff --check`, report actual results and limitations, then pause for review.
+The seven-step `AnalysisOrchestrator` still interprets, retrieves, traverses, reasons, reviews, validates, and writes the brief. `HybridRetriever` only selects indexed, repository-scoped context for impact reasoning; `EvidenceValidator` still gates model claims. REST and MCP report envelopes remain compatible; `retrieval_metadata` is additive. Indexed relative paths are normalized to forward slashes on Windows so graph links and source labels resolve consistently. No database migration, frontend edit, new dependency, or secret was added.
 
-For local verification on Windows, set `PYTHONPATH=services/api` and use `.venv/Scripts/python.exe`. Use a **new** `--basetemp` directory inside the workspace for each pytest run because pytest replaces an existing basetemp directory. Do not put API keys in tests, logs, commits, or this document.
+The official Meta docs specify the [API base URL](https://dev.meta.ai/docs/api-reference), [Muse Spark 1.3 model](https://dev.meta.ai/docs/models), and [JSON Schema response format](https://dev.meta.ai/docs/structured-output). The adapter follows those formats; only mocked requests have been exercised. Partner providers retain their existing OpenAI-compatible JSON mode. Offline mode remains the default.
+
+## Verification and measured limitations
+
+- Local `.venv`: Python 3.13.13 with the existing `services/api/requirements.txt`.
+- SG-AI-03 checkpoint: 63 backend tests passed before SG-AI-05/06 edits.
+- SG-AI-05 provider tests: 30 passed.
+- SG-AI-06 metric/scanner focused tests: 5 passed.
+- Final backend suite after SG-AI-03/05/06 code edits: **69 passed, 1 live-smoke skipped** on 2026-10-27. The linked branch records the final pushed SHA; the evaluation JSON records the SHA used for each local run.
+- Frontend build was attempted as an integration check but could not start: `tsc` is unavailable because frontend packages are not installed in this workspace. No frontend source or TypeScript contract changed in this workstream.
+- Offline labeled evaluation: 3 cases, 14 indexed files, macro Recall@8 0.758 versus 0.532 for the previous selection rule. Impact F1 0.343; 17 of 24 validator-accepted impact claims are unsupported by the manual file/type labels. These are small demo-fixture measurements, not a Meta quality claim.
+- A real Meta smoke and live evaluation remain unverified. Neither `META_AI_API_KEY` nor `MODEL_API_KEY` is present in this environment. A paid call needs separate explicit approval.
+- `potential_impacts` is in REST/MCP JSON but is not displayed by the current frontend. The offline provider remains tailored to the email-change demo; non-email impact quality is weak. Graph edge construction may still conflate same-named symbols across files; traversal uses persisted edges.
+
+## Reproduce
+
+From the repository root in PowerShell:
+
+```powershell
+$env:PYTHONPATH='services/api'
+.\.venv\Scripts\python.exe -m pytest services/api/tests/ -v -p no:cacheprovider --basetemp data/pytest-NEW-UNUSED-DIRECTORY --tb=short
+.\.venv\Scripts\python.exe scripts/evaluate_ai_core.py --mode offline --output data/ai_core_evaluation.json
+```
+
+Pytest replaces its basetemp, so choose a new directory inside the workspace. The JSON output is Git-ignored. A live smoke is intentionally skipped in the normal suite. After the team supplies an authorized key and approves a paid call, set `RUN_META_LIVE_SMOKE=1`, `ALLOW_PAID_META_SMOKE=1`, and `META_AI_API_KEY` (or `MODEL_API_KEY`) in the environment, then run only `services/api/tests/test_live_meta_smoke.py` with the same pytest command. The live evaluation is separate: `scripts/evaluate_ai_core.py --mode live --allow-paid-request --output data/ai_core_live_evaluation.json`. Do not paste credentials into logs or commit them.
+
+## Team next actions
+
+1. Review this branch and the human labels in `services/api/tests/evaluation/ai_core_cases.json`; expand the fixture before drawing product-wide quality conclusions.
+2. Provide authorized Meta Model API access and explicit paid-call approval if live SG-AI-05/06 validation is desired. Inspect the sanitized live result for actual model identity, token usage, latency, and grounding.
+3. Address the low offline impact F1 and the known indexer edge-resolution limitation in follow-up tasks with focused fixtures.
+4. Run a frontend build only if a future change touches the UI or its TypeScript contracts. Do not present `potential_impacts` as visible in the current UI.

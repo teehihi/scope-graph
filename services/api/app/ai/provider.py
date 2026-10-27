@@ -78,20 +78,27 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
             timeout=45.0,
         )
 
-    def _call_model(self, system_prompt: str, user_prompt: str, expect_json: bool = True) -> tuple[dict[str, Any] | str, float, str, dict[str, int] | None]:
+    def _call_model(self, system_prompt: str, user_prompt: str, expect_json: bool = True, schema: type[BaseModel] | None = None) -> tuple[dict[str, Any] | str, float, str, dict[str, int] | None]:
         start = time.perf_counter()
         url = f"{self.base_url}/chat/completions"
         payload = {
             "model": self.model,
             "messages": [
-                {"role": "system", "content": system_prompt},
+                {"role": "developer" if self.provider_name == "meta_model_api" else "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            "temperature": settings.META_AI_TEMPERATURE,
             "max_tokens": settings.META_AI_MAX_TOKENS,
         }
+        if self.provider_name != "meta_model_api":
+            payload["temperature"] = settings.META_AI_TEMPERATURE
         if expect_json:
-            payload["response_format"] = {"type": "json_object"}
+            if self.provider_name == "meta_model_api" and schema is not None:
+                payload["response_format"] = {
+                    "type": "json_schema",
+                    "json_schema": {"name": schema.__name__, "schema": schema.model_json_schema()},
+                }
+            else:
+                payload["response_format"] = {"type": "json_object"}
 
         for attempt in range(self.max_retries + 1):
             try:
@@ -159,7 +166,7 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
         return content, latency, actual_model, token_usage
 
     def _validated_response(self, schema: type[BaseModel], system_prompt: str, user_prompt: str) -> AIProviderResponse:
-        data, latency, model, token_usage = self._call_model(system_prompt, user_prompt)
+        data, latency, model, token_usage = self._call_model(system_prompt, user_prompt, schema=schema)
         try:
             validated = schema.model_validate(data)
         except ValidationError:
@@ -197,6 +204,11 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
             "You are a principal engineer conducting a code impact analysis.\n"
             "Given a requirement and real indexed repository files with symbols and dependencies,\n"
             "identify which files and symbols are directly or indirectly affected.\n"
+            "Graph edges run from an importing/calling file to its dependency: upstream means dependencies, "
+            "downstream means callers/dependents. Use the supplied paths to explain any cascade.\n"
+            "A graph connection alone is only a potential impact. Mark direct only for a requirement-specific "
+            "change target; mark indirect only when the dependency path and requirement support a plausible "
+            "cascade. Put uncertain possibilities in risks or assumptions.\n"
             "CRITICAL: Do NOT invent file paths or symbols. Only reference items provided in the repository context.\n"
             "Respond ONLY with a JSON object matching:\n"
             "{\n"
@@ -296,7 +308,7 @@ class OfflineDemoProvider(BaseMetaAIProvider):
             "security_implications": ["Prevent unauthorized account takeover", "Token expiration and single-use enforcement"],
             "validation_requirements": ["Valid email format", "Signature verification on token", "Expiration check"],
             "affected_layers": ["api", "service", "model", "test"],
-            "search_keywords": keywords or ["user", "email"],
+            "search_keywords": keywords,
             "ambiguities": ["Should old email also receive notification of pending change?"]
         }
         return AIProviderResponse(
@@ -349,14 +361,26 @@ class OfflineDemoProvider(BaseMetaAIProvider):
 
         # Add downstream dependents from dependency context
         for downstream_path in dependency_context.get("downstream", []):
+            # A dependency edge alone is a candidate, not proof of impact.
+            if not any(k in downstream_path.lower() for k in keywords):
+                continue
             if not any(item["file_path"] == downstream_path for item in affected_items):
+                lower_path = downstream_path.lower()
+                category = (
+                    "test" if "test" in lower_path else
+                    "api" if "api" in lower_path or "route" in lower_path else
+                    "model" if "model" in lower_path else
+                    "service" if "service" in lower_path else "module"
+                )
+                route = dependency_context.get("paths", {}).get("downstream", {}).get(downstream_path)
                 affected_items.append({
                     "file_path": downstream_path,
                     "symbol": None,
                     "impact_type": "indirect",
-                    "category": "service",
-                    "reason": "Direct caller of affected service layer in dependency graph",
-                    "confidence": 0.75,
+                    "category": category,
+                    "reason": "Requirement-matched downstream file via dependency path: " +
+                              (" -> ".join(route) if route else downstream_path),
+                    "confidence": 0.65,
                 })
 
         risks = [
