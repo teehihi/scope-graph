@@ -20,11 +20,6 @@ Built for the **Meta Global AI Developer Hackathon** (Push the Frontier Track).
 [![Meta AI](https://img.shields.io/badge/Meta%20AI-Llama%203.3%20%2F%20Muse%20Spark-0668E1.svg?logo=meta&logoColor=white)](https://ai.meta.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-<br/>
-
-<p align="center">
-  <img src="docs/scopegraph-brand-final/illustrations/scopegraph-dashboard.svg" alt="ScopeGraph Dashboard UI" width="100%" />
-</p>
 
 </div>
 
