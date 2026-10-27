@@ -66,7 +66,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   ];
 
   return (
-    <div className="relative w-full h-full bg-slate-50 flex flex-col">
+    <div className="relative w-full h-full bg-slate-50 flex flex-col min-h-0">
       {/* Top Filter Bar */}
       <div className="absolute top-4 left-4 z-10 flex items-center gap-2 bg-white/90 backdrop-blur p-1.5 rounded-xl border border-slate-200 shadow-sm">
         <div className="flex items-center gap-1 pl-2 pr-1 text-slate-600 text-xs font-medium">
@@ -108,7 +108,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       </div>
 
       {/* Legend Badge */}
-      <div className="absolute bottom-4 left-4 z-10 bg-white/90 backdrop-blur p-2.5 rounded-xl border border-slate-200 shadow-sm text-xs space-y-1.5">
+      <div className="absolute bottom-4 left-4 z-10 bg-white/90 backdrop-blur p-2.5 rounded-xl border border-slate-200 shadow-sm text-xs space-y-1.5 pointer-events-none">
         <div className="font-semibold text-slate-800 text-[11px] uppercase tracking-wider">Legend</div>
         <div className="flex items-center gap-2 text-slate-600">
           <span className="w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-rose-200" />
@@ -124,9 +124,10 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         </div>
       </div>
 
-      {/* Main Flow Canvas */}
-      <div className="w-full h-full flex-1">
+      {/* Main Flow Canvas with explicit height */}
+      <div className="w-full h-full flex-1 min-h-[400px]">
         <ReactFlow
+          key={`rf-${filteredNodes.length}-${impactedCount}`}
           nodes={filteredNodes}
           edges={filteredEdges}
           onNodesChange={onNodesChange}
@@ -134,6 +135,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           onNodeClick={onNodeClick}
           nodeTypes={nodeTypes}
           fitView
+          fitViewOptions={{ padding: 0.25 }}
           minZoom={0.2}
           maxZoom={1.5}
         >
