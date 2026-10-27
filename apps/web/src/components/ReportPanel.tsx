@@ -10,6 +10,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { AnalysisReport, ImpactItem } from '../types';
+import { RoleAiAgentIcon, StatusCompletedIcon } from './BrandIcons';
 
 interface ReportPanelProps {
   report: AnalysisReport;
@@ -38,16 +39,16 @@ export const ReportPanel: React.FC<ReportPanelProps> = ({
   };
 
   return (
-    <div className="h-80 border-t border-slate-200 bg-white flex flex-col z-10 shadow-md">
+    <div className="h-80 border-t border-[#E4E7E1] bg-white flex flex-col z-10 shadow-md">
       {/* Tab Header */}
-      <div className="flex items-center justify-between border-b border-slate-200 px-6 bg-slate-50/70">
+      <div className="flex items-center justify-between border-b border-[#E4E7E1] px-6 bg-[#F7F8F5]">
         <div className="flex items-center gap-1">
           <button
             onClick={() => setActiveTab('items')}
             className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
               activeTab === 'items'
-                ? 'border-sky-600 text-sky-700 bg-white'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'border-[#151923] text-[#151923] bg-white'
+                : 'border-transparent text-[#8B929E] hover:text-[#151923]'
             }`}
           >
             <FileText className="w-3.5 h-3.5" />
@@ -58,11 +59,11 @@ export const ReportPanel: React.FC<ReportPanelProps> = ({
             onClick={() => setActiveTab('risks')}
             className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
               activeTab === 'risks'
-                ? 'border-sky-600 text-sky-700 bg-white'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'border-[#151923] text-[#151923] bg-white'
+                : 'border-transparent text-[#8B929E] hover:text-[#151923]'
             }`}
           >
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+            <AlertTriangle className="w-3.5 h-3.5 text-[#F5A623]" />
             <span>Risks & Regressions ({report.risks.length})</span>
           </button>
 
@@ -70,11 +71,11 @@ export const ReportPanel: React.FC<ReportPanelProps> = ({
             onClick={() => setActiveTab('tests')}
             className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
               activeTab === 'tests'
-                ? 'border-sky-600 text-sky-700 bg-white'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'border-[#151923] text-[#151923] bg-white'
+                : 'border-transparent text-[#8B929E] hover:text-[#151923]'
             }`}
           >
-            <TestTube className="w-3.5 h-3.5 text-cyan-600" />
+            <TestTube className="w-3.5 h-3.5 text-[#526BEE]" />
             <span>Suggested Tests ({report.suggested_tests.length})</span>
           </button>
 
@@ -82,17 +83,22 @@ export const ReportPanel: React.FC<ReportPanelProps> = ({
             onClick={() => setActiveTab('brief')}
             className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
               activeTab === 'brief'
-                ? 'border-sky-600 text-sky-700 bg-white'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'border-[#151923] text-[#151923] bg-white'
+                : 'border-transparent text-[#8B929E] hover:text-[#151923]'
             }`}
           >
-            <Zap className="w-3.5 h-3.5 text-purple-600" />
+            <Zap className="w-3.5 h-3.5 text-[#526BEE]" />
             <span>Coding Agent Brief</span>
           </button>
         </div>
 
         {/* Operational info */}
-        <div className="flex items-center gap-2 text-[11px] text-slate-500 font-mono">
+        <div className="flex items-center gap-2 text-[11px] text-[#151923] font-mono">
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#EDF0F7] text-[#151923] border border-[#E4E7E1]">
+            <StatusCompletedIcon size={14} />
+            <span className="font-semibold text-[10px]">Analysis Complete</span>
+          </div>
+          <span>•</span>
           <span>{report.operational_metadata?.model || 'Meta AI'}</span>
           <span>•</span>
           <span>{report.operational_metadata?.execution_time_seconds || 0}s</span>
@@ -107,30 +113,30 @@ export const ReportPanel: React.FC<ReportPanelProps> = ({
             {/* Direct items */}
             {directItems.length > 0 && (
               <div>
-                <div className="text-[11px] font-bold uppercase tracking-wider text-rose-700 mb-2 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-rose-500" />
-                  Direct Changes ({directItems.length})
+                <div className="text-[11px] font-bold uppercase tracking-wider text-[#151923] mb-2 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-[#151923]" />
+                  Direct Changes / Triggers ({directItems.length})
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
                   {directItems.map((item, idx) => (
                     <div
                       key={idx}
                       onClick={() => onSelectItem(item)}
-                      className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                      className={`p-3 rounded-xl border-2 cursor-pointer transition-all ${
                         selectedFilePath === item.file_path
-                          ? 'border-rose-500 bg-rose-50/40 ring-2 ring-rose-500/20'
-                          : 'border-slate-200 hover:border-slate-300 bg-white'
+                          ? 'border-[#151923] bg-[#F7F8F5] ring-2 ring-[#C7F36B]'
+                          : 'border-[#E4E7E1] hover:border-[#8B929E] bg-white'
                       }`}
                     >
                       <div className="flex items-center justify-between mb-1">
-                        <span className="font-mono text-xs font-bold text-slate-900 truncate">
+                        <span className="font-mono text-xs font-bold text-[#151923] truncate">
                           {item.file_path.split('/').pop()}
                         </span>
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-rose-100 text-rose-800">
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#EBFACD] text-[#151923] border border-[#C7F36B]">
                           {Math.round(item.confidence * 100)}%
                         </span>
                       </div>
-                      <p className="font-mono text-[10px] text-slate-500 truncate mb-1.5">{item.file_path}</p>
+                      <p className="font-mono text-[10px] text-[#8B929E] truncate mb-1.5">{item.file_path}</p>
                       <p className="text-xs text-slate-600 line-clamp-2">{item.reason}</p>
                     </div>
                   ))}
@@ -141,30 +147,30 @@ export const ReportPanel: React.FC<ReportPanelProps> = ({
             {/* Indirect items */}
             {indirectItems.length > 0 && (
               <div>
-                <div className="text-[11px] font-bold uppercase tracking-wider text-amber-700 mb-2 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-amber-500" />
-                  Indirect / Downstream Dependents ({indirectItems.length})
+                <div className="text-[11px] font-bold uppercase tracking-wider text-[#526BEE] mb-2 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-[#526BEE]" />
+                  Affected Paths / Downstream Dependents ({indirectItems.length})
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
                   {indirectItems.map((item, idx) => (
                     <div
                       key={idx}
                       onClick={() => onSelectItem(item)}
-                      className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                      className={`p-3 rounded-xl border-2 cursor-pointer transition-all ${
                         selectedFilePath === item.file_path
-                          ? 'border-amber-500 bg-amber-50/40 ring-2 ring-amber-500/20'
-                          : 'border-slate-200 hover:border-slate-300 bg-white'
+                          ? 'border-[#526BEE] bg-[#526BEE]/5 ring-2 ring-[#526BEE]/30'
+                          : 'border-[#E4E7E1] hover:border-[#8B929E] bg-white'
                       }`}
                     >
                       <div className="flex items-center justify-between mb-1">
-                        <span className="font-mono text-xs font-bold text-slate-900 truncate">
+                        <span className="font-mono text-xs font-bold text-[#151923] truncate">
                           {item.file_path.split('/').pop()}
                         </span>
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#526BEE]/10 text-[#526BEE] border border-[#526BEE]/30">
                           {Math.round(item.confidence * 100)}%
                         </span>
                       </div>
-                      <p className="font-mono text-[10px] text-slate-500 truncate mb-1.5">{item.file_path}</p>
+                      <p className="font-mono text-[10px] text-[#8B929E] truncate mb-1.5">{item.file_path}</p>
                       <p className="text-xs text-slate-600 line-clamp-2">{item.reason}</p>
                     </div>
                   ))}
@@ -180,9 +186,9 @@ export const ReportPanel: React.FC<ReportPanelProps> = ({
             {report.risks.map((risk, idx) => (
               <div
                 key={idx}
-                className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50/50 border border-amber-200 text-xs text-amber-900"
+                className="flex items-start gap-2.5 p-3 rounded-xl bg-[#F5A623]/10 border border-[#F5A623]/30 text-xs text-[#151923]"
               >
-                <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <ShieldAlert className="w-4 h-4 text-[#F5A623] shrink-0 mt-0.5" />
                 <span className="leading-relaxed">{risk}</span>
               </div>
             ))}
@@ -195,9 +201,9 @@ export const ReportPanel: React.FC<ReportPanelProps> = ({
             {report.suggested_tests.map((test, idx) => (
               <div
                 key={idx}
-                className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800"
+                className="flex items-start gap-2.5 p-3 rounded-xl bg-[#F7F8F5] border border-[#E4E7E1] text-xs text-[#151923]"
               >
-                <CheckCircle className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
+                <CheckCircle className="w-4 h-4 text-[#526BEE] shrink-0 mt-0.5" />
                 <span className="leading-relaxed font-mono">{test}</span>
               </div>
             ))}
@@ -208,14 +214,17 @@ export const ReportPanel: React.FC<ReportPanelProps> = ({
         {activeTab === 'brief' && (
           <div className="max-w-4xl space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-xs text-slate-500">
-                Ready-to-use structured brief for AI coding agents (Claude Code, Codex, Cursor, etc.):
-              </p>
+              <div className="flex items-center gap-2">
+                <RoleAiAgentIcon size={22} />
+                <p className="text-xs text-slate-600 font-medium">
+                  Ready-to-use structured brief for AI coding agents (Claude Code, Codex, Cursor, etc.):
+                </p>
+              </div>
               <button
                 onClick={handleCopyBrief}
-                className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-sky-600 text-white hover:bg-sky-700 transition-colors shadow-sm"
+                className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#151923] text-white hover:bg-slate-800 transition-colors shadow-sm"
               >
-                {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                {copied ? <Check className="w-3.5 h-3.5 text-[#C7F36B]" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>{copied ? 'Copied to Clipboard!' : 'Copy Brief for Agent'}</span>
               </button>
             </div>

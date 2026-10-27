@@ -50,20 +50,20 @@ export const ScopeNode: React.FC<NodeProps> = memo(({ data, selected }) => {
   const isDirect = nodeData.impact_status === 'direct';
   const isIndirect = nodeData.impact_status === 'indirect';
 
-  let containerBorder = 'border-slate-200 bg-white hover:border-slate-300';
+  let containerBorder = 'border-[#E4E7E1] bg-white hover:border-[#8B929E]';
   if (selected) {
-    containerBorder = 'border-sky-600 ring-2 ring-sky-500/20 bg-white';
+    containerBorder = 'border-[#151923] ring-2 ring-[#526BEE] bg-white';
   } else if (isDirect) {
-    containerBorder = 'border-rose-500 bg-rose-50/30 ring-2 ring-rose-500/20 shadow-sm';
+    containerBorder = 'border-[#151923] bg-white ring-2 ring-[#C7F36B] shadow-sm';
   } else if (isIndirect) {
-    containerBorder = 'border-amber-500 bg-amber-50/20 ring-2 ring-amber-500/10 shadow-sm';
+    containerBorder = 'border-[#526BEE] bg-white ring-2 ring-[#526BEE]/30 shadow-sm';
   }
 
   return (
     <div
-      className={`w-64 rounded-xl border p-3.5 shadow-sm transition-all duration-150 cursor-pointer ${containerBorder}`}
+      className={`w-72 rounded-xl border-2 p-3.5 shadow-sm transition-all duration-150 cursor-pointer ${containerBorder}`}
     >
-      <Handle type="target" position={Position.Top} className="!w-2 !h-2" />
+      <Handle type="target" position={Position.Left} className="!w-2.5 !h-2.5 !bg-[#526BEE] !border-2 !border-white" />
 
       {/* Header */}
       <div className="flex items-center justify-between gap-2 mb-2">
@@ -78,38 +78,54 @@ export const ScopeNode: React.FC<NodeProps> = memo(({ data, selected }) => {
 
         {/* Impact Badge */}
         {isDirect && (
-          <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 animate-pulse">
-            Direct
+          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#EBFACD] text-[#151923] border border-[#C7F36B] flex items-center gap-1 shrink-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#151923]" />
+            Trigger
           </span>
         )}
         {isIndirect && (
-          <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
-            Indirect
+          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#526BEE]/10 text-[#526BEE] border border-[#526BEE]/30 flex items-center gap-1 shrink-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#526BEE]" />
+            Affected
           </span>
         )}
       </div>
 
       {/* File Label */}
-      <div className="font-semibold text-xs text-slate-900 truncate mb-1" title={nodeData.path}>
+      <div className="font-semibold text-xs text-[#151923] truncate mb-1" title={nodeData.path}>
         {nodeData.label}
       </div>
 
       {/* Relative path */}
-      <div className="font-mono text-[10px] text-slate-500 truncate mb-2.5" title={nodeData.path}>
+      <div className="font-mono text-[10px] text-[#8B929E] truncate mb-2.5" title={nodeData.path}>
         {nodeData.path}
       </div>
 
-      {/* Meta stats */}
-      <div className="flex items-center justify-between text-[11px] text-slate-600 pt-2 border-t border-slate-100">
-        <span>{nodeData.symbol_count} symbols</span>
-        {nodeData.endpoints && nodeData.endpoints.length > 0 && (
-          <span className="font-mono text-[10px] bg-slate-100 px-1 rounded text-slate-700">
-            {nodeData.endpoints[0].method} {nodeData.endpoints[0].route || ''}
+      {/* Meta stats & Full Endpoint badge */}
+      <div className="flex flex-col gap-1.5 pt-2 border-t border-[#E4E7E1]">
+        <div className="flex items-center justify-between text-[11px] text-[#8B929E]">
+          <span>{nodeData.symbol_count} symbols</span>
+          <span className="uppercase text-[9px] font-semibold tracking-wider text-slate-400">
+            {nodeData.layer}
           </span>
+        </div>
+
+        {nodeData.endpoints && nodeData.endpoints.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {nodeData.endpoints.map((ep, idx) => (
+              <span
+                key={idx}
+                className="font-mono text-[10px] bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-[#151923] font-medium break-all"
+                title={`${ep.method} ${ep.route || ep.name}`}
+              >
+                <strong className="text-[#526BEE]">{ep.method}</strong> {ep.route || ep.name}
+              </span>
+            ))}
+          </div>
         )}
       </div>
 
-      <Handle type="source" position={Position.Bottom} className="!w-2 !h-2" />
+      <Handle type="source" position={Position.Right} className="!w-2.5 !h-2.5 !bg-[#526BEE] !border-2 !border-white" />
     </div>
   );
 });

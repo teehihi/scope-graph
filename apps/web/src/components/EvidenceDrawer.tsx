@@ -1,6 +1,7 @@
 import React from 'react';
-import { X, FileCode, ShieldCheck } from 'lucide-react';
+import { X, FileCode } from 'lucide-react';
 import { NodeData, ImpactItem } from '../types';
+import { RoleReviewerIcon, StatusPotentiallyAffectedIcon, StatusCompletedIcon } from './BrandIcons';
 
 interface EvidenceDrawerProps {
   selectedNode: NodeData | null;
@@ -45,25 +46,32 @@ export const EvidenceDrawer: React.FC<EvidenceDrawerProps> = ({
       <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
         {/* Impact Status Banner */}
         <div
-          className={`p-3 rounded-xl border ${
+          className={`p-3.5 rounded-xl border ${
             isDirect
-              ? 'bg-rose-50 border-rose-200 text-rose-800'
+              ? 'bg-[#151923] border-[#151923] text-white shadow-sm'
               : isIndirect
-              ? 'bg-amber-50 border-amber-200 text-amber-800'
-              : 'bg-slate-50 border-slate-200 text-slate-700'
+              ? 'bg-[#526BEE]/5 border-[#526BEE]/30 text-[#151923]'
+              : 'bg-[#F7F8F5] border-[#E4E7E1] text-[#151923]'
           }`}
         >
-          <div className="flex items-center justify-between font-semibold mb-1">
-            <span className="uppercase tracking-wider text-[10px]">
-              {isDirect ? 'Direct Impact' : isIndirect ? 'Indirect Impact' : 'No Impact Detected'}
+          <div className="flex items-center justify-between font-semibold mb-1.5">
+            <span className="uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+              {isDirect ? (
+                <StatusPotentiallyAffectedIcon size={16} />
+              ) : (
+                <StatusCompletedIcon size={16} />
+              )}
+              <span className={isDirect ? 'text-[#C7F36B] font-bold' : isIndirect ? 'text-[#526BEE] font-bold' : 'text-[#8B929E]'}>
+                {isDirect ? 'Trigger / Direct Target' : isIndirect ? 'Affected Path (Downstream)' : 'Unchanged in Scope'}
+              </span>
             </span>
             {impactItem && (
-              <span className="text-[10px] bg-white/80 px-1.5 py-0.5 rounded border border-current">
+              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${isDirect ? 'bg-[#151923] border-[#C7F36B] text-[#C7F36B]' : 'bg-white border-[#E4E7E1] text-[#151923]'}`}>
                 {Math.round(impactItem.confidence * 100)}% Confidence
               </span>
             )}
           </div>
-          <p className="text-[11px] leading-relaxed">
+          <p className={`text-[11px] leading-relaxed ${isDirect ? 'text-slate-200' : 'text-slate-600'}`}>
             {impactItem?.reason ||
               (isDirect
                 ? 'This module is a direct code change target for the proposed requirement.'
@@ -76,7 +84,7 @@ export const EvidenceDrawer: React.FC<EvidenceDrawerProps> = ({
         {/* Evidence Verification Badge */}
         {impactItem && (
           <div className="flex items-center gap-2 p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800">
-            <ShieldCheck className="w-4 h-4 shrink-0 text-emerald-600" />
+            <RoleReviewerIcon size={18} />
             <div className="text-[11px]">
               <span className="font-semibold">Repository-Grounded Fact: </span>
               {impactItem.is_verified_fact

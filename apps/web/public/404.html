@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>404 — Lost in the graph? | ScopeGraph</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <style>
+    :root {
+      --ink: #151923;
+      --white: #F7F8F5;
+      --lime: #C7F36B;
+      --blue: #526BEE;
+      --gray: #8B929E;
+      --border: #E4E7E1
+    }
+
+    * {
+      box-sizing: border-box
+    }
+
+    body {
+      margin: 0;
+      background: var(--white);
+      color: var(--ink);
+      font-family: Inter, system-ui, -apple-system, sans-serif;
+      display: flex;
+      min-height: 100vh;
+      align-items: center;
+      justify-content: center;
+      padding: 24px
+    }
+
+    .card {
+      max-width: 560px;
+      width: 100%;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center
+    }
+
+    .frame-container {
+      position: relative;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 190px;
+      margin-bottom: 12px
+    }
+
+    .frame-img {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      margin: auto;
+      max-height: 100%;
+      object-fit: contain;
+      user-select: none;
+      pointer-events: none;
+      display: none
+    }
+
+    .frame-img.active {
+      display: block;
+      z-index: 2
+    }
+
+    .frame-spacer {
+      visibility: hidden;
+      pointer-events: none;
+      max-height: 100%;
+      object-fit: contain
+    }
+
+    .desktop-view .frame-img,
+    .desktop-view .frame-spacer {
+      width: 100%;
+      max-width: 440px;
+      height: auto
+    }
+
+    .mobile-view .frame-img,
+    .mobile-view .frame-spacer {
+      width: 200px;
+      height: auto
+    }
+
+    h1 {
+      font-size: 36px;
+      letter-spacing: -.5px;
+      margin: 16px 0 8px;
+      font-weight: 800;
+      color: var(--ink)
+    }
+
+    p {
+      color: var(--gray);
+      font-size: 16px;
+      margin: 0 0 28px;
+      line-height: 1.5
+    }
+
+    a {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--ink);
+      color: var(--white);
+      text-decoration: none;
+      padding: 12px 24px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 13px;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 2px 4px rgba(21, 25, 35, 0.08)
+    }
+
+    a:hover {
+      background: var(--lime);
+      color: var(--ink);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(199, 243, 107, 0.35)
+    }
+
+    a span.arrow {
+      color: var(--lime);
+      transition: all 0.2s ease;
+      font-size: 15px
+    }
+
+    a:hover span.arrow {
+      color: var(--ink);
+      transform: translateX(3px)
+    }
+  </style>
+</head>
+
+<body>
+  <main class="card">
+    <div id="frame-box" class="frame-container desktop-view">
+      <img id="f-0" class="frame-img active" src="/brand/404_frame/0.png" alt="Lost in the graph">
+      <img id="f-1" class="frame-img" src="/brand/404_frame/1.png" alt="Lost in the graph">
+      <img id="f-2" class="frame-img" src="/brand/404_frame/2.png" alt="Lost in the graph">
+      <img id="f-3" class="frame-img" src="/brand/404_frame/3.png" alt="Lost in the graph">
+      <img id="f-spacer" class="frame-spacer" src="/brand/404_frame/0.png" alt="" aria-hidden="true">
+    </div>
+    <h1>Lost in the graph?</h1>
+    <p>This path doesn’t lead anywhere. Let’s find your way back.</p>
+    <a href="/">Back to dashboard <span class="arrow">→</span></a>
+  </main>
+
+  <script>
+    (function () {
+      var desktopFrames = [
+        '/brand/404_frame/0.png',
+        '/brand/404_frame/1.png',
+        '/brand/404_frame/2.png',
+        '/brand/404_frame/3.png'
+      ];
+      var mobileFrames = [
+        '/brand/404_frame/mascot_only_new/0.png',
+        '/brand/404_frame/mascot_only_new/1.png',
+        '/brand/404_frame/mascot_only_new/2.png',
+        '/brand/404_frame/mascot_only_new/3.png'
+      ];
+      var durations = [1500, 180, 1400, 180];
+
+      // Preload
+      [desktopFrames, mobileFrames].forEach(function (list) {
+        list.forEach(function (src) {
+          var img = new Image();
+          img.src = src;
+        });
+      });
+
+      var box = document.getElementById('frame-box');
+      var spacer = document.getElementById('f-spacer');
+      var imgEls = [
+        document.getElementById('f-0'),
+        document.getElementById('f-1'),
+        document.getElementById('f-2'),
+        document.getElementById('f-3')
+      ];
+
+      var idx = 0;
+      var isMob = false;
+
+      function checkResponsive() {
+        var mob = (window.innerWidth < 640) || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        if (mob !== isMob) {
+          isMob = mob;
+          box.className = 'frame-container ' + (isMob ? 'mobile-view' : 'desktop-view');
+          var frames = isMob ? mobileFrames : desktopFrames;
+          for (var i = 0; i < 4; i++) {
+            imgEls[i].src = frames[i];
+          }
+          spacer.src = frames[0];
+        }
+      }
+
+      checkResponsive();
+      window.addEventListener('resize', checkResponsive);
+
+      function nextFrame() {
+        imgEls[idx].className = 'frame-img';
+        idx = (idx + 1) % 4;
+        imgEls[idx].className = 'frame-img active';
+        setTimeout(nextFrame, durations[idx]);
+      }
+
+      setTimeout(nextFrame, durations[0]);
+    })();
+  </script>
+</body>
+
+</html>

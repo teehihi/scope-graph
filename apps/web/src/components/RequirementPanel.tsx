@@ -81,16 +81,16 @@ export const RequirementPanel: React.FC<RequirementPanelProps> = ({
               <button
                 type="submit"
                 disabled={!requirement.trim() || isAnalyzing}
-                className="flex items-center justify-center gap-1.5 text-xs font-semibold px-4 py-2.5 rounded-xl bg-sky-600 text-white hover:bg-sky-700 active:bg-sky-800 transition-colors shadow-sm disabled:opacity-50"
+                className="flex items-center justify-center gap-2 text-xs font-semibold px-4 py-2.5 rounded-xl bg-[#151923] text-white hover:bg-slate-800 active:bg-black transition-all shadow-sm disabled:opacity-50"
               >
                 {isAnalyzing ? (
                   <>
-                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span>Reasoning Impact...</span>
+                    <img src="/brand/scout-exploring.gif" alt="Scout analyzing" className="w-4 h-4 rounded-full" />
+                    <span>Scout is reasoning impact...</span>
                   </>
                 ) : (
                   <>
-                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <Play className="w-3.5 h-3.5 fill-[#C7F36B] text-[#C7F36B]" />
                     <span>Analyze Impact</span>
                   </>
                 )}

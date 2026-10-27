@@ -1,6 +1,7 @@
 import React from 'react';
-import { GitBranch, Upload, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
+import { Upload, CheckCircle2, AlertCircle, RotateCcw } from 'lucide-react';
 import { Repository } from '../types';
+import { ScopeGraphLogoMark } from './BrandIcons';
 
 interface NavbarProps {
   repositories: Repository[];
@@ -22,20 +23,13 @@ export const Navbar: React.FC<NavbarProps> = ({
   systemStatus,
 }) => {
   return (
-    <header className="h-16 border-b border-slate-200 bg-white/95 backdrop-blur px-6 flex items-center justify-between sticky top-0 z-30">
+    <header className="h-16 border-b border-[#E4E7E1] bg-white/95 backdrop-blur px-6 flex items-center justify-between sticky top-0 z-30">
       {/* Brand */}
-      <div className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-sky-600 flex items-center justify-center text-white shadow-sm shadow-sky-600/20">
-          <GitBranch className="w-5 h-5" />
-        </div>
+      <div className="flex items-center gap-2.5">
+        <ScopeGraphLogoMark size={36} dark={false} className="shrink-0" />
         <div>
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-base tracking-tight text-slate-900">ScopeGraph</span>
-            <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-sky-100 text-sky-800">
-              Meta AI Hackathon
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 hidden sm:block">Understand the impact before you change the code</p>
+          <span className="font-extrabold text-base tracking-[-0.5px] text-[#151923] font-sans">ScopeGraph</span>
+          <p className="text-xs text-[#8B929E] hidden sm:block font-medium">Understand the impact before you change the code</p>
         </div>
       </div>
 
@@ -68,7 +62,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100 transition-colors disabled:opacity-50"
           title="Instant 1-Click Demo with sample Auth & User microservice"
         >
-          <Sparkles className="w-3.5 h-3.5" />
+          <RotateCcw className="w-3.5 h-3.5" />
           <span>{isLoadingSample ? 'Loading Demo...' : 'Load Sample Repo'}</span>
         </button>
 
