@@ -45,7 +45,7 @@ While we strive for comprehensive accessibility, we are actively improving the f
 
 We welcome your feedback on the accessibility of ScopeGraph. If you encounter accessibility barriers, please contact us:
 
-- **Email**: [tee21052005@gmail.com](mailto:tee21052005@gmail.com)
+- **Email**: [teeforwork21@gmail.com](mailto:teeforwork21@gmail.com)
 - **GitHub Issues**: Open an issue using the `[BUG]` or `[FEAT]` template with the label `accessibility`.
 
 We aim to respond to accessibility feedback within **2 business days**.
