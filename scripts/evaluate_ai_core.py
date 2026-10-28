@@ -2,6 +2,7 @@
 
 import argparse
 import datetime as dt
+import hashlib
 import json
 import os
 import subprocess
@@ -21,6 +22,30 @@ from app.core.config import settings
 from app.db.database import Base
 from app.db.models import IndexedFile, IndexedSymbol, Repository
 from app.indexing.engine import IndexingEngine
+
+
+def verify_snapshot_manifest(dataset: dict, sample: Path, manifest: dict) -> int:
+    """Reject a changed selected source tree before indexing or claiming its digest."""
+    if manifest["snapshot_root"] != dataset["repository"] or manifest["upstream_commit"] != dataset["repository_snapshot"]:
+        raise ValueError("Snapshot manifest does not match dataset source identity")
+    records = manifest["files"]
+    expected = {item["path"] for item in records}
+    actual = {path.relative_to(sample).as_posix() for path in sample.rglob("*") if path.is_file()}
+    if len(expected) != len(records) or actual != expected or len(records) != manifest["file_count"]:
+        raise ValueError("Snapshot file inventory does not match manifest")
+    for item in records:
+        source = (sample / item["path"]).resolve()
+        try:
+            source.relative_to(sample.resolve())
+        except ValueError:
+            raise ValueError("Snapshot path escapes selected source tree") from None
+        content = source.read_bytes()
+        if len(content) != item["size_bytes"] or hashlib.sha256(content).hexdigest() != item["sha256"]:
+            raise ValueError(f"Snapshot file hash mismatch: {item['path']}")
+    tree_lines = "".join(f'{item["path"]}\t{item["sha256"]}\n' for item in records)
+    if hashlib.sha256(tree_lines.encode("utf-8")).hexdigest() != manifest["tree_sha256"]:
+        raise ValueError("Snapshot tree digest does not match manifest")
+    return len(records)
 
 
 def old_keyword_retrieval(files, symbols_by_file, keywords):
@@ -62,8 +87,13 @@ def run(mode: str, output: Path, allow_paid_request: bool, dataset_path: Path | 
         settings.META_AI_PROVIDER = "offline_demo"
         settings.META_AI_API_KEY = ""
 
-    dataset = json.loads((dataset_path or ROOT / "services/api/tests/evaluation/ai_core_cases.json").read_text(encoding="utf-8"))
+    selected_dataset = dataset_path or ROOT / "services/api/tests/evaluation/ai_core_cases.json"
+    dataset_bytes = selected_dataset.read_bytes()
+    dataset = json.loads(dataset_bytes)
+    manifest_bytes = (ROOT / dataset["snapshot_manifest"]).read_bytes() if dataset.get("snapshot_manifest") else None
+    manifest = json.loads(manifest_bytes) if manifest_bytes else None
     sample = ROOT / dataset["repository"]
+    verified_source_file_count = verify_snapshot_manifest(dataset, sample, manifest) if manifest else None
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
     session = sessionmaker(bind=engine)()
@@ -119,7 +149,18 @@ def run(mode: str, output: Path, allow_paid_request: bool, dataset_path: Path | 
         artifact = {
             "schema_version": 2,
             "dataset_version": dataset["dataset_version"], "dataset_size": len(cases),
+            "dataset_sha256": hashlib.sha256(dataset_bytes).hexdigest(),
+            "repository": dataset["repository"],
             "repository_snapshot": dataset.get("repository_snapshot"),
+            "source_manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest() if manifest_bytes else None,
+            "source_tree_sha256": manifest["tree_sha256"] if manifest else None,
+            "verified_source_file_count": verified_source_file_count,
+            "review_status": dataset.get("review_status"),
+            "label_counts": {
+                "direct": sum(len(case["impact"]["direct"]) for case in dataset["cases"]),
+                "indirect": sum(len(case["impact"]["indirect"]) for case in dataset["cases"]),
+                "total": sum(len(case["impact"][kind]) for case in dataset["cases"] for kind in ("direct", "indirect")),
+            },
             "indexed_file_count": len(files), "mode": mode,
             "timestamp_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
             "commit_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),

@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import subprocess
@@ -156,6 +157,10 @@ def test_offline_evaluation_records_one_interpretation_and_replayable_scenario_t
 
     assert result == saved
     assert result["schema_version"] == 2
+    fixture = evaluate_ai_core.ROOT / "services/api/tests/evaluation/ai_core_cases.json"
+    assert result["dataset_sha256"] == hashlib.sha256(fixture.read_bytes()).hexdigest()
+    assert result["repository"] == "examples/sample-repository"
+    assert result["label_counts"] == {"direct": 7, "indirect": 5, "total": 12}
     assert len(calls) == result["dataset_size"] == 3
     assert result == evaluation.replay_evaluation(result)
     for case in result["cases"]:
@@ -174,6 +179,40 @@ def test_offline_evaluation_records_one_interpretation_and_replayable_scenario_t
         assert isinstance(trace["potential_impacts"], list)
         assert "additional_files_to_check" in trace["completeness_review"]
         assert "true_positives" in case["scoring_details"]
+
+
+def test_holdout_offline_evaluation_records_exact_fixture_and_source_provenance(tmp_path):
+    fixture = evaluate_ai_core.ROOT / "services/api/tests/evaluation/holdout_realworld_cases_v2.json"
+    manifest_path = evaluate_ai_core.ROOT / "services/api/tests/evaluation/holdout_realworld_snapshot_v1.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    result = evaluate_ai_core.run("offline", tmp_path / "holdout.json", allow_paid_request=False, dataset_path=fixture)
+
+    assert result["dataset_size"] == 10
+    assert result["dataset_sha256"] == hashlib.sha256(fixture.read_bytes()).hexdigest()
+    assert result["source_manifest_sha256"] == hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+    assert result["source_tree_sha256"] == manifest["tree_sha256"]
+    assert result["verified_source_file_count"] == 103
+    assert result["repository_snapshot"] == manifest["upstream_commit"]
+    assert result["label_counts"] == {"direct": 10, "indirect": 15, "total": 25}
+    assert "human" in result["review_status"]
+    assert result["config"]["provider"] == "offline_demo"
+    assert result == evaluation.replay_evaluation(result)
+
+
+def test_holdout_evaluation_rejects_snapshot_that_does_not_match_recorded_manifest(tmp_path):
+    root = evaluate_ai_core.ROOT
+    fixture = json.loads((root / "services/api/tests/evaluation/holdout_realworld_cases_v2.json").read_text(encoding="utf-8"))
+    manifest = json.loads((root / fixture["snapshot_manifest"]).read_text(encoding="utf-8"))
+    manifest["files"][0]["sha256"] = "0" * 64
+    bad_manifest = tmp_path / "bad-manifest.json"
+    bad_manifest.write_text(json.dumps(manifest), encoding="utf-8")
+    fixture["snapshot_manifest"] = str(bad_manifest)
+    bad_fixture = tmp_path / "bad-fixture.json"
+    bad_fixture.write_text(json.dumps(fixture), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Snapshot file hash mismatch"):
+        evaluate_ai_core.run("offline", tmp_path / "should-not-exist.json", allow_paid_request=False, dataset_path=bad_fixture)
+    assert not (tmp_path / "should-not-exist.json").exists()
 
 
 def test_replay_cli_recalculates_saved_artifact_with_live_provider_environment(tmp_path):

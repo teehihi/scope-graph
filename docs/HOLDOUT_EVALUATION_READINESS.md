@@ -1,5 +1,7 @@
 # SG-AI-09B — holdout validation and evaluation readiness
 
+> **Historical v1 readiness snapshot.** This document records the state before holdout inference. The current v2 candidate has since had a clearly labeled [provisional offline evaluation](HOLDOUT_EVALUATION_REPORT.md); independent human sign-off is still pending. Use the v2 report and [v2 decision form](HOLDOUT_HUMAN_SIGNOFF_V2.md) for current status.
+
 Updated: 2026-10-28 (Asia/Bangkok). **Gate: BLOCKED: HUMAN_SIGNOFF_REQUIRED.** This is technical readiness evidence, not a holdout model evaluation or a final benchmark. No holdout inference, paid Meta request, label change, fixture freeze, or tuning was performed.
 
 ## Dataset and source validation

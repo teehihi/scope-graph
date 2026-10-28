@@ -2,12 +2,14 @@
 
 import hashlib
 import json
+from copy import deepcopy
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURES = ROOT / "services/api/tests/evaluation"
 DATASET = FIXTURES / "holdout_realworld_cases_v1.json"
+DATASET_V2 = FIXTURES / "holdout_realworld_cases_v2.json"
 MANIFEST = FIXTURES / "holdout_realworld_snapshot_v1.json"
 SNAPSHOT_SHA = "029eb7781c60d5f563ee8990a0cbfb79b244538c"
 
@@ -112,3 +114,61 @@ def test_holdout_cases_have_complete_source_backed_candidate_labels():
         "api", "configuration", "business_logic", "model_schema",
         "security", "cross_module", "regression_test", "negative",
     }
+
+
+def test_holdout_v2_adds_only_two_source_backed_indirect_impacts():
+    original = json.loads(DATASET.read_text(encoding="utf-8"))
+    candidate = json.loads(DATASET_V2.read_text(encoding="utf-8"))
+    assert hashlib.sha256(DATASET.read_bytes()).hexdigest() == (
+        "5892974d49b89a735104d6857aacc4314599d2a3eec544bcc76d4599a00f5615"
+    )
+    assert candidate["dataset_version"] == "2026-10-28-realworld-holdout-v2-candidate"
+    assert "AI-assisted" in candidate["review_status"]
+    assert "human" in candidate["review_status"]
+    assert "not frozen" in candidate["review_status"]
+
+    expected = deepcopy(original)
+    expected["dataset_version"] = candidate["dataset_version"]
+    expected["review_status"] = candidate["review_status"]
+    additions = {
+        "api_default_page_size": ("app/api/routes/articles/articles_resource.py", 30),
+        "access_token_ttl": ("app/api/dependencies/authentication.py", 78),
+    }
+    candidate_by_id = {case["id"]: case for case in candidate["cases"]}
+    for case in expected["cases"]:
+        case_id = case["id"]
+        if case_id not in additions:
+            continue
+        path, line = additions[case_id]
+        annotation = next(item for item in candidate_by_id[case_id]["annotations"] if item["path"] == path)
+        assert annotation["line"] == line
+        assert annotation["rationale"].strip()
+        case["retrieval_relevant"].append(path)
+        case["impact"]["indirect"].append(path)
+        case["annotations"].append(annotation)
+    assert candidate == expected
+    assert candidate["repository_snapshot"] == SNAPSHOT_SHA
+
+    root = ROOT / candidate["repository"]
+    direct = indirect = 0
+    for case in candidate["cases"]:
+        assert case["repository_snapshot"] == SNAPSHOT_SHA
+        retrieval = case["retrieval_relevant"]
+        assert len(retrieval) == len(set(retrieval))
+        labels = case["impact"]
+        assert len(labels["direct"]) == len(set(labels["direct"]))
+        assert len(labels["indirect"]) == len(set(labels["indirect"]))
+        assert not set(labels["direct"]) & set(labels["indirect"])
+        assert set(labels["direct"] + labels["indirect"]) <= set(retrieval)
+        assert {item["path"] for item in case["annotations"]} == set(labels["direct"] + labels["indirect"])
+        assert len(case["annotations"]) == len(labels["direct"] + labels["indirect"])
+        assert {item["path"] for item in case["context_annotations"]} == set(retrieval) - set(labels["direct"] + labels["indirect"])
+        for path in retrieval:
+            _source_path(root, path)
+        for key in ("annotations", "context_annotations", "potential_impacts", "ambiguities", "negative_evidence"):
+            for item in case.get(key, []):
+                _check_evidence(root, item)
+        direct += len(labels["direct"])
+        indirect += len(labels["indirect"])
+    assert len(candidate["cases"]) == 10
+    assert (direct, indirect) == (10, 15)

@@ -1,5 +1,7 @@
 # SG-AI-09B: FastAPI RealWorld holdout label review
 
+> **Historical v1 review queue.** The original candidate remains unchanged. The current [v2 candidate and provisional evaluation](HOLDOUT_EVALUATION_REPORT.md) add two source-backed indirect labels; the [v2 human decision form](HOLDOUT_HUMAN_SIGNOFF_V2.md) covers all 25 labels. Human sign-off remains pending.
+
 Updated 2026-10-28. **Candidate dataset; independent human sign-off pending.** No ScopeGraph model predictions or scores were used to create these labels. Do not evaluate or tune AI reasoning against this candidate before a reviewer resolves the decisions below.
 
 ## Source and scope

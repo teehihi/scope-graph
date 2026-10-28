@@ -1,5 +1,7 @@
 # SG-AI-09B — independent human holdout label sign-off
 
+> **Historical v1 form for 23 labels.** The current [v2 candidate](../services/api/tests/evaluation/holdout_realworld_cases_v2.json) has 25 provisional labels. Use the blank [v2 human sign-off form](HOLDOUT_HUMAN_SIGNOFF_V2.md) for the current review. No human sign-off has been recorded for either version.
+
 **Status: PENDING INDEPENDENT HUMAN REVIEW.** This form has no reviewer, decisions, or approval recorded. The separate [AI-assisted source review](HOLDOUT_AI_ASSISTED_REVIEW_V1.md) examined all 23 existing impact labels and recommended KEEP 23, CHANGE 0, REMOVE 0. That record is preparation for a human review, not a human sign-off.
 
 The project owner acknowledged the AI-assisted proposal in chat on 2026-10-28 and clarified that they have **not** independently checked the 23 labels against source. This acknowledgement does not fill any human decision field below.
