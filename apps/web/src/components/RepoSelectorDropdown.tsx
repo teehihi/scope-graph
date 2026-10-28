@@ -34,7 +34,7 @@ export const RepoSelectorDropdown: React.FC = () => {
       >
         <FolderGit2 className="w-3.5 h-3.5 text-[#526BEE] shrink-0" />
         <span className="truncate font-mono">
-          {activeRepo?.name || 'Chọn kho mã nguồn'}
+          {activeRepo?.name || t('repo.select_placeholder')}
         </span>
         <ChevronDown
           className={`w-3.5 h-3.5 text-[#8B929E] transition-transform duration-200 shrink-0 ${
@@ -50,7 +50,7 @@ export const RepoSelectorDropdown: React.FC = () => {
           <div className="p-3 border-b border-[#E4E7E1] bg-[#F7F8F5] flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-[#8B929E] flex items-center gap-1.5">
               <FolderGit2 className="w-3.5 h-3.5 text-[#151923]" />
-              Kho mã nguồn ({repositories.length})
+              {t('repo.dropdown_header')} ({repositories.length})
             </span>
             <span className="text-[10px] text-[#8B929E] font-mono">ScopeGraph</span>
           </div>
@@ -92,7 +92,7 @@ export const RepoSelectorDropdown: React.FC = () => {
             })}
           </div>
 
-          {/* Bottom Action Footer: Thêm / Quản lý kho mã nguồn */}
+          {/* Bottom Action Footer: Thêm & Quản lý kho mã nguồn */}
           <div className="p-2 border-t border-[#E4E7E1] bg-[#F7F8F5]">
             <button
               type="button"
@@ -103,7 +103,7 @@ export const RepoSelectorDropdown: React.FC = () => {
               className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-white border border-[#E4E7E1] hover:border-[#151923] hover:bg-slate-50 text-[#151923] text-xs font-bold transition-all shadow-2xs group cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5 text-[#526BEE] group-hover:scale-110 transition-transform" />
-              <span>Thêm & Quản lý kho mã nguồn</span>
+              <span>{t('repo.manage_add_btn')}</span>
               <ArrowRight className="w-3.5 h-3.5 text-[#8B929E] group-hover:translate-x-0.5 transition-transform ml-auto" />
             </button>
           </div>

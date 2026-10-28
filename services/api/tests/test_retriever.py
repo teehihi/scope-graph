@@ -7,6 +7,8 @@ from sqlalchemy.orm import sessionmaker
 from app.analysis.retriever import HybridRetriever
 from app.db.database import Base
 from app.db.models import Repository, IndexedFile, IndexedSymbol, DependencyEdge
+from app.indexing.engine import IndexingEngine
+from pathlib import Path
 
 
 @pytest.fixture
@@ -106,3 +108,46 @@ def test_empty_weak_matches_and_repository_isolation(indexed_db):
     assert [item["path"] for item in retriever.retrieve("repo-b", "verify_email").items] == [
         "other/verify_email.py",
     ]
+
+
+def test_sample_context_contains_expiry_setting_usage_and_bounded_source():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    db = sessionmaker(bind=engine)()
+    sample = Path(__file__).resolve().parents[3] / "examples/sample-repository"
+    db.add(Repository(id="sample", name="Sample", workspace_path=str(sample), status="pending"))
+    db.commit()
+    try:
+        assert IndexingEngine(db).index_repository("sample").status == "ready"
+        result = HybridRetriever(db).retrieve(
+            "sample", "Shorten email verification token expiry to thirty minutes",
+            search_keywords=["email", "verification", "token", "expire"], top_k=8,
+            context_token_budget=3000,
+        )
+        by_path = {item["path"]: item for item in result.items}
+        assert "app/core/config.py" in by_path
+        assert "app/services/verification_service.py" in by_path
+        config = by_path["app/core/config.py"]
+        assert any(s["name"] == "Settings.EMAIL_VERIFICATION_TOKEN_EXPIRE_HOURS" for s in config["symbols"])
+        assert "EMAIL_VERIFICATION_TOKEN_EXPIRE_HOURS" in str(config["source_snippets"])
+        assert "settings.EMAIL_VERIFICATION_TOKEN_EXPIRE_HOURS" in str(
+            by_path["app/services/verification_service.py"]["source_snippets"]
+        )
+        assert sum(item["estimated_tokens"] for item in result.items) <= 3000
+        password = HybridRetriever(db).retrieve(
+            "sample", "Strengthen password hashing and verification",
+            search_keywords=["password"], top_k=8, context_token_budget=3000,
+        )
+        password_paths = [item["path"] for item in password.items]
+        assert password_paths.index("app/core/security.py") < 4
+        if "app/services/verification_service.py" in password_paths:
+            assert password_paths.index("app/core/security.py") < password_paths.index(
+                "app/services/verification_service.py"
+            )
+        assert "tests/test_auth.py" in password_paths[:4]
+        assert HybridRetriever(db).retrieve(
+            "sample", "Change invoice rounding for billing reports", top_k=8,
+        ).items == []
+    finally:
+        db.close()
+        engine.dispose()

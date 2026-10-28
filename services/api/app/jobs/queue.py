@@ -80,5 +80,6 @@ def set_cache(key: str, data: dict[str, Any], ttl_seconds: int = 3600) -> bool:
 
 def make_analysis_cache_key(repo_id: str, requirement: str, model_id: str) -> str:
     norm_req = " ".join(requirement.lower().strip().split())
-    raw = f"{repo_id}:{norm_req}:{model_id}"
+    # Bump when indexing or impact-classification semantics change.
+    raw = f"sg-ai-07c-v2:{repo_id}:{norm_req}:{model_id}"
     return hashlib.sha256(raw.encode()).hexdigest()

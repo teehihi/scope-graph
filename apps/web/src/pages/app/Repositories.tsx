@@ -139,10 +139,10 @@ export const RepositoriesPage: React.FC = () => {
                           setActiveRepo(repo);
                           navigate('/app/graph');
                         }}
-                        className="flex items-center gap-1.5 text-xs font-bold px-4 py-2 rounded-xl bg-[#151923] text-white hover:bg-slate-800 transition-colors shadow-sm"
+                        className="group flex items-center gap-2 text-xs font-bold px-4 py-2.5 rounded-xl bg-[#151923] text-[#F7F8F5] hover:bg-[#C7F36B] hover:text-[#151923] hover:shadow-md hover:shadow-[#C7F36B]/25 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer shadow-sm"
                       >
                         <span>{t('repo.explore')}</span>
-                        <ArrowRight className="w-3.5 h-3.5 text-[#C7F36B]" />
+                        <ArrowRight className="w-3.5 h-3.5 text-[#C7F36B] group-hover:text-[#151923] group-hover:translate-x-1 transition-all duration-200" />
                       </button>
                     </div>
                   </div>

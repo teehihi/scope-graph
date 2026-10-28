@@ -67,7 +67,7 @@ export const ImpactPage: React.FC = () => {
             >
               <Network className="w-3.5 h-3.5 text-[#526BEE]" />
               <span className="hidden sm:inline">{t('impact.view_in_graph')}</span>
-              <span className="sm:hidden">Xem đồ thị</span>
+              <span className="sm:hidden">{t('impact.view_graph_mobile')}</span>
             </button>
           )}
         </div>

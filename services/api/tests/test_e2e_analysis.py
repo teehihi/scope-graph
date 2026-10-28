@@ -112,6 +112,50 @@ def test_full_e2e_indexing_and_analysis(test_db, monkeypatch):
         mcp_server.SessionLocal = orig_session_local
 
 
+def test_evaluation_trace_captures_the_actual_reasoning_inputs(test_db, monkeypatch):
+    sample_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../examples/sample-repository"))
+    test_db.add(Repository(id="trace-repo", name="Trace", workspace_path=sample_dir, status="pending"))
+    test_db.commit()
+    assert IndexingEngine(test_db).index_repository("trace-repo").status == "ready"
+
+    class CapturingProvider(OfflineDemoProvider):
+        interpretation_calls = 0
+        reasoning_input = None
+
+        def interpret_requirement(self, requirement):
+            self.interpretation_calls += 1
+            return super().interpret_requirement(requirement)
+
+        def reason_about_impact(self, requirement_interpretation, retrieved_files, dependency_context):
+            self.reasoning_input = {
+                "requirement_interpretation": requirement_interpretation,
+                "retrieved_files": retrieved_files,
+                "dependency_context": dependency_context,
+            }
+            return super().reason_about_impact(requirement_interpretation, retrieved_files, dependency_context)
+
+    provider = CapturingProvider()
+    monkeypatch.setattr(orchestrator_module, "get_ai_provider", lambda: provider)
+    trace = {}
+    run = AnalysisOrchestrator(test_db).run_analysis(
+        "trace-repo", "Require email verification before changing an email address", evaluation_trace=trace,
+    )
+
+    assert run.status == "completed"
+    assert provider.interpretation_calls == 1
+    assert trace["interpretation"] == run.result_json["interpretation"]
+    assert trace["reasoning_context"] == provider.reasoning_input
+    assert trace["raw_impact"]["affected_items"]
+    assert trace["validated_impact"]["affected_items"] == run.result_json["affected_items"]
+    assert trace["validated_impact"]["rejected_hallucinations"] == run.result_json["rejected_hallucinations"]
+    assert trace["potential_impacts"] == run.result_json["potential_impacts"]
+    assert trace["completeness_review"] == run.result_json["coverage_review"]
+    assert trace["retrieval"]["seed_paths"]
+    assert [item["rank"] for item in trace["retrieval"]["ranked_files"]] == list(
+        range(1, len(trace["retrieval"]["ranked_files"]) + 1)
+    )
+
+
 def test_mocked_live_report_records_all_inference_usage(test_db, tmp_path, monkeypatch):
     source = tmp_path / "app/services/user_service.py"
     source.parent.mkdir(parents=True)
@@ -221,14 +265,15 @@ def test_review_suggestions_are_grounded_and_graph_neighbors_stay_potential(test
 
     assert run.status == "completed"
     report = run.result_json
-    assert [item["file_path"] for item in report["affected_items"]] == ["app/services/email.py"]
+    assert report["affected_items"] == []
     assert report["coverage_review"]["additional_files_to_check"] == ["app/config.py"]
     assert report["coverage_review"]["is_complete"] is False
     assert {item["claimed_path"] for item in report["coverage_review"]["rejected_file_suggestions"]} == {
         "missing.py", "../outside.py", "other/secret.py",
     }
     potential = {item["file_path"]: item for item in report["potential_impacts"]}
-    assert set(potential) == {"app/api/routes.py", "app/config.py"}
+    assert set(potential) == {"app/api/routes.py", "app/config.py", "app/services/email.py"}
+    assert potential["app/services/email.py"]["sources"] == ["unconfirmed_claim"]
     assert potential["app/api/routes.py"]["dependency_paths"]["downstream"] == [
         "app/services/email.py", "app/api/routes.py",
     ]
@@ -261,3 +306,90 @@ def test_weak_query_does_not_send_arbitrary_files_to_provider(test_db, tmp_path,
     assert provider.retrieved_files == []
     assert run.result_json["retrieval_metadata"]["selected_files"] == 0
     assert run.result_json["affected_items"] == []
+
+
+def test_report_keeps_unsupported_claims_potential_and_promotes_call_review(test_db, tmp_path, monkeypatch):
+    sources = {
+        "app/security.py": "def hash_password(value):\n    return value\n",
+        "tests/test_security.py": "from app.security import hash_password\ndef test_password():\n    assert hash_password('x')\n",
+        "app/unrelated.py": "def health(): return 'ok'\n",
+    }
+    for path, content in sources.items():
+        source = tmp_path / path
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_text(content, encoding="utf-8")
+    test_db.add(Repository(id="causal-report", name="Causal report", workspace_path=str(tmp_path), status="pending"))
+    test_db.commit()
+    assert IndexingEngine(test_db).index_repository("causal-report").status == "ready"
+
+    class Provider(OfflineDemoProvider):
+        def reason_about_impact(self, requirement_interpretation, retrieved_files, dependency_context):
+            response = super().reason_about_impact(requirement_interpretation, retrieved_files, dependency_context)
+            response.data["affected_items"] = [
+                {"file_path": path, "symbol": symbol, "impact_type": "direct", "category": "backend",
+                 "reason": "Change password hashing", "confidence": 0.99}
+                for path, symbol in (("app/security.py", "hash_password"), ("app/unrelated.py", "health"))
+            ]
+            return response
+
+        def review_completeness(self, requirement, proposed_impact, repository_context):
+            response = super().review_completeness(requirement, proposed_impact, repository_context)
+            response.data["additional_files_to_check"] = ["tests/test_security.py"]
+            return response
+
+    monkeypatch.setattr(orchestrator_module, "get_ai_provider", Provider)
+    trace = {}
+    run = AnalysisOrchestrator(test_db).run_analysis(
+        "causal-report", "Strengthen password hashing", evaluation_trace=trace,
+    )
+    assert run.status == "completed"
+    report = run.result_json
+    assert {(item["file_path"], item["impact_type"]) for item in report["affected_items"]} == {
+        ("app/security.py", "direct"), ("tests/test_security.py", "indirect"),
+    }
+    assert all(item["impact_supported"] for item in report["affected_items"])
+    assert all(item["technical_explanation"]["evidence_refs"] and item["simple_explanation"]["summary"]
+               for item in report["affected_items"])
+    potential = {item["file_path"]: item for item in report["potential_impacts"]}
+    assert "app/unrelated.py" in potential
+    assert potential["app/unrelated.py"]["evidence_status"] == "potential"
+    assert potential["app/unrelated.py"]["simple_explanation"]["uncertainty"]
+    assert "Password protection" in report["affected_functional_areas"]
+    assert trace["existence_validated_impact"]["validation_metrics"]["verified_claims"] == 2
+    assert len(trace["validated_impact"]["affected_items"]) == 2
+
+
+def test_mcp_context_does_not_read_indexed_escape_path(test_db, tmp_path, monkeypatch):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    outside = tmp_path / "outside.py"
+    outside.write_text("private_outside_value\n", encoding="utf-8")
+    test_db.add_all([
+        Repository(id="mcp-safe", name="MCP", workspace_path=str(workspace), status="ready"),
+        IndexedFile(id="escape", repository_id="mcp-safe", path="../outside.py"),
+    ])
+    test_db.commit()
+    monkeypatch.setattr(mcp_server, "SessionLocal", lambda: test_db)
+
+    response = json.loads(mcp_server.get_relevant_context("mcp-safe", "outside", limit=5))
+
+    assert "private_outside_value" not in json.dumps(response)
+    assert response["context_items"] == []
+
+
+def test_mcp_context_weak_query_does_not_fall_back_to_arbitrary_files(test_db, tmp_path, monkeypatch):
+    source = tmp_path / "app/service.py"
+    source.parent.mkdir()
+    source.write_text("def email_change(): pass\n", encoding="utf-8")
+    test_db.add_all([
+        Repository(id="mcp-weak", name="MCP", workspace_path=str(tmp_path), status="ready"),
+        IndexedFile(id="mcp-file", repository_id="mcp-weak", path="app/service.py"),
+        IndexedSymbol(id="mcp-symbol", repository_id="mcp-weak", file_id="mcp-file",
+                      name="email_change", symbol_type="function", line_start=1, line_end=1),
+    ])
+    test_db.commit()
+    monkeypatch.setattr(mcp_server, "SessionLocal", lambda: test_db)
+
+    response = json.loads(mcp_server.get_relevant_context("mcp-weak", "quantum bridge", limit=5))
+
+    assert response["context_items"] == []

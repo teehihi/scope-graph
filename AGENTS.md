@@ -197,12 +197,16 @@ docker compose down -v
 
 ### 7.3 Testing & Quality Verification
 ```bash
-# Run backend pytest suite (all 6 automated tests)
+# Run backend pytest suite (all automated tests)
 source .venv/bin/activate
 PYTHONPATH=services/api pytest services/api/tests/ -v
 
 # Run frontend TypeScript typecheck and production build
 cd apps/web && npm run build
+
+# Run automated 12-language i18n parity & hardcoded string audit
+node scripts/audit_i18n.js
+# or: cd apps/web && npm run audit:i18n
 ```
 
 ---
@@ -224,10 +228,14 @@ Every agent undertaking work on ScopeGraph must follow these operational steps:
 4. **Targeted, Minimal Modifications**:
    - Avoid massive speculative refactoring. Make small, focused, verifiable modifications.
    - Do not install new dependencies unless strictly necessary and approved.
-5. **Post-Change Verification**:
+5. **Strict Internationalization (i18n) Standard (Zero Hardcoded Text)**:
+   - **MANDATORY**: Any new user-facing text, button label, tooltip, placeholder, or notification must be added to `apps/web/src/context/LanguageContext.tsx` across all 12 supported languages (`en`, `vi`, `ja`, `ko`, `zh`, `es`, `fr`, `de`, `hi`, `th`, `it`, `ru`).
+   - Never hardcode raw Vietnamese, English, or any other natural language text directly in UI component files (`.tsx`). Always wrap with `t('your.key')`.
+   - Before submitting changes, always execute `node scripts/audit_i18n.js` to automatically verify 100% key parity across all 12 languages and ensure no unlocalized strings exist.
+6. **Post-Change Verification**:
    - Backend changes: Execute `PYTHONPATH=services/api pytest services/api/tests/ -v`.
-   - Frontend changes: Execute `cd apps/web && npm run build` (tsc + vite build).
-6. **Transparent Reporting**:
+   - Frontend changes: Execute `cd apps/web && npm run build` (tsc + vite build) AND `node scripts/audit_i18n.js`.
+7. **Transparent Reporting**:
    - Detail every file created or modified.
    - Report test outputs and build status.
    - Explicitly highlight any unverified assumptions or limitations.
@@ -238,6 +246,8 @@ Every agent undertaking work on ScopeGraph must follow these operational steps:
 
 Agents are strictly forbidden from the following:
 
+- ❌ **No Hardcoded UI Strings**: Never insert hardcoded natural language text directly into React components. All strings must reside in `LanguageContext.tsx` and pass the automated audit `node scripts/audit_i18n.js`.
+- ❌ **No Incomplete Translations**: Never add a key to only `en` or `vi`. All 12 supported languages must maintain 100% key parity.
 - ❌ **No Speculative Architectural Divergence**: Do not create parallel graph engines, new state management libraries (e.g. Redux), or alternative styling frameworks (e.g. styled-components) when the repository already has standard implementations.
 - ❌ **No Destructive Git Actions**: Never run `git reset --hard`, `git checkout -- .`, or `git clean -fd`. Never discard uncommitted work.
 - ❌ **No Fake Test Passes**: Never claim tests passed without running the command and inspecting the exit code.

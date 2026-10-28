@@ -4,17 +4,19 @@ import json
 import re
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.db.models import IndexedFile, IndexedSymbol
+from app.db.models import IndexedFile, IndexedSymbol, Repository
 from app.graph.engine import GraphEngine, determine_layer
 
 
 _STOP_WORDS = {
-    "and", "are", "before", "for", "from", "into", "must", "only", "require",
-    "should", "that", "the", "their", "then", "this", "with",
+    "add", "and", "are", "before", "change", "changes", "changing", "for", "from",
+    "into", "modify", "must", "new", "only", "require", "should", "that", "the",
+    "their", "then", "this", "update", "with",
 }
 
 
@@ -33,6 +35,44 @@ class HybridRetriever:
         self.db = db
 
     @staticmethod
+    def _source_snippets(root: str | None, path: str, symbols: list[IndexedSymbol],
+                         terms: list[str]) -> list[dict[str, Any]]:
+        if not root or not symbols:
+            return []
+        workspace = Path(root).resolve()
+        source = (workspace / path).resolve()
+        try:
+            source.relative_to(workspace)
+        except ValueError:
+            return []
+        if not source.is_file():
+            return []
+        try:
+            lines = source.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            return []
+        snippets = []
+        for symbol in symbols:
+            if len(snippets) >= 3:
+                break
+            if not any(term in symbol.name.lower() or term in (symbol.signature or "").lower()
+                       for term in terms):
+                continue
+            start = symbol.line_start or 0
+            if start < 1 or start > len(lines):
+                continue
+            end = min(len(lines), symbol.line_end or start, start + 5)
+            excerpt = []
+            for index in range(start - 1, end):
+                line = lines[index][:180]
+                if re.search(r"\b(?:SECRET|API_KEY|PASSWORD)\w*\s*(?::[^=]+)?=\s*['\"]", line, re.I):
+                    line = re.sub(r"=\s*(['\"]).*?\1", "= [REDACTED]", line)
+                excerpt.append(f"{index + 1}: {line}")
+            snippets.append({"symbol": symbol.name, "line_start": start,
+                             "line_end": end, "text": "\n".join(excerpt)})
+        return snippets
+
+    @staticmethod
     def _terms(query: str, search_keywords: list[str] | None) -> list[str]:
         terms: set[str] = set()
         for text in [query, *(search_keywords or [])]:
@@ -40,6 +80,10 @@ class HybridRetriever:
                 for part in (token, *token.split("_")):
                     if len(part) >= 3 and part not in _STOP_WORDS:
                         terms.add(part)
+                        if part.endswith("ing") and len(part) >= 7:
+                            terms.add(part[:-3])
+                        if part == "expiry":
+                            terms.add("expire")
         return sorted(terms)
 
     def retrieve(
@@ -57,6 +101,8 @@ class HybridRetriever:
             return RetrievalResult([], [], 0, time.perf_counter() - start)
 
         files = self.db.query(IndexedFile).filter(IndexedFile.repository_id == repository_id).all()
+        repo = self.db.query(Repository).filter(Repository.id == repository_id).first()
+        workspace_root = repo.workspace_path if repo else None
         symbols = self.db.query(IndexedSymbol).filter(IndexedSymbol.repository_id == repository_id).all()
         symbols_by_file: dict[str, list[IndexedSymbol]] = {}
         for symbol in symbols:
@@ -71,19 +117,21 @@ class HybridRetriever:
             score = 0
             reasons: list[str] = []
             for term in terms:
+                term_score = 0
                 if term in path_lower:
-                    score += 5
+                    term_score = max(term_score, 5)
                     reasons.append(f"path:{term}")
                 for symbol in file_symbols:
                     if term in symbol.name.lower():
-                        score += 8
+                        term_score = max(term_score, 5 if symbol.symbol_type == "attribute" else 8)
                         reasons.append(f"symbol:{symbol.name}")
                     elif term in (symbol.signature or "").lower() or term in (symbol.docstring or "").lower():
-                        score += 2
+                        term_score = max(term_score, 2)
                         reasons.append(f"symbol_detail:{term}")
                     if term in json.dumps(symbol.metadata_json or {}, sort_keys=True).lower():
-                        score += 3
+                        term_score = max(term_score, 3)
                         reasons.append(f"symbol_metadata:{term}")
+                score += term_score
             if score <= 0:
                 continue
             layer = determine_layer(file.path, file_symbols)
@@ -95,9 +143,10 @@ class HybridRetriever:
                 "file_id": file.id, "path": file.path, "language": file.language,
                 "symbols": [
                     {"name": s.name, "type": s.symbol_type, "line": s.line_start,
-                     "docstring": (s.docstring or "")[:100]}
+                     "signature": (s.signature or "")[:160], "docstring": (s.docstring or "")[:100]}
                     for s in file_symbols
                 ],
+                "source_snippets": self._source_snippets(workspace_root, file.path, file_symbols, terms),
                 "score": score, "reasons": list(dict.fromkeys(reasons)),
             }
 
@@ -126,9 +175,11 @@ class HybridRetriever:
                                 "file_id": file.id, "path": file.path, "language": file.language,
                                 "symbols": [
                                     {"name": s.name, "type": s.symbol_type, "line": s.line_start,
+                                     "signature": (s.signature or "")[:160],
                                      "docstring": (s.docstring or "")[:100]}
                                     for s in file_symbols
                                 ],
+                                "source_snippets": self._source_snippets(workspace_root, file.path, file_symbols, terms),
                                 "score": 0, "reasons": [],
                             }
                             candidates[neighbor_path] = candidate

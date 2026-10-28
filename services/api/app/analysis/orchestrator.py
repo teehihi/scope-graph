@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from app.db.models import Repository, IndexedFile, AnalysisRun
 from app.graph.engine import GraphEngine
 from app.analysis.retriever import HybridRetriever
+from app.analysis.causal import CausalImpactVerifier
+from app.analysis.explanations import explain_item
 from app.ai.provider import get_ai_provider
 from app.core.config import settings
 from app.evidence.validator import EvidenceValidator
@@ -16,7 +18,10 @@ class AnalysisOrchestrator:
     def __init__(self, db: Session):
         self.db = db
 
-    def run_analysis(self, repository_id: str, requirement: str, analysis_id: str | None = None) -> AnalysisRun:
+    def run_analysis(
+        self, repository_id: str, requirement: str, analysis_id: str | None = None,
+        evaluation_trace: dict[str, Any] | None = None,
+    ) -> AnalysisRun:
         repo = self.db.query(Repository).filter(Repository.id == repository_id).first()
         if not repo:
             raise ValueError(f"Repository {repository_id} not found")
@@ -99,7 +104,7 @@ class AnalysisOrchestrator:
             # Step 6: Validate Claims against Actual Repository Index
             logger.info("Step 6: Validating claims against ground-truth index")
             validator = EvidenceValidator(self.db, repo.workspace_path or "")
-            validated = validator.validate_ai_claims(repository_id, raw_impact)
+            existence_validated = validator.validate_ai_claims(repository_id, raw_impact)
             review_candidates = validator.validate_ai_claims(repository_id, {
                 "affected_items": [
                     {"file_path": path, "symbol": None, "impact_type": "indirect",
@@ -122,8 +127,23 @@ class AnalysisOrchestrator:
                     "Some suggested files could not be verified against the repository index",
                 ]
 
+            causal = CausalImpactVerifier(self.db).classify(
+                repository_id, requirement, existence_validated, verified_review_paths,
+            )
+            validated = {
+                **existence_validated,
+                "affected_items": causal["affected_items"],
+                "potential_claims": causal["potential_claims"],
+                "validation_metrics": causal["validation_metrics"],
+            }
+            coverage_review["promoted_files"] = causal["promoted_suggestions"]
+
             affected_paths = {item["file_path"] for item in validated["affected_items"]}
             potential_by_path: dict[str, dict[str, Any]] = {}
+            for item in causal["potential_claims"]:
+                potential_by_path[item["file_path"]] = {
+                    **item, "sources": ["unconfirmed_claim"], "dependency_paths": {},
+                }
             for direction in ("upstream", "downstream"):
                 for path, route in dependency_context["paths"][direction].items():
                     if path in affected_paths:
@@ -134,6 +154,8 @@ class AnalysisOrchestrator:
                         "sources": ["dependency_graph"], "dependency_paths": {},
                     })
                     candidate["dependency_paths"][direction] = route
+                    if "dependency_graph" not in candidate["sources"]:
+                        candidate["sources"].append("dependency_graph")
             for path in verified_review_paths:
                 if path in affected_paths:
                     continue
@@ -142,18 +164,32 @@ class AnalysisOrchestrator:
                     "existence_verified": True, "impact_supported": False,
                     "sources": [], "dependency_paths": {},
                 })
-                candidate["sources"].append("completeness_review")
+                if "completeness_review" not in candidate["sources"]:
+                    candidate["sources"].append("completeness_review")
+
+            explained_affected = [{**item, **explain_item(item)} for item in validated["affected_items"]]
+            explained_potential = [
+                {**potential_by_path[path], **explain_item(potential_by_path[path])}
+                for path in sorted(potential_by_path)
+            ]
 
             # Combine into final structured report
             final_report = {
                 "requirement_summary": requirement,
                 "interpretation": interpretation,
-                "affected_items": validated["affected_items"],
+                "affected_items": explained_affected,
+                "affected_functional_areas": sorted({
+                    item["simple_explanation"]["functional_area"] for item in explained_affected
+                }),
                 "risks": validated["risks"],
                 "suggested_tests": validated["suggested_tests"],
                 "assumptions": validated["assumptions"],
                 "coverage_review": coverage_review,
-                "potential_impacts": [potential_by_path[path] for path in sorted(potential_by_path)],
+                "potential_impacts": explained_potential,
+                "risk_explanations": [
+                    {"summary": risk, "evidence_status": "potential"} for risk in validated["risks"]
+                ],
+                "recommended_checks": validated["suggested_tests"],
                 "retrieval_metadata": {
                     "selected_files": len(retrieved_files),
                     "candidate_files": retrieval.candidate_count,
@@ -202,6 +238,36 @@ class AnalysisOrchestrator:
             run.completed_at = datetime.datetime.now(datetime.timezone.utc)
             self.db.commit()
             self.db.refresh(run)
+            if evaluation_trace is not None:
+                evaluation_trace.update({
+                    "requirement": requirement,
+                    "interpretation": interpretation,
+                    "retrieval": {
+                        "ranked_files": [
+                            {"rank": rank, "path": item["path"], "score": item["score"],
+                             "reasons": item["reasons"], "estimated_tokens": item["estimated_tokens"]}
+                            for rank, item in enumerate(retrieved_files, 1)
+                        ],
+                        "seed_paths": seed_paths,
+                        "candidate_count": retrieval.candidate_count,
+                        "latency_seconds": retrieval.latency_seconds,
+                    },
+                    "reasoning_context": {
+                        "requirement_interpretation": interpretation,
+                        "retrieved_files": retrieved_files,
+                        "dependency_context": dependency_context,
+                    },
+                    "raw_impact": raw_impact,
+                    "existence_validated_impact": existence_validated,
+                    "validated_impact": {**validated, "affected_items": explained_affected},
+                    "potential_impacts": final_report["potential_impacts"],
+                    "raw_completeness_review": completeness,
+                    "completeness_review": coverage_review,
+                    "provider": run.provider,
+                    "model": run.model,
+                    "token_usage": metadata["token_usage"],
+                    "analysis_latency_seconds": run.execution_time_seconds,
+                })
             return run
 
         except Exception as e:

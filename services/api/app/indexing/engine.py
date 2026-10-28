@@ -1,6 +1,7 @@
 import os
 import datetime
 import logging
+from collections import defaultdict
 from sqlalchemy.orm import Session
 from app.db.models import Repository, IndexedFile, IndexedSymbol, DependencyEdge
 from app.indexing.scanner import scan_workspace
@@ -28,9 +29,9 @@ def module_to_file_path(module_name: str, file_map: dict[str, str]) -> str | Non
         return candidate2
 
     # Check suffix matches
-    for indexed_path in file_map:
-        if indexed_path.endswith(candidate1) or candidate1.endswith(indexed_path):
-            return indexed_path
+    suffix_matches = [path for path in file_map if path.endswith("/" + candidate1)]
+    if len(suffix_matches) == 1:
+        return suffix_matches[0]
 
     return None
 
@@ -93,7 +94,8 @@ class IndexingEngine:
             self.db.flush()
 
             # 4. Parse code and extract symbols and preliminary edges
-            symbol_records_by_name: dict[str, IndexedSymbol] = {}
+            symbol_records_by_file: dict[tuple[str, str], IndexedSymbol] = {}
+            exported_instances: dict[str, dict[str, str]] = {}
             raw_edges: list[tuple[IndexedFile, Any]] = []
             parse_errors: list[str] = []
 
@@ -107,6 +109,7 @@ class IndexingEngine:
                         if res.errors:
                             parse_errors.extend(res.errors)
 
+                        exported_instances[sf.rel_path] = res.exported_instances
                         # Insert symbols
                         for sym in res.symbols:
                             sym_rec = IndexedSymbol(
@@ -121,7 +124,7 @@ class IndexingEngine:
                                 metadata_json=sym.metadata,
                             )
                             self.db.add(sym_rec)
-                            symbol_records_by_name[sym.name] = sym_rec
+                            symbol_records_by_file[(sf.rel_path, sym.name)] = sym_rec
 
                         # Collect edges
                         for edge in res.edges:
@@ -136,27 +139,77 @@ class IndexingEngine:
             file_lookup = {f_path: f_rec.id for f_path, f_rec in file_records.items()}
             created_edges_count = 0
 
+            imports_by_file: dict[str, dict[str, set[tuple[str, str | None]]]] = defaultdict(
+                lambda: defaultdict(set)
+            )
+            for source_file_rec, raw_edge in raw_edges:
+                if raw_edge.edge_type != "imports":
+                    continue
+                module = raw_edge.target_file_or_module
+                level = raw_edge.metadata.get("level", 0)
+                if level:
+                    package = source_file_rec.path.removesuffix(".py").split("/")[:-1]
+                    module = ".".join([*package[:len(package) - level + 1], *module.split(".")])
+                target_path = module_to_file_path(module, file_lookup)
+                imported_name = raw_edge.target_symbol if raw_edge.metadata.get("import_type") == "from" else None
+                if imported_name:
+                    child_path = module_to_file_path(f"{module}.{imported_name}", file_lookup)
+                    if child_path and (not target_path or
+                                       (target_path, imported_name) not in symbol_records_by_file):
+                        target_path = child_path
+                        imported_name = None
+                if not target_path:
+                    continue
+                alias = raw_edge.metadata.get("alias", raw_edge.target_symbol)
+                if not alias:
+                    continue
+                imports_by_file[source_file_rec.path][alias].add((target_path, imported_name))
+
+            def resolve_reference(source_path: str, call_name: str) -> IndexedSymbol | None:
+                # A local definition has precedence over imported names. Unknown or
+                # ambiguous names must not become cross-file dependency edges.
+                local = symbol_records_by_file.get((source_path, call_name))
+                if local:
+                    return local
+                parts = call_name.split(".")
+                imports = imports_by_file[source_path].get(parts[0], set())
+                if len(imports) != 1:
+                    return None
+                target_path, imported_name = next(iter(imports))
+                if len(parts) == 1 and imported_name:
+                    return symbol_records_by_file.get((target_path, imported_name))
+                if len(parts) == 2:
+                    member = parts[1]
+                    if imported_name:
+                        class_name = exported_instances.get(target_path, {}).get(imported_name, imported_name)
+                        return symbol_records_by_file.get((target_path, f"{class_name}.{member}"))
+                    return symbol_records_by_file.get((target_path, member))
+                return None
+
             for source_file_rec, raw_edge in raw_edges:
                 target_file_id = None
                 target_symbol_id = None
                 source_symbol_id = None
 
                 # Locate source symbol if available
-                if raw_edge.source_symbol and raw_edge.source_symbol in symbol_records_by_name:
-                    source_symbol_id = symbol_records_by_name[raw_edge.source_symbol].id
+                if raw_edge.source_symbol:
+                    source_symbol = symbol_records_by_file.get((source_file_rec.path, raw_edge.source_symbol))
+                    source_symbol_id = source_symbol.id if source_symbol else None
 
                 if raw_edge.edge_type == "imports":
                     # Map imported module to target file
-                    target_path = module_to_file_path(raw_edge.target_file_or_module, file_lookup)
+                    alias = raw_edge.metadata.get("alias", raw_edge.target_symbol)
+                    targets = imports_by_file[source_file_rec.path].get(alias, set())
+                    target_path = next(iter(targets))[0] if len(targets) == 1 else None
                     if target_path and target_path != source_file_rec.path:
                         target_file_id = file_lookup[target_path]
-                        if raw_edge.target_symbol and raw_edge.target_symbol in symbol_records_by_name:
-                            target_symbol_id = symbol_records_by_name[raw_edge.target_symbol].id
+                        target_symbol = symbol_records_by_file.get((target_path, raw_edge.target_symbol))
+                        target_symbol_id = target_symbol.id if target_symbol else None
 
-                elif raw_edge.edge_type == "calls":
+                elif raw_edge.edge_type in {"calls", "reads"}:
                     # Locate target symbol and its defining file
-                    if raw_edge.target_symbol in symbol_records_by_name:
-                        t_sym = symbol_records_by_name[raw_edge.target_symbol]
+                    t_sym = resolve_reference(source_file_rec.path, raw_edge.target_symbol or "")
+                    if t_sym:
                         target_symbol_id = t_sym.id
                         target_file_id = t_sym.file_id
 
