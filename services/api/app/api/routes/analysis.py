@@ -49,7 +49,13 @@ def trigger_analysis(
         db.add(run)
         db.commit()
         db.refresh(run)
-        return {"analysis_id": run.id, "status": "completed", "cached": True}
+        return {
+            "analysis_id": run.id,
+            "status": "completed",
+            "cached": True,
+            "result": cached_result,
+            "brief": run.brief_markdown,
+        }
 
     analysis_id = str(uuid.uuid4())
     run = AnalysisRun(

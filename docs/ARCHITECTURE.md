@@ -47,7 +47,7 @@ flowchart TD
 - **Graph Traversal**: Computes downstream (dependents/callers) and upstream (dependencies) subgraphs.
 
 ### 2.4 Meta AI Semantic Reasoning (`app/ai`)
-- **Provider Adapter**: Targets the official Meta Model API chat-completions endpoint (`https://api.meta.ai/v1/chat/completions`) with `muse-spark-1.3` and JSON-schema responses. Partner OpenAI-compatible endpoints remain configurable; offline mode is deterministic and labeled as a demo. Official API compatibility has been checked against [Meta API reference](https://dev.meta.ai/docs/api-reference), [models](https://dev.meta.ai/docs/models), and [structured output](https://dev.meta.ai/docs/structured-output); a real authorized inference call has not yet been run.
+- **Provider Adapter**: Targets the official Meta Model API chat-completions endpoint (`https://api.meta.ai/v1/chat/completions`) with `muse-spark-1.3` and JSON-schema responses. Partner OpenAI-compatible endpoints remain configurable; offline mode is deterministic and labeled as a demo. Official API compatibility has been checked against [Meta API reference](https://dev.meta.ai/docs/api-reference), [models](https://dev.meta.ai/docs/models), and [structured output](https://dev.meta.ai/docs/structured-output), then verified with an authorized live full-pipeline smoke and three-case evaluation. See [EVALUATION.md](EVALUATION.md) for measured limits.
 - **Structured Prompts**: Multi-pass orchestration:
   1. Requirement Interpretation
   2. Grounded Impact Reasoning

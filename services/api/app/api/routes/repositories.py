@@ -2,6 +2,7 @@ import os
 import shutil
 from pathlib import Path
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Query
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.db.database import get_db
@@ -176,9 +177,4 @@ def load_sample_repository(db: Session = Depends(get_db)):
     indexing_engine = IndexingEngine(db)
     indexed_repo = indexing_engine.index_repository(repo.id)
 
-    return {
-        "repository_id": indexed_repo.id,
-        "name": indexed_repo.name,
-        "status": indexed_repo.status,
-        "stats": indexed_repo.stats,
-    }
+    return {**jsonable_encoder(indexed_repo), "repository_id": indexed_repo.id}

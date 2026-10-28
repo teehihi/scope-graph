@@ -253,6 +253,24 @@ def test_malformed_or_non_object_json_fails(provider_with_transport, content):
         provider.interpret_requirement("Verify email")
 
 
+@pytest.mark.parametrize("content", ["", '{"business_intent":'])
+def test_meta_length_truncation_reports_token_limit_without_body(content):
+    provider = MetaAIHttpProvider("test-key", "https://api.meta.ai/v1", "muse-spark-1.3")
+    provider.client.close()
+    provider.client = httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(200, json={
+        "model": "muse-spark-1.3",
+        "choices": [{"finish_reason": "length", "message": {"content": content}}],
+        "usage": {"completion_tokens": 3000},
+    })))
+    try:
+        with pytest.raises(ValueError, match="completion token limit") as error:
+            provider.interpret_requirement("Verify email")
+        if content:
+            assert content not in str(error.value)
+    finally:
+        provider.client.close()
+
+
 def test_missing_chat_completion_fields_fail(provider_with_transport):
     provider = provider_with_transport(lambda request: httpx.Response(200, json={"choices": []}))
 
