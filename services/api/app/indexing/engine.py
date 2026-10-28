@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Repository, IndexedFile, IndexedSymbol, DependencyEdge
 from app.indexing.scanner import scan_workspace
 from app.indexing.parser import PythonASTParser, CodeParseResult
+from app.indexing.ts_parser import TypeScriptASTParser
 
 logger = logging.getLogger(__name__)
 
@@ -101,11 +102,16 @@ class IndexingEngine:
 
             for sf in scanned_files:
                 file_rec = file_records[sf.rel_path]
-                if sf.language == "python":
+                if sf.language in ("python", "typescript", "javascript"):
                     try:
                         with open(sf.abs_path, "r", encoding="utf-8", errors="replace") as f:
                             code = f.read()
-                        res = PythonASTParser.parse_code(sf.rel_path, code)
+
+                        if sf.language == "python":
+                            res = PythonASTParser.parse_code(sf.rel_path, code)
+                        else:
+                            res = TypeScriptASTParser.parse_code(sf.rel_path, code)
+
                         if res.errors:
                             parse_errors.extend(res.errors)
 

@@ -1,9 +1,11 @@
 import logging
 import asyncio
+import hashlib
 import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from app.core.config import settings
+from app.jobs.queue import get_cache, set_cache
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +40,7 @@ async def get_github_auth_url():
             detail="GitHub OAuth is not configured. Please set GITHUB_CLIENT_ID in your .env file."
         )
     
-    scope = "read:user user:email"
+    scope = "read:user user:email repo"
     url = (
         f"https://github.com/login/oauth/authorize"
         f"?client_id={settings.GITHUB_CLIENT_ID}"
@@ -160,3 +162,94 @@ async def exchange_github_code(req: GitHubAuthRequest):
             ),
             access_token=gh_token,
         )
+
+class GitHubRepoItem(BaseModel):
+    id: int
+    name: str
+    full_name: str
+    private: bool
+    html_url: str
+    clone_url: str
+    description: str | None = None
+    default_branch: str = "main"
+    language: str | None = None
+    updated_at: str | None = None
+
+@router.get("/github/repos", response_model=list[GitHubRepoItem])
+async def list_user_github_repos(token: str | None = None, refresh: bool = False):
+    """
+    List public and private GitHub repositories of the authenticated user.
+    Uses Redis caching (5 min TTL) for instant response times.
+    """
+    if not token:
+        raise HTTPException(status_code=401, detail="GitHub access token is required")
+
+    cache_key = f"gh_repos:{hashlib.sha256(token.encode()).hexdigest()[:16]}"
+    if not refresh:
+        cached_data = get_cache(cache_key)
+        if cached_data and isinstance(cached_data, list):
+            return [GitHubRepoItem(**item) for item in cached_data]
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "ScopeGraph-App/1.0",
+    }
+
+    # Fast connect timeout (5s) and bounded read timeout (12s)
+    timeout_cfg = httpx.Timeout(12.0, connect=5.0)
+
+    async with httpx.AsyncClient(timeout=timeout_cfg, follow_redirects=True) as client:
+        last_exc = None
+        for attempt in range(3):
+            try:
+                resp = await client.get(
+                    "https://api.github.com/user/repos",
+                    headers=headers,
+                    params={"sort": "updated", "per_page": 100, "affiliation": "owner,collaborator,organization_member"},
+                )
+                if resp.status_code == 200:
+                    repos = resp.json()
+                    items = []
+                    for r in repos:
+                        items.append(
+                            GitHubRepoItem(
+                                id=r.get("id"),
+                                name=r.get("name"),
+                                full_name=r.get("full_name"),
+                                private=r.get("private", False),
+                                html_url=r.get("html_url", ""),
+                                clone_url=r.get("clone_url", ""),
+                                description=r.get("description"),
+                                default_branch=r.get("default_branch", "main"),
+                                language=r.get("language"),
+                                updated_at=r.get("updated_at"),
+                            )
+                        )
+                    # Cache in Redis with 300s TTL for instant subsequent loads
+                    set_cache(cache_key, [item.model_dump() for item in items], ttl_seconds=300)
+                    return items
+                elif resp.status_code in (401, 403):
+                    logger.warning("GitHub API /user/repos rejected token: %s", resp.text)
+                    raise HTTPException(status_code=resp.status_code, detail="Invalid or expired GitHub access token. Please reconnect your account.")
+                else:
+                    logger.warning("GitHub API /user/repos attempt %d failed with status %s: %s", attempt + 1, resp.status_code, resp.text)
+            except HTTPException:
+                raise
+            except (httpx.TimeoutException, httpx.NetworkError) as net_err:
+                last_exc = net_err
+                logger.warning("GitHub API /user/repos retry %d/3 after network error: %r", attempt + 1, net_err)
+                if attempt < 2:
+                    await asyncio.sleep(0.3)
+            except Exception as exc:
+                last_exc = exc
+                break
+
+        # Fallback to cache even if expired if GitHub has network timeout
+        fallback_data = get_cache(cache_key)
+        if fallback_data and isinstance(fallback_data, list):
+            logger.info("Serving stale cached GitHub repos after network error")
+            return [GitHubRepoItem(**item) for item in fallback_data]
+
+        logger.error("Error fetching repositories from GitHub after retries: %r", last_exc)
+        raise HTTPException(status_code=502, detail=f"Error connecting to GitHub: {str(last_exc or 'Timeout')}")

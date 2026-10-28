@@ -10,6 +10,7 @@ export interface User {
   workspace?: string;
   role?: string;
   onboarded?: boolean;
+  githubToken?: string;
 }
 
 interface AuthContextType {
@@ -23,7 +24,8 @@ interface AuthContextType {
     avatarUrl?: string,
     provider?: 'email' | 'github' | 'google' | 'demo',
     username?: string,
-    onboarded?: boolean
+    onboarded?: boolean,
+    githubToken?: string
   ) => void;
   loginAsDemo: () => void;
   updateUser: (updates: Partial<User>) => void;
@@ -58,12 +60,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     avatarUrl?: string,
     provider: 'email' | 'github' | 'google' | 'demo' = 'email',
     username?: string,
-    onboarded?: boolean
+    onboarded?: boolean,
+    githubToken?: string
   ) => {
     const hasOnboarded =
       onboarded !== undefined
         ? onboarded
         : isDemo || localStorage.getItem(`scopegraph_onboarded_${email}`) === 'true';
+
+    const savedGithubToken = githubToken || localStorage.getItem(`scopegraph_gh_token_${email}`) || undefined;
 
     const newUser: User = {
       name: name || (email.split('@')[0] ? email.split('@')[0].replace(/[^a-zA-Z0-9]/g, ' ') : 'Developer'),
@@ -73,11 +78,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       provider,
       username,
       onboarded: hasOnboarded,
+      githubToken: savedGithubToken,
     };
     setUser(newUser);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(newUser));
     if (hasOnboarded) {
       localStorage.setItem(`scopegraph_onboarded_${email}`, 'true');
+    }
+    if (savedGithubToken) {
+      localStorage.setItem(`scopegraph_gh_token_${email}`, savedGithubToken);
     }
   };
 

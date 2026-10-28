@@ -51,7 +51,7 @@ export const Login: React.FC = () => {
     if (provider === 'GitHub') {
       const clientId = import.meta.env.VITE_GITHUB_CLIENT_ID || 'Ov23lifjNq0eAxACh6IW';
       const redirectUri = `${window.location.origin}/auth/callback/github`;
-      window.location.href = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=read:user%20user:email`;
+      window.location.href = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=read:user%20user:email%20repo`;
       return;
     }
     // Show cloud notice for Google

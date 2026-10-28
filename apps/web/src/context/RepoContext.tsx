@@ -2,11 +2,13 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { useNodesState, useEdgesState, Node, Edge } from '@xyflow/react';
 import { Repository, NodeData, ImpactItem, AnalysisReport, LayerType } from '../types';
 import { fetchRepositories, loadSampleRepository, fetchGraph, runAnalysis } from '../api/client';
+import { useLanguage } from './LanguageContext';
 
 interface RepoContextType {
   repositories: Repository[];
   activeRepo: Repository | null;
   setActiveRepo: (repo: Repository | null) => void;
+  refreshRepositories: () => Promise<Repository[]>;
   isLoadingSample: boolean;
   loadSample: () => Promise<void>;
   nodes: Node[];
@@ -33,6 +35,7 @@ interface RepoContextType {
 const RepoContext = createContext<RepoContextType | undefined>(undefined);
 
 export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { language } = useLanguage();
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [activeRepo, setActiveRepo] = useState<Repository | null>(null);
   const [isLoadingSample, setIsLoadingSample] = useState(false);
@@ -60,7 +63,7 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!repo) return;
     setIsAnalyzing(true);
     try {
-      const resp = await runAnalysis(repo.id, req);
+      const resp = await runAnalysis(repo.id, req, language);
       if (resp.result) {
         setAnalysisReport(resp.result);
         setBriefMarkdown(resp.brief || '');
@@ -77,12 +80,24 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  const refreshRepositories = useCallback(async () => {
+    try {
+      const repos = await fetchRepositories();
+      setRepositories(repos);
+      return repos;
+    } catch (err) {
+      console.warn('Failed to refresh repositories:', err);
+      return [];
+    }
+  }, []);
+
   // Load sample repo
   const loadSample = useCallback(async () => {
     setIsLoadingSample(true);
     try {
       const repo = await loadSampleRepository();
-      setRepositories((prev) => [repo, ...prev.filter((r) => r.id !== repo.id)]);
+      const freshRepos = await fetchRepositories();
+      setRepositories(freshRepos);
       setActiveRepo(repo);
       setSelectedNodeData(null);
       setSelectedImpactItem(null);
@@ -91,7 +106,7 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setIsLoadingSample(false);
     }
-  }, [setNodes, setEdges]);
+  }, []);
 
   // Sync graph
   const reloadGraph = useCallback(
@@ -135,8 +150,9 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Initial load - sync with backend if available
   useEffect(() => {
     let isCancelled = false;
+    let retryTimer: any = null;
 
-    const initRepositories = async () => {
+    const initRepositories = async (attempt: number = 1) => {
       try {
         const repos = await fetchRepositories();
         if (isCancelled) return;
@@ -144,12 +160,24 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setRepositories(repos);
           setActiveRepo(repos[0]);
         } else {
-          // Backend is online but database is empty, seed it
-          await loadSample();
+          // Backend is online but database is empty, automatically seed sample repository
+          try {
+            const sampleRepo = await loadSampleRepository();
+            if (!isCancelled) {
+              setRepositories([sampleRepo]);
+              setActiveRepo(sampleRepo);
+            }
+          } catch (seedErr) {
+            console.warn('[RepoContext] Auto-seed failed:', seedErr);
+          }
         }
       } catch (err) {
-        console.warn('[RepoContext] Backend connecting in background:', err);
-        // Keep the empty or last successfully loaded repository state.
+        console.warn(`[RepoContext] Backend connecting (attempt ${attempt}/5)...`, err);
+        if (!isCancelled && attempt < 5) {
+          retryTimer = setTimeout(() => {
+            initRepositories(attempt + 1);
+          }, 1500);
+        }
       }
     };
 
@@ -157,8 +185,9 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return () => {
       isCancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
     };
-  }, [loadSample]);
+  }, []);
 
   const clearAnalysis = () => {
     setAnalysisReport(null);
@@ -174,6 +203,7 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
         repositories,
         activeRepo,
         setActiveRepo,
+        refreshRepositories,
         isLoadingSample,
         loadSample,
         nodes,

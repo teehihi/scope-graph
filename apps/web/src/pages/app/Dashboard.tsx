@@ -5,6 +5,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { AppLayout } from '../../components/layouts/AppLayout';
 import { GraphCanvas } from '../../components/GraphCanvas';
 import { RepoSelectorDropdown } from '../../components/RepoSelectorDropdown';
+import { OnboardingTour, TourStep } from '../../components/OnboardingTour';
 import {
   RotateCcw,
   ArrowRight,
@@ -18,6 +19,7 @@ import {
   FileCode,
   ExternalLink,
   CheckCircle2,
+  HelpCircle,
 } from 'lucide-react';
 import { Node } from '@xyflow/react';
 
@@ -156,12 +158,90 @@ export const Dashboard: React.FC = () => {
         },
       ];
 
+  // Guided Tour State
+  const [showTour, setShowTour] = useState(false);
+
+  React.useEffect(() => {
+    const seenTour = localStorage.getItem('scopegraph_dashboard_tour_seen');
+    if (!seenTour) {
+      const timer = setTimeout(() => setShowTour(true), 800);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  const handleCloseTour = () => {
+    setShowTour(false);
+    localStorage.setItem('scopegraph_dashboard_tour_seen', 'true');
+  };
+
+  const dashboardTourSteps: TourStep[] = [
+    {
+      id: 'repo',
+      targetSelector: '#tour-dash-repo',
+      title: t('dash.tour_step_repo_title'),
+      placement: 'bottom',
+      spotlightPadding: 6,
+      spotlightRadius: 16,
+      description: t('dash.tour_step_repo_desc'),
+      interactiveTip: t('dash.tour_step_repo_tip'),
+    },
+    {
+      id: 'metrics',
+      targetSelector: '#tour-dash-metrics',
+      title: t('dash.tour_step_metrics_title'),
+      placement: 'bottom',
+      spotlightPadding: 6,
+      spotlightRadius: 18,
+      description: t('dash.tour_step_metrics_desc'),
+      interactiveTip: t('dash.tour_step_metrics_tip'),
+    },
+    {
+      id: 'graph',
+      targetSelector: '#tour-dash-graph',
+      title: t('dash.tour_step_graph_title'),
+      placement: 'right',
+      spotlightPadding: 6,
+      spotlightRadius: 18,
+      description: t('dash.tour_step_graph_desc'),
+      interactiveTip: t('dash.tour_step_graph_tip'),
+    },
+    {
+      id: 'scout',
+      targetSelector: '#tour-dash-scout',
+      title: t('dash.tour_step_scout_title'),
+      placement: 'left',
+      spotlightPadding: 6,
+      spotlightRadius: 18,
+      description: t('dash.tour_step_scout_desc'),
+      interactiveTip: t('dash.tour_step_scout_tip'),
+    },
+    {
+      id: 'table',
+      targetSelector: '#tour-dash-table',
+      title: t('dash.tour_step_table_title'),
+      placement: 'top',
+      spotlightPadding: 6,
+      spotlightRadius: 18,
+      description: t('dash.tour_step_table_desc'),
+      interactiveTip: t('dash.tour_step_table_tip'),
+    },
+  ];
+
   return (
     <AppLayout
       title={t('dash.title')}
       subtitle={t('dash.subtitle')}
       actions={
-        <div className="flex items-center gap-1.5 sm:gap-2">
+        <div id="tour-dash-repo" className="flex items-center gap-1.5 sm:gap-2">
+          <button
+            type="button"
+            onClick={() => setShowTour(true)}
+            className="flex items-center gap-1.5 text-xs font-bold px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-white text-[#151923] border border-[#E4E7E1] hover:bg-slate-50 transition-colors shadow-xs shrink-0 cursor-pointer"
+            title={t('dash.tour_btn')}
+          >
+            <HelpCircle className="w-3.5 h-3.5 text-[#526BEE]" />
+            <span className="hidden sm:inline">{t('dash.tour_btn')}</span>
+          </button>
           <RepoSelectorDropdown />
           <button
             onClick={loadSample}
@@ -202,7 +282,7 @@ export const Dashboard: React.FC = () => {
         </div>
 
         {/* 4 Metric KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div id="tour-dash-metrics" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* 1. Directly Affected */}
           <div className="p-5 rounded-2xl bg-white border border-[#E4E7E1] shadow-xs flex flex-col justify-between space-y-2 hover:border-[#151923] transition-colors">
             <div className="flex items-center justify-between text-[#8B929E]">
@@ -259,7 +339,7 @@ export const Dashboard: React.FC = () => {
         {/* Central Cockpit: Dependency Graph Preview (Left) + AI Agent Hub (Right) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
           {/* Left Column: Interactive Dependency Graph Preview (7 cols / ~60%) */}
-          <div className="lg:col-span-7 bg-white rounded-2xl border border-[#E4E7E1] shadow-xs flex flex-col overflow-hidden min-h-[480px]">
+          <div id="tour-dash-graph" className="lg:col-span-7 bg-white rounded-2xl border border-[#E4E7E1] shadow-xs flex flex-col overflow-hidden min-h-[480px]">
             {/* Header */}
             <div className="p-4 px-5 border-b border-[#E4E7E1] flex items-center justify-between bg-white z-10">
               <div className="flex items-center gap-2">
@@ -296,7 +376,7 @@ export const Dashboard: React.FC = () => {
           </div>
 
           {/* Right Column: AI Agent Cockpit & Change Simulator (5 cols / ~40%) */}
-          <div className="lg:col-span-5 bg-white rounded-2xl border border-[#E4E7E1] shadow-xs p-5 flex flex-col justify-between space-y-5">
+          <div id="tour-dash-scout" className="lg:col-span-5 bg-white rounded-2xl border border-[#E4E7E1] shadow-xs p-5 flex flex-col justify-between space-y-5">
             {/* Top: Scout Agent Status */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -426,7 +506,7 @@ export const Dashboard: React.FC = () => {
         </div>
 
         {/* Bottom Section: Affected Components / Blast Radius Breakdown Table */}
-        <div className="bg-white rounded-2xl border border-[#E4E7E1] shadow-xs overflow-hidden">
+        <div id="tour-dash-table" className="bg-white rounded-2xl border border-[#E4E7E1] shadow-xs overflow-hidden">
           <div className="p-4 px-5 border-b border-[#E4E7E1] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
               <div className="flex items-center gap-2">
@@ -521,6 +601,15 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Interactive Guided Walkthrough Tour (like Onboarding) */}
+      <OnboardingTour
+        isOpen={showTour}
+        steps={dashboardTourSteps}
+        onClose={handleCloseTour}
+        onComplete={handleCloseTour}
+        onSkip={handleCloseTour}
+      />
     </AppLayout>
   );
 };

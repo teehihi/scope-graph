@@ -14,6 +14,7 @@ router = APIRouter(tags=["analysis"])
 class AnalyzeRequest(BaseModel):
     requirement: str
     run_sync: bool = False
+    target_language: str = "en"
 
 @router.post("/repositories/{repository_id}/analyze")
 def trigger_analysis(
@@ -69,7 +70,9 @@ def trigger_analysis(
 
     if payload.run_sync:
         orchestrator = AnalysisOrchestrator(db)
-        completed_run = orchestrator.run_analysis(repository_id, req_text, analysis_id=analysis_id)
+        completed_run = orchestrator.run_analysis(
+            repository_id, req_text, analysis_id=analysis_id, target_language=payload.target_language
+        )
         # Store in cache
         if completed_run.result_json:
             cache_payload = dict(completed_run.result_json)

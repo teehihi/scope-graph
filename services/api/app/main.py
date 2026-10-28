@@ -52,6 +52,7 @@ app.add_middleware(
 
 # Include routes
 app.include_router(health.router)
+app.include_router(health.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(repositories.router, prefix="/api/v1")
 app.include_router(analysis.router, prefix="/api/v1")

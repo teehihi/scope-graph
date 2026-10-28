@@ -264,10 +264,18 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
         self,
         requirement: str,
         validated_impact: dict[str, Any],
+        language: str = "en",
     ) -> str:
+        lang_instruction = ""
+        if language in ("vi", "vietnamese"):
+            lang_instruction = "IMPORTANT: Write the entire Implementation Brief in Vietnamese (Tiếng Việt). Keep code symbols and paths in English code blocks."
+        elif language and language != "en":
+            lang_instruction = f"IMPORTANT: Write the entire Implementation Brief in language code '{language}'. Keep code symbols and paths in English code blocks."
+
         system_prompt = (
             "You are an AI coding assistant architect. Generate a crisp, actionable Implementation Brief\n"
             "formatted in Markdown that a human developer or AI coding agent (like Codex, Claude Code) can immediately execute.\n"
+            f"{lang_instruction}\n"
             "Include:\n"
             "1. Goal & Acceptance Criteria\n"
             "2. Grounded Files & Symbols to Inspect (with explicit reasons)\n"
@@ -452,12 +460,64 @@ class OfflineDemoProvider(BaseMetaAIProvider):
         self,
         requirement: str,
         validated_impact: dict[str, Any],
+        language: str = "en",
     ) -> str:
         affected_items = validated_impact.get("affected_items", [])
         direct_items = [i for i in affected_items if i.get("impact_type") == "direct"]
         indirect_items = [i for i in affected_items if i.get("impact_type") == "indirect"]
         tests = validated_impact.get("suggested_tests", [])
         risks = validated_impact.get("risks", [])
+
+        if language in ("vi", "vietnamese"):
+            lines = [
+                f"# Báo cáo Kế hoạch Triển khai (ScopeGraph Implementation Brief)",
+                f"**Yêu cầu:** {requirement}",
+                f"**Mô hình tạo:** ScopeGraph Code Impact Engine (Chế độ Ngoại tuyến Tất định)",
+                f"",
+                f"## 1. Tóm tắt Mục tiêu Thay đổi",
+                f"Đề xuất yêu cầu cập nhật luồng đổi email của người dùng từ việc sửa trực tiếp sang quy trình xác thực 2 bước bằng mã token.",
+                f"",
+                f"## 2. Các tệp mã nguồn cần kiểm tra & sửa đổi",
+                f"### Các tệp ảnh hưởng trực tiếp (Direct):",
+            ]
+            for item in direct_items:
+                sym_text = f" (`{item['symbol']}`)" if item.get('symbol') else ""
+                lines.append(f"- **`{item['file_path']}`**{sym_text}: {item['reason']}")
+
+            if indirect_items:
+                lines.append(f"### Các tệp ảnh hưởng gián tiếp / xuôi dòng (Indirect):")
+                for item in indirect_items:
+                    sym_text = f" (`{item['symbol']}`)" if item.get('symbol') else ""
+                    lines.append(f"- **`{item['file_path']}`**{sym_text}: {item['reason']}")
+
+            lines.extend([
+                f"",
+                f"## 3. Các bước Kỹ thuật cần Thực hiện",
+                f"1. **Tầng Service (`app/services/user_service.py`):** Cập nhật hàm `update_user_email` để yêu cầu đổi email thay vì sửa trực tiếp `user.email`. Khởi tạo token qua `verification_service`.",
+                f"2. **Tầng API (`app/api/users.py`):** Cập nhật tài liệu endpoint và schema phản hồi để thông báo rằng email xác nhận đã được gửi đi.",
+                f"3. **Xác nhận Token (`app/api/verification.py`):** Xử lý loại token `email_change` để hoán đổi `user.email` khi người dùng bấm xác nhận hợp lệ.",
+                f"4. **Cảnh báo Bảo mật (`app/services/notification_service.py`):** Đảm bảo gửi email thông báo tới cả địa chỉ email cũ.",
+                f"",
+                f"## 4. Kiểm thử Hồi quy Khuyến nghị",
+            ])
+            for t in tests:
+                lines.append(f"- [ ] {t}")
+
+            lines.extend([
+                f"",
+                f"## 5. Rủi ro Tiềm ẩn & Cần Đề phòng",
+            ])
+            for r in risks:
+                lines.append(f"- ⚠️ {r}")
+
+            lines.extend([
+                f"",
+                f"## 6. Danh mục Kiểm tra Trước khi Mở PR (Pre-flight Checklist)",
+                f"- Kiểm tra các khóa ngoại (Foreign Keys) trong CSDL có cascade chính xác.",
+                f"- Đảm bảo token có thời hạn TTL rõ ràng và không thể tái sử dụng (`is_used == True`).",
+                f"- Chạy toàn bộ bộ kiểm thử tự động: `pytest` trước khi gửi Pull Request.",
+            ])
+            return "\n".join(lines)
 
         lines = [
             f"# ScopeGraph Implementation Brief",
