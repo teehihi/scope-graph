@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "audit:i18n": "node ../../scripts/audit_i18n.js",
     "preview": "vite preview"
   },
   "dependencies": {
