@@ -51,6 +51,7 @@ def test_imported_alias_and_statically_exported_instance_method_resolve(tmp_path
     calls = [edge for edge in edges if edge[2] == "calls"]
     assert ("pkg/route.py", "pkg/security.py", "calls", ("pkg/route.py", "endpoint"), ("pkg/security.py", "hash_password")) in calls
     assert ("pkg/route.py", "pkg/service.py", "calls", ("pkg/route.py", "endpoint"), ("pkg/service.py", "Service.update")) in calls
+    assert not any(edge[2] == "reads" and edge[4] == ("pkg/service.py", "Service.update") for edge in edges)
 
 
 def test_ambiguous_and_dynamic_calls_create_no_speculative_edges(tmp_path):

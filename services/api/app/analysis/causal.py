@@ -25,9 +25,13 @@ class CausalImpactVerifier:
         symbols = {symbol.id: symbol for symbol in self.db.query(IndexedSymbol).filter_by(repository_id=repository_id)}
         edges = self.db.query(DependencyEdge).filter_by(repository_id=repository_id).all()
         calls_by_source: dict[str, list[DependencyEdge]] = defaultdict(list)
+        reads_by_source: dict[str, list[DependencyEdge]] = defaultdict(list)
         for edge in edges:
-            if edge.edge_type == "calls" and edge.source_file_id in files and edge.target_file_id in files:
-                calls_by_source[files[edge.source_file_id].path].append(edge)
+            if edge.source_file_id in files and edge.target_file_id in files:
+                if edge.edge_type == "calls":
+                    calls_by_source[files[edge.source_file_id].path].append(edge)
+                elif edge.edge_type == "reads" and symbols.get(edge.target_symbol_id, None):
+                    reads_by_source[files[edge.source_file_id].path].append(edge)
 
         supported: list[dict[str, Any]] = []
         potential: list[dict[str, Any]] = []
@@ -83,6 +87,29 @@ class CausalImpactVerifier:
                 supported.append(support(corrected, "Indexed function matches multiple requirement terms", []))
                 reclassified_direct.add(item["file_path"])
 
+        repo = self.db.query(Repository).filter_by(id=repository_id).first()
+        validator = EvidenceValidator(self.db, repo.workspace_path if repo else "")
+        promoted_settings: list[str] = []
+        if "configur" in requirement.lower() or "setting" in requirement.lower():
+            ranked_attributes = sorted(
+                ((term_hits(symbol.name), symbol) for symbol in symbols.values()
+                 if symbol.symbol_type == "attribute"),
+                key=lambda pair: (-pair[0], files[pair[1].file_id].path, pair[1].name),
+            )
+            if (ranked_attributes and ranked_attributes[0][0] >= 2
+                    and (len(ranked_attributes) == 1 or ranked_attributes[0][0] > ranked_attributes[1][0])):
+                symbol = ranked_attributes[0][1]
+                path = files[symbol.file_id].path
+                if not any(item["file_path"] == path for item in supported):
+                    candidate = validator.validate_ai_claims(repository_id, {"affected_items": [{
+                        "file_path": path, "symbol": symbol.name, "impact_type": "direct",
+                        "category": "config", "reason": requirement, "confidence": 0.0,
+                    }]})["affected_items"]
+                    if candidate and candidate[0].get("evidence_snippet"):
+                        supported.append(support(candidate[0],
+                                                 "Unique indexed setting matches multiple requirement terms", []))
+                        promoted_settings.append(path)
+
         direct_paths = {item["file_path"] for item in supported}
         direct_symbols_by_path: dict[str, set[str]] = defaultdict(set)
         for item in supported:
@@ -100,6 +127,15 @@ class CausalImpactVerifier:
                     return edge, target
             return None
 
+        def supported_read(path: str) -> tuple[DependencyEdge, str] | None:
+            for edge in reads_by_source.get(path, []):
+                target = files[edge.target_file_id].path
+                target_symbol = symbols.get(edge.target_symbol_id)
+                if (target in direct_paths and target_symbol and target_symbol.symbol_type == "attribute"
+                        and target_symbol.name in direct_symbols_by_path[target]):
+                    return edge, target
+            return None
+
         for item in items:
             is_test_direct = item["impact_type"] == "direct" and (
                 item["file_path"].startswith("tests/") or item.get("symbol_type") == "test"
@@ -108,14 +144,16 @@ class CausalImpactVerifier:
                 continue
             if item["impact_type"] == "indirect" and item["file_path"] in reclassified_direct:
                 continue
-            call = supported_call(item["file_path"])
+            call = supported_call(item["file_path"]) or supported_read(item["file_path"])
             if call and item.get("evidence_snippet") and (
                 matching(item.get("reason", "")) or term_hits(item.get("symbol") or "") >= 2
             ):
-                _, target = call
+                edge, target = call
                 corrected = ({**item, "original_impact_type": "direct", "impact_type": "indirect"}
                              if is_test_direct else item)
-                supported.append(support(corrected, f"Indexed call reaches supported direct target {target}",
+                explanation = (f"Indexed source reads supported setting in {target}" if edge.edge_type == "reads" else
+                               f"Indexed call reaches supported direct target {target}")
+                supported.append(support(corrected, explanation,
                                          [target, item["file_path"]]))
             else:
                 explanation = ("Test was claimed direct but no supported downstream call was found" if is_test_direct else
@@ -123,12 +161,10 @@ class CausalImpactVerifier:
                 potential.append(potential_item(item, explanation))
 
         promoted = []
-        repo = self.db.query(Repository).filter_by(id=repository_id).first()
-        validator = EvidenceValidator(self.db, repo.workspace_path if repo else "")
         for path in dict.fromkeys(review_paths):
             if path in direct_paths or any(item["file_path"] == path for item in supported):
                 continue
-            call = supported_call(path)
+            call = supported_call(path) or supported_read(path)
             if not call:
                 continue
             edge, target = call
@@ -139,11 +175,13 @@ class CausalImpactVerifier:
             candidate = validator.validate_ai_claims(repository_id, {"affected_items": [{
                 "file_path": path, "symbol": source_symbol.name, "impact_type": "indirect",
                 "category": "test" if path.startswith("tests/") else "module",
-                "reason": f"Calls {target_symbol.name} in {target}", "confidence": 0.0,
+                "reason": f"{'Reads' if edge.edge_type == 'reads' else 'Calls'} {target_symbol.name} in {target}",
+                "confidence": 0.0,
             }]})["affected_items"]
             if not candidate or not candidate[0].get("evidence_snippet"):
                 continue
-            supported.append(support(candidate[0], f"Completeness review found an indexed call to {target}",
+            relation = "read" if edge.edge_type == "reads" else "call"
+            supported.append(support(candidate[0], f"Completeness review found an indexed {relation} to {target}",
                                      [target, path]))
             promoted.append(path)
 
@@ -168,13 +206,36 @@ class CausalImpactVerifier:
                                      [target, path]))
             promoted_tests.append(path)
 
+        promoted_reads: list[str] = []
+        for path in sorted(reads_by_source):
+            if any(item["file_path"] == path for item in supported):
+                continue
+            read = supported_read(path)
+            if not read:
+                continue
+            edge, target = read
+            source_symbol = symbols.get(edge.source_symbol_id)
+            target_symbol = symbols.get(edge.target_symbol_id)
+            if not source_symbol or not target_symbol:
+                continue
+            candidate = validator.validate_ai_claims(repository_id, {"affected_items": [{
+                "file_path": path, "symbol": source_symbol.name, "impact_type": "indirect",
+                "category": "module", "reason": f"Reads {target_symbol.name} in {target}", "confidence": 0.0,
+            }]})["affected_items"]
+            if candidate and candidate[0].get("evidence_snippet"):
+                supported.append(support(candidate[0], f"Indexed source reads supported setting {target_symbol.name}",
+                                         [target, path]))
+                promoted_reads.append(path)
+
         supported = list({(item["file_path"], item["impact_type"]): item for item in supported}.values())
         supported_pairs = {(item["file_path"], item["impact_type"]) for item in supported}
         potential = [item for item in potential if (item["file_path"], item["impact_type"]) not in supported_pairs]
         metrics = {**existence_validated["validation_metrics"],
                    "impact_supported_claims": len(supported),
                    "potential_claims": len(potential), "duplicate_claims": duplicates,
-                   "promoted_suggestions": len(promoted), "promoted_graph_tests": len(promoted_tests)}
+                   "promoted_suggestions": len(promoted), "promoted_graph_tests": len(promoted_tests),
+                   "promoted_index_settings": len(promoted_settings), "promoted_setting_reads": len(promoted_reads)}
         return {"affected_items": supported, "potential_claims": potential,
                 "promoted_suggestions": promoted, "promoted_graph_tests": promoted_tests,
+                "promoted_index_settings": promoted_settings, "promoted_setting_reads": promoted_reads,
                 "validation_metrics": metrics}

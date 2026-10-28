@@ -165,7 +165,7 @@ class IndexingEngine:
                     continue
                 imports_by_file[source_file_rec.path][alias].add((target_path, imported_name))
 
-            def resolve_call(source_path: str, call_name: str) -> IndexedSymbol | None:
+            def resolve_reference(source_path: str, call_name: str) -> IndexedSymbol | None:
                 # A local definition has precedence over imported names. Unknown or
                 # ambiguous names must not become cross-file dependency edges.
                 local = symbol_records_by_file.get((source_path, call_name))
@@ -206,9 +206,9 @@ class IndexingEngine:
                         target_symbol = symbol_records_by_file.get((target_path, raw_edge.target_symbol))
                         target_symbol_id = target_symbol.id if target_symbol else None
 
-                elif raw_edge.edge_type == "calls":
+                elif raw_edge.edge_type in {"calls", "reads"}:
                     # Locate target symbol and its defining file
-                    t_sym = resolve_call(source_file_rec.path, raw_edge.target_symbol or "")
+                    t_sym = resolve_reference(source_file_rec.path, raw_edge.target_symbol or "")
                     if t_sym:
                         target_symbol_id = t_sym.id
                         target_file_id = t_sym.file_id

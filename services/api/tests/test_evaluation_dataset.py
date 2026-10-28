@@ -36,6 +36,9 @@ def test_expanded_dataset_runs_offline_and_replays_without_network(tmp_path):
     assert result["dataset_size"] == 17
     assert result["dataset_version"] == "2026-10-28-manual-v2"
     assert result["macro"]["impact"]["precision"] is not None
+    assert result["macro"]["impact"]["precision"] > result["macro"]["raw_impact"]["precision"]
+    assert result["macro"]["impact"]["indirect_recall"] > result["macro"]["raw_impact"]["indirect_recall"]
+    assert result["macro"]["impact"]["direct_recall"] >= result["macro"]["raw_impact"]["direct_recall"]
     assert result["macro"]["file_only_impact"]["recall"] is not None
     assert result["macro"]["context_reduction_vs_full_source"] is not None
     assert result["macro"]["analysis_latency_p50_seconds"] >= 0

@@ -143,6 +143,10 @@ class PythonASTParser:
                         result.symbols.append(method_sym)
 
                         # Check for calls inside method
+                        called_attributes = {
+                            id(subnode.func) for subnode in ast.walk(item)
+                            if isinstance(subnode, ast.Call) and isinstance(subnode.func, ast.Attribute)
+                        }
                         for subnode in ast.walk(item):
                             if isinstance(subnode, ast.Call):
                                 call_name = None
@@ -159,6 +163,13 @@ class PythonASTParser:
                                             target_symbol=call_name,
                                         )
                                     )
+                            elif (isinstance(subnode, ast.Attribute) and isinstance(subnode.ctx, ast.Load)
+                                  and id(subnode) not in called_attributes):
+                                result.edges.append(ParsedEdge(
+                                    target_file_or_module="", edge_type="reads",
+                                    source_symbol=f"{node.name}.{item.name}",
+                                    target_symbol=ast.unparse(subnode),
+                                ))
 
             elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 doc = ast.get_docstring(node)
@@ -203,6 +214,10 @@ class PythonASTParser:
                 result.symbols.append(fn_sym)
 
                 # Calls inside function
+                called_attributes = {
+                    id(subnode.func) for subnode in ast.walk(node)
+                    if isinstance(subnode, ast.Call) and isinstance(subnode.func, ast.Attribute)
+                }
                 for subnode in ast.walk(node):
                     if isinstance(subnode, ast.Call):
                         call_name = None
@@ -219,5 +234,11 @@ class PythonASTParser:
                                     target_symbol=call_name,
                                 )
                             )
+                    elif (isinstance(subnode, ast.Attribute) and isinstance(subnode.ctx, ast.Load)
+                          and id(subnode) not in called_attributes):
+                        result.edges.append(ParsedEdge(
+                            target_file_or_module="", edge_type="reads",
+                            source_symbol=node.name, target_symbol=ast.unparse(subnode),
+                        ))
 
         return result

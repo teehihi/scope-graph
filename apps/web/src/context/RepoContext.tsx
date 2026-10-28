@@ -2,12 +2,6 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { useNodesState, useEdgesState, Node, Edge } from '@xyflow/react';
 import { Repository, NodeData, ImpactItem, AnalysisReport, LayerType } from '../types';
 import { fetchRepositories, loadSampleRepository, fetchGraph, runAnalysis } from '../api/client';
-import {
-  FALLBACK_SAMPLE_REPO,
-  FALLBACK_GRAPH_NODES,
-  FALLBACK_GRAPH_EDGES,
-  FALLBACK_ANALYSIS_REPORT,
-} from '../data/sampleData';
 
 interface RepoContextType {
   repositories: Repository[];
@@ -39,17 +33,17 @@ interface RepoContextType {
 const RepoContext = createContext<RepoContextType | undefined>(undefined);
 
 export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [repositories, setRepositories] = useState<Repository[]>([FALLBACK_SAMPLE_REPO]);
-  const [activeRepo, setActiveRepo] = useState<Repository | null>(FALLBACK_SAMPLE_REPO);
+  const [repositories, setRepositories] = useState<Repository[]>([]);
+  const [activeRepo, setActiveRepo] = useState<Repository | null>(null);
   const [isLoadingSample, setIsLoadingSample] = useState(false);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node>(FALLBACK_GRAPH_NODES);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(FALLBACK_GRAPH_EDGES);
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedLayer, setSelectedLayer] = useState<LayerType | 'all'>('all');
   const [focusSubgraph, setFocusSubgraph] = useState(false);
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisReport, setAnalysisReport] = useState<AnalysisReport | null>(FALLBACK_ANALYSIS_REPORT);
+  const [analysisReport, setAnalysisReport] = useState<AnalysisReport | null>(null);
   const [briefMarkdown, setBriefMarkdown] = useState<string>('');
   const [requirement, setRequirement] = useState<string>(
     'Require email verification before users can change their email address.'
@@ -77,11 +71,7 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
     } catch (err: any) {
-      console.warn('Analysis API unavailable, using grounded demo report:', err);
-      // Fallback demo report so user is never stuck
-      setAnalysisReport(FALLBACK_ANALYSIS_REPORT);
-      const firstDirect = FALLBACK_ANALYSIS_REPORT.affected_items.find((i) => i.impact_type === 'direct');
-      if (firstDirect) setSelectedImpactItem(firstDirect);
+      console.warn('Analysis API unavailable:', err);
     } finally {
       setIsAnalyzing(false);
     }
@@ -97,11 +87,7 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSelectedNodeData(null);
       setSelectedImpactItem(null);
     } catch (err) {
-      console.warn('Backend load-sample failed, ensuring client sample repo:', err);
-      setRepositories((prev) => (prev.length > 0 ? prev : [FALLBACK_SAMPLE_REPO]));
-      setActiveRepo((prev) => prev || FALLBACK_SAMPLE_REPO);
-      setNodes(FALLBACK_GRAPH_NODES);
-      setEdges(FALLBACK_GRAPH_EDGES);
+      console.warn('Backend load-sample failed:', err);
     } finally {
       setIsLoadingSample(false);
     }
@@ -134,17 +120,14 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setNodes(rfNodes);
         setEdges(graphData.edges);
       } catch (err) {
-        // Fallback to sample graph if database query fails
-        console.warn('Graph API unavailable, using fallback graph topology:', err);
-        setNodes(FALLBACK_GRAPH_NODES);
-        setEdges(FALLBACK_GRAPH_EDGES);
+        console.warn('Graph API unavailable:', err);
       }
     },
     [setNodes, setEdges]
   );
 
   useEffect(() => {
-    if (activeRepo && activeRepo.id !== 'sample-auth-service') {
+    if (activeRepo) {
       reloadGraph(activeRepo.id, analysisReport, focusSubgraph);
     }
   }, [activeRepo, reloadGraph, analysisReport, focusSubgraph]);
@@ -166,7 +149,7 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } catch (err) {
         console.warn('[RepoContext] Backend connecting in background:', err);
-        // Fallback is already initialized in state
+        // Keep the empty or last successfully loaded repository state.
       }
     };
 
