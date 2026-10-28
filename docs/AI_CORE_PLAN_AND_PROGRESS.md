@@ -24,6 +24,8 @@
 
 The workstream is on the linked branch for team review. The three-case live result and expanded 17-case offline fixture are diagnostic; wider product quality remains an open research task. The latest `main` was merged into the AI branch on 2026-10-28. A subsequent user request explicitly authorized fixing the inherited frontend build break; this changed `RepoContext.tsx` only.
 
+The 17-case fixture now also has an [AI-assisted v3 label review](AI_CORE_LABEL_REVIEW_V3.md): six impact labels removed, leaving 25 direct and 10 indirect labels. The [label-only replay](EVALUATION.md#sg-ai-09-label-only-v3-replay-2026-10-28) uses the saved offline predictions and changes no model output. Independent human sign-off and a separate repository holdout remain open.
+
 ## Architecture and contracts
 
 The seven-step `AnalysisOrchestrator` still interprets, retrieves, traverses, reasons, reviews, validates, and writes the brief. `HybridRetriever` only selects indexed, repository-scoped context for impact reasoning; `EvidenceValidator` still gates model claims. `CausalImpactVerifier` then separates source-supported and potential effects. REST and MCP report envelopes remain compatible; explanation, trace, and retrieval metadata fields are additive. Indexed relative paths are normalized to forward slashes on Windows so graph links and source labels resolve consistently. No database migration, new dependency, or secret was added. The one frontend edit was the separately requested build repair. Persisted graph edges are computed at indexing time: reindex repositories to receive corrected call and imported-attribute `reads` edges; the analysis cache version was advanced for report changes.
