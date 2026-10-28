@@ -1,0 +1,400 @@
+{
+  "dataset_version": "2026-10-29-synthetic-v1",
+  "repository": "examples/sample-repository",
+  "repository_snapshot": "f413b0b90d6157d5493a5603fb1245a7f4681eb6",
+  "snapshot_manifest": "services/api/tests/evaluation/multimodal_snapshot_manifest_v1.json",
+  "source_label_dataset": "services/api/tests/evaluation/ai_core_cases_v3.json",
+  "source_label_dataset_sha256": "d40728b3225ac7f366c239256c1e320491dbf5e65b3f85884762ffe5cd60f497",
+  "image_rights": "Original synthetic UI artwork generated locally by scripts/generate_multimodal_fixture.ps1; no third-party or private imagery.",
+  "review_status": "AI-assisted source labels inherited from v3; independent human visual/label sign-off pending",
+  "evaluation_mode": "scripted visual intent keyed by validated image SHA-256; no pixel understanding or paid inference",
+  "cases": [
+    {
+      "id": "email_confirmation",
+      "source_case_id": "email_confirmation",
+      "repository_snapshot": "f413b0b90d6157d5493a5603fb1245a7f4681eb6",
+      "requirement": "Require email verification before users can change their email address",
+      "screenshot": {
+        "id": "account_email",
+        "path": "services/api/tests/evaluation/screenshots_v1/account_email.png",
+        "sha256": "e63ab13ea4f9b56ded558fdd6b1a73e18e002f25eb92ce87fa5881e140ac071a",
+        "mime_type": "image/png",
+        "relationship": "clear"
+      },
+      "expected_visual_concepts": [
+        "profile",
+        "email change"
+      ],
+      "mock_visual_intent": {
+        "screen_type": "account settings",
+        "visible_text": [],
+        "visible_elements": [
+          "email address field",
+          "save email button"
+        ],
+        "user_actions": [
+          "update email"
+        ],
+        "functional_concepts": [
+          "profile",
+          "email change"
+        ],
+        "requirement_interpretation": "Require email verification before users can change their email address",
+        "uncertainties": [
+          "The screenshot cannot show whether the new email is verified."
+        ]
+      },
+      "retrieval_relevant": [
+        "app/api/users.py",
+        "app/services/user_service.py",
+        "app/api/verification.py",
+        "app/services/verification_service.py",
+        "app/models/verification_token.py",
+        "app/services/notification_service.py",
+        "tests/test_users.py",
+        "tests/test_verification.py"
+      ],
+      "impact": {
+        "direct": [
+          "app/api/users.py",
+          "app/services/user_service.py",
+          "app/api/verification.py"
+        ],
+        "indirect": [
+          "app/services/notification_service.py",
+          "tests/test_users.py"
+        ]
+      },
+      "annotations": [
+        {
+          "path": "app/api/users.py",
+          "line": 27,
+          "rationale": "Endpoint currently invokes immediate update."
+        },
+        {
+          "path": "app/services/user_service.py",
+          "line": 31,
+          "rationale": "Service mutates email before confirmation."
+        },
+        {
+          "path": "app/api/verification.py",
+          "line": 20,
+          "rationale": "Confirmation branch must finalize pending email."
+        },
+        {
+          "path": "app/services/notification_service.py",
+          "line": 15,
+          "rationale": "Existing email-changed alert timing should be checked after flow change."
+        },
+        {
+          "path": "tests/test_users.py",
+          "line": 24,
+          "rationale": "Test expects the old immediate mutation."
+        }
+      ],
+      "negative_rationale": null,
+      "annotation_provenance": "AI-assisted; human sign-off pending"
+    },
+    {
+      "id": "password_hashing",
+      "source_case_id": "password_hashing",
+      "repository_snapshot": "f413b0b90d6157d5493a5603fb1245a7f4681eb6",
+      "requirement": "Strengthen password hashing and verification",
+      "screenshot": {
+        "id": "sign_in",
+        "path": "services/api/tests/evaluation/screenshots_v1/sign_in.png",
+        "sha256": "41c38af3e30ebc3bf0afbe110a113e4ed0513750fa009ece70e26277539b8c7d",
+        "mime_type": "image/png",
+        "relationship": "clear"
+      },
+      "expected_visual_concepts": [
+        "sign in",
+        "password entry",
+        "authentication"
+      ],
+      "mock_visual_intent": {
+        "screen_type": "sign in",
+        "visible_text": [],
+        "visible_elements": [
+          "email field",
+          "password field",
+          "sign in button"
+        ],
+        "user_actions": [
+          "sign in"
+        ],
+        "functional_concepts": [
+          "sign in",
+          "password entry",
+          "authentication"
+        ],
+        "requirement_interpretation": "Strengthen password hashing and verification",
+        "uncertainties": [
+          "The hashing algorithm is not visible in the interface."
+        ]
+      },
+      "retrieval_relevant": [
+        "app/core/security.py",
+        "tests/test_auth.py",
+        "app/api/auth.py"
+      ],
+      "impact": {
+        "direct": [
+          "app/core/security.py"
+        ],
+        "indirect": [
+          "tests/test_auth.py"
+        ]
+      },
+      "annotations": [
+        {
+          "path": "app/core/security.py",
+          "line": 6,
+          "rationale": "Hash and verify functions define the current password behavior."
+        },
+        {
+          "path": "tests/test_auth.py",
+          "line": 5,
+          "rationale": "Test calls both password functions."
+        }
+      ],
+      "negative_rationale": null,
+      "annotation_provenance": "AI-assisted; human sign-off pending"
+    },
+    {
+      "id": "token_expiry",
+      "source_case_id": "token_expiry",
+      "repository_snapshot": "f413b0b90d6157d5493a5603fb1245a7f4681eb6",
+      "requirement": "Shorten email verification token expiry to thirty minutes",
+      "screenshot": {
+        "id": "verification_link",
+        "path": "services/api/tests/evaluation/screenshots_v1/verification_link.png",
+        "sha256": "f9b60c3077b19f6b82cab149b0956bac202965d931798987456fe2283132ad6f",
+        "mime_type": "image/png",
+        "relationship": "ambiguous"
+      },
+      "expected_visual_concepts": [
+        "verification email",
+        "verification link"
+      ],
+      "mock_visual_intent": {
+        "screen_type": "verification notice",
+        "visible_text": [],
+        "visible_elements": [
+          "verification email notice",
+          "resend link"
+        ],
+        "user_actions": [
+          "open verification link"
+        ],
+        "functional_concepts": [
+          "verification email",
+          "verification link",
+          "token expiry"
+        ],
+        "requirement_interpretation": "Shorten email verification token expiry to thirty minutes",
+        "uncertainties": [
+          "The expiry duration is not visible in this preview."
+        ]
+      },
+      "retrieval_relevant": [
+        "app/core/config.py",
+        "app/services/verification_service.py",
+        "app/models/verification_token.py",
+        "tests/test_verification.py"
+      ],
+      "impact": {
+        "direct": [
+          "app/core/config.py",
+          "app/services/verification_service.py"
+        ],
+        "indirect": [
+          "tests/test_verification.py"
+        ]
+      },
+      "annotations": [
+        {
+          "path": "app/core/config.py",
+          "line": 7,
+          "rationale": "Current token expiry is configured in hours."
+        },
+        {
+          "path": "app/services/verification_service.py",
+          "line": 10,
+          "rationale": "Creation uses the hours setting; changing units requires this calculation."
+        },
+        {
+          "path": "tests/test_verification.py",
+          "line": 18,
+          "rationale": "Existing expiry test uses a one-hour-old token and needs boundary review."
+        }
+      ],
+      "negative_rationale": null,
+      "annotation_provenance": "AI-assisted; human sign-off pending"
+    },
+    {
+      "id": "smtp_host",
+      "source_case_id": "smtp_host",
+      "repository_snapshot": "f413b0b90d6157d5493a5603fb1245a7f4681eb6",
+      "requirement": "Change the configured SMTP host for verification emails",
+      "screenshot": {
+        "id": "project_board",
+        "path": "services/api/tests/evaluation/screenshots_v1/project_board.png",
+        "sha256": "d410250ca519075f9fe3a3d100559c98aadd7279d18a2c52349e1333f565e2e8",
+        "mime_type": "image/png",
+        "relationship": "irrelevant"
+      },
+      "expected_visual_concepts": [
+        "project board",
+        "task cards"
+      ],
+      "mock_visual_intent": {
+        "screen_type": "project board",
+        "visible_text": [],
+        "visible_elements": [
+          "project columns",
+          "task cards"
+        ],
+        "user_actions": [
+          "review tasks"
+        ],
+        "functional_concepts": [
+          "project board",
+          "task cards"
+        ],
+        "requirement_interpretation": "Change the configured SMTP host for verification emails",
+        "uncertainties": [
+          "The image shows no email delivery settings."
+        ]
+      },
+      "retrieval_relevant": [
+        "app/core/config.py",
+        "app/services/notification_service.py"
+      ],
+      "impact": {
+        "direct": [
+          "app/core/config.py"
+        ],
+        "indirect": [
+          "app/services/notification_service.py"
+        ]
+      },
+      "annotations": [
+        {
+          "path": "app/core/config.py",
+          "line": 8,
+          "rationale": "SMTP_HOST is configured here."
+        },
+        {
+          "path": "app/services/notification_service.py",
+          "line": 12,
+          "rationale": "Sending code reads the SMTP setting; inspect behavior."
+        }
+      ],
+      "negative_rationale": null,
+      "annotation_provenance": "AI-assisted; human sign-off pending"
+    },
+    {
+      "id": "profile_response",
+      "source_case_id": "profile_response",
+      "repository_snapshot": "f413b0b90d6157d5493a5603fb1245a7f4681eb6",
+      "requirement": "Include pending email in the user profile API response",
+      "screenshot": {
+        "id": "password_reset",
+        "path": "services/api/tests/evaluation/screenshots_v1/password_reset.png",
+        "sha256": "23dae4037e8115ab6affd52058ee5bc63aa29fcfebbcc75d3d8c2973a2410487",
+        "mime_type": "image/png",
+        "relationship": "conflicting"
+      },
+      "expected_visual_concepts": [
+        "password reset",
+        "email field"
+      ],
+      "mock_visual_intent": {
+        "screen_type": "password reset",
+        "visible_text": [],
+        "visible_elements": [
+          "email field",
+          "send reset link button"
+        ],
+        "user_actions": [
+          "request password reset"
+        ],
+        "functional_concepts": [
+          "password reset",
+          "email field"
+        ],
+        "requirement_interpretation": "Include pending email in the user profile API response",
+        "uncertainties": [
+          "The pictured password-reset flow does not establish profile response behavior."
+        ]
+      },
+      "retrieval_relevant": [
+        "app/api/users.py",
+        "app/models/user.py"
+      ],
+      "impact": {
+        "direct": [
+          "app/api/users.py"
+        ],
+        "indirect": []
+      },
+      "annotations": [
+        {
+          "path": "app/api/users.py",
+          "line": 10,
+          "rationale": "Response schema omits pending email."
+        }
+      ],
+      "negative_rationale": null,
+      "annotation_provenance": "AI-assisted; human sign-off pending"
+    },
+    {
+      "id": "billing_negative",
+      "source_case_id": "billing_negative",
+      "repository_snapshot": "f413b0b90d6157d5493a5603fb1245a7f4681eb6",
+      "requirement": "Change invoice rounding for billing reports",
+      "screenshot": {
+        "id": "invoice_report",
+        "path": "services/api/tests/evaluation/screenshots_v1/invoice_report.png",
+        "sha256": "9e2cd8d4487e059d6865b9cce1434f61bdf2bf0a552c4c41e2678f004023700e",
+        "mime_type": "image/png",
+        "relationship": "no_match"
+      },
+      "expected_visual_concepts": [
+        "invoice report",
+        "billing total",
+        "export report"
+      ],
+      "mock_visual_intent": {
+        "screen_type": "invoice report",
+        "visible_text": [],
+        "visible_elements": [
+          "invoice rows",
+          "totals",
+          "export report button"
+        ],
+        "user_actions": [
+          "export report"
+        ],
+        "functional_concepts": [
+          "invoice report",
+          "billing total",
+          "export report"
+        ],
+        "requirement_interpretation": "Change invoice rounding for billing reports",
+        "uncertainties": [
+          "The selected repository may have no billing implementation."
+        ]
+      },
+      "retrieval_relevant": [],
+      "impact": {
+        "direct": [],
+        "indirect": []
+      },
+      "annotations": [],
+      "negative_rationale": "The checked-in sample contains no billing, invoice, or report component.",
+      "annotation_provenance": "AI-assisted; human sign-off pending"
+    }
+  ]
+}
