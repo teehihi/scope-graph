@@ -1,6 +1,12 @@
 # ScopeGraph AI Core evaluation
 
-The [SG-AI-09B RealWorld holdout candidate](HOLDOUT_LABEL_REVIEW.md) is a separate 10-case source-labeled dataset, pinned to upstream commit `029eb7781c60d5f563ee8990a0cbfb79b244538c`. Its [AI-assisted source review record](HOLDOUT_AI_ASSISTED_REVIEW_V1.md) retains all 10 direct and 13 indirect labels without changing the fixture. [Technical readiness](HOLDOUT_EVALUATION_READINESS.md) passed; the [independent human sign-off form](HOLDOUT_HUMAN_SIGNOFF.md) is blank. **BLOCKED: HUMAN_SIGNOFF_REQUIRED** for fixture freezing and evaluation. It has **not** been evaluated with offline or paid model inference, so this document reports no holdout score.
+The [SG-AI-09B RealWorld holdout candidate](HOLDOUT_LABEL_REVIEW.md) is a separate 10-case source-labeled dataset, pinned to upstream commit `029eb7781c60d5f563ee8990a0cbfb79b244538c`. Its provisional [v2 offline evaluation](HOLDOUT_EVALUATION_REPORT.md) is recorded separately. The owner accepted the AI-assisted labels as a project checkpoint; independent human source sign-off and a frozen final benchmark remain pending.
+
+## SG-AI-18 scripted screenshot comparison (2026-10-29)
+
+The [six-case synthetic screenshot fixture](../services/api/tests/evaluation/multimodal_cases_v1.json) reuses unchanged provisional v3 source labels from `examples/sample-repository` at `f413b0b90d6157d5493a5603fb1245a7f4681eb6`. Images are original locally rendered UI mockups. A hash-keyed `fixture_mock` supplies authored visual intent; it does **not** interpret image pixels. The [full report](MULTIMODAL_EVALUATION_V1.md) records image hashes, per-case outcomes, failures, reproduction commands and limits. Evaluation code commit: `033cede3e8c2b966397296c289b75ae5f930a82e`; the recorded run had a clean worktree. Its replayable prediction artifact is Git-ignored at `data/multimodal_evaluation_v1.json`.
+
+At K=8, text-only versus screenshot-plus-scripted-intent micro retrieval recall was **15/19 (0.789) versus 16/19 (0.842)**. Micro supported-impact precision/recall/F1 was **0.345/0.769/0.476 versus 0.370/0.769/0.500**; direct/indirect recall stayed **0.750/0.800**. Claims outside the provisional impact labels fell from 19 to 17. These changes show a functioning visual-hint path on this fixture, **not** a measured improvement from Muse Spark vision. Scripted visual concept agreement of 0.944 precision and 1.000 recall is a fixture sanity measure, not model accuracy. Mean local latency was 18.6 versus 18.8 ms; model-reported tokens are unavailable; paid inference cost was $0. Human label/visual review and authorized live inference remain separate gates.
 
 ## SG-AI-09 label-only v3 replay (2026-10-28)
 
