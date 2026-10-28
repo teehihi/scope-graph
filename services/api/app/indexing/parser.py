@@ -43,6 +43,7 @@ class CodeParseResult:
         self.symbols: list[ParsedSymbol] = []
         self.edges: list[ParsedEdge] = []
         self.errors: list[str] = []
+        self.exported_instances: dict[str, str] = {}
 
 class PythonASTParser:
     """
@@ -61,7 +62,7 @@ class PythonASTParser:
 
         current_class = None
 
-        for node in ast.walk(tree):
+        for node in tree.body:
             # Imports
             if isinstance(node, ast.Import):
                 for alias in node.names:
@@ -70,7 +71,7 @@ class PythonASTParser:
                             target_file_or_module=alias.name,
                             edge_type="imports",
                             target_symbol=alias.asname or alias.name,
-                            metadata={"import_type": "standard"}
+                            metadata={"import_type": "standard", "alias": alias.asname or alias.name.split(".")[0]}
                         )
                     )
             elif isinstance(node, ast.ImportFrom):
@@ -81,9 +82,20 @@ class PythonASTParser:
                             target_file_or_module=module,
                             edge_type="imports",
                             target_symbol=alias.name,
-                            metadata={"import_type": "from", "level": node.level}
+                            metadata={"import_type": "from", "level": node.level,
+                                      "alias": alias.asname or alias.name}
                         )
                     )
+
+        local_classes = {node.name for node in tree.body if isinstance(node, ast.ClassDef)}
+        for node in tree.body:
+            if isinstance(node, (ast.Assign, ast.AnnAssign)):
+                value = node.value
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                if isinstance(value, ast.Call) and isinstance(value.func, ast.Name) and value.func.id in local_classes:
+                    for target in targets:
+                        if isinstance(target, ast.Name):
+                            result.exported_instances[target.id] = value.func.id
 
         # Walk body sequentially for hierarchical context
         for node in tree.body:
@@ -103,6 +115,17 @@ class PythonASTParser:
                     metadata={"bases": [ast.unparse(b) for b in node.bases]}
                 )
                 result.symbols.append(cls_sym)
+
+                for item in node.body:
+                    if isinstance(item, (ast.Assign, ast.AnnAssign)):
+                        targets = item.targets if isinstance(item, ast.Assign) else [item.target]
+                        for target in targets:
+                            if isinstance(target, ast.Name):
+                                result.symbols.append(ParsedSymbol(
+                                    name=f"{node.name}.{target.id}", symbol_type="attribute",
+                                    line_start=item.lineno, line_end=getattr(item, "end_lineno", item.lineno),
+                                    metadata={"class": node.name},
+                                ))
 
                 # Inspect methods
                 for item in node.body:

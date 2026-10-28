@@ -1,6 +1,6 @@
 # ScopeGraph AI Core — plan and progress
 
-- Updated: 2026-10-27 (Asia/Bangkok)
+- Updated: 2026-10-28 (Asia/Bangkok)
 - Branch: [ai/evidence-grounding-v2](https://github.com/teehihi/scope-graph/tree/ai/evidence-grounding-v2)
 - Scope: AI Core workstream only. Frontend, authentication, multi-language parsing, direct Git ingestion, deployment, and the wider product roadmap are separate work.
 - Historical audit: [AI_CORE_BASELINE.md](AI_CORE_BASELINE.md). Its original environment and defect status is superseded by this file.
@@ -16,6 +16,7 @@
 | SG-AI-03 hybrid retrieval | Complete, pushed | Repository-scoped deterministic path/symbol/metadata/layer/graph ranking, stable ties, top K and context budget, no unconditional first-eight fallback. Labeled comparison in [EVALUATION.md](EVALUATION.md). Commit `125c6be`. |
 | SG-AI-05 Meta integration | Complete on the sample pipeline | Authorized `muse-spark-1.3` smoke passed against Meta Model API. A live response exhausted the original 3,000-token completion budget during reasoning; the default is now 6,000, with a specific truncated-response error and regression tests. |
 | SG-AI-06 evaluation | Complete on the three-case fixture | Offline and authorized live runs recorded retrieval, impact, grounding, latency, and reported token usage. The live result and limitations are in [EVALUATION.md](EVALUATION.md). |
+| SG-AI-07A evaluation replay and observability | Implemented locally; pending team review | Schema-v2 per-case traces use the orchestrator's actual context and interpretation. Pure replay recomputes case/macro/micro metrics, separates unique from raw claims, and requires ignored local output. No new paid run. |
 
 The workstream is on the linked branch for team review. The three-case fixture is diagnostic; wider product quality remains an open research task.
 
@@ -32,6 +33,7 @@ The official Meta docs specify the [API base URL](https://dev.meta.ai/docs/api-r
 - SG-AI-05 provider tests: 30 passed.
 - SG-AI-06 metric/scanner focused tests: 5 passed.
 - Backend suite after the web contract regression tests: **76 passed, 1 live-smoke skipped** on 2026-10-27 (`META_AI_PROVIDER=offline_demo`). The separately opted-in live smoke passed **1 test** with the 6,000-token default.
+- SG-AI-07A backend suite on 2026-10-28: **85 passed, 1 live-smoke skipped** (`META_AI_PROVIDER=offline_demo`). Trace/replay tests include a CLI run with live-provider environment variables but no key or network request.
 - Frontend packages were installed from the existing lockfile and `npm run build` passed on 2026-10-27. No frontend source or TypeScript contract changed in this workstream.
 - Offline labeled evaluation: 3 cases, 14 indexed files, macro Recall@8 0.758 versus 0.532 for the previous selection rule. Impact F1 0.343; 17 of 24 validator-accepted impact claims are unsupported by the manual file/type labels. These are small demo-fixture measurements, not a Meta quality claim.
 - Authorized Meta evaluation: **3/3 cases completed**, model `muse-spark-1.3`, macro impact precision / recall / F1 **0.197 / 0.516 / 0.282**; direct / indirect recall **0.833 / 0.111**. All **38** reported file/symbol claims passed the existence gate, but **27/38** accepted impact claims lack support in the manual file/type labels. This is not production accuracy. The key is kept only in the ignored root `.env`.
@@ -45,14 +47,14 @@ From the repository root in PowerShell:
 ```powershell
 $env:PYTHONPATH='services/api'
 .\.venv\Scripts\python.exe -m pytest services/api/tests/ -v -p no:cacheprovider --basetemp data/pytest-NEW-UNUSED-DIRECTORY --tb=short
-.\.venv\Scripts\python.exe scripts/evaluate_ai_core.py --mode offline --output data/ai_core_evaluation.json
+.\.venv\Scripts\python.exe scripts/evaluate_ai_core.py --mode offline --output data/ai_core_evaluation_sg_ai_07a.json
 ```
 
-Pytest replaces its basetemp, so choose a new directory inside the workspace. The JSON output is Git-ignored. A live smoke is intentionally skipped in the normal suite. With an authorized key in the root `.env`, set `RUN_META_LIVE_SMOKE=1` and `ALLOW_PAID_META_SMOKE=1` in the test process, then run only `services/api/tests/test_live_meta_smoke.py` with the same pytest command. The live evaluation is separate: `scripts/evaluate_ai_core.py --mode live --allow-paid-request --output data/ai_core_live_evaluation.json`. Paid runs are opt-in; do not paste credentials into logs or commit them.
+Pytest replaces its basetemp, so choose a new directory inside the workspace. The JSON output is Git-ignored. A live smoke is intentionally skipped in the normal suite. With an authorized key in the root `.env`, set `RUN_META_LIVE_SMOKE=1` and `ALLOW_PAID_META_SMOKE=1` in the test process, then run only `services/api/tests/test_live_meta_smoke.py` with the same pytest command. The live evaluation is separate: `scripts/evaluate_ai_core.py --mode live --allow-paid-request --output data/ai_core_live_evaluation_sg_ai_07a.json` after fresh approval. Paid runs are opt-in; do not paste credentials into logs or commit them.
 
 ## Team next actions
 
-1. Review this branch and the human labels in `services/api/tests/evaluation/ai_core_cases.json`; expand the fixture before drawing product-wide quality conclusions.
-2. Investigate the **27/38** live unsupported claims and **0.111** indirect recall with targeted labels and prompt/index evidence; rerun the opt-in evaluation after improvements.
-3. Address the known indexer edge-resolution limitation in follow-up tasks with focused fixtures.
+1. Review SG-AI-07A's local trace/replay changes and the untouched historical Meta result. The earlier live artifact cannot yield claim-level replay because its raw predictions were not saved.
+2. After approval, start SG-AI-07B with focused indexer and retrieval fixtures; coordinate before changing graph edge semantics or persisted schemas.
+3. Adjudicate and expand the human labels before drawing product-wide quality conclusions or running another opt-in paid evaluation.
 4. Run a frontend build only if a future change touches the UI or its TypeScript contracts. Do not present `potential_impacts` as visible in the current UI.

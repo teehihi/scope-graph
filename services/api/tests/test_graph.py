@@ -118,3 +118,26 @@ def test_missing_seeds_and_other_repository_nodes_are_excluded(test_db):
     assert connected["upstream"] == ["b.py"]
     assert connected["downstream"] == []
     assert "secret.py" not in str(connected)
+
+
+def test_file_graph_keeps_all_underlying_import_and_call_evidence(test_db):
+    test_db.add(Repository(id="parallel", name="Parallel"))
+    test_db.add_all([
+        IndexedFile(id="caller", repository_id="parallel", path="app/caller.py"),
+        IndexedFile(id="target", repository_id="parallel", path="app/target.py"),
+        DependencyEdge(id="import-edge", repository_id="parallel", source_file_id="caller",
+                       target_file_id="target", edge_type="imports"),
+        DependencyEdge(id="call-edge", repository_id="parallel", source_file_id="caller",
+                       target_file_id="target", edge_type="calls"),
+    ])
+    test_db.commit()
+
+    graph = GraphEngine(test_db).build_repository_graph("parallel")
+
+    assert graph.number_of_edges() == 1
+    assert {edge["edge_type"] for edge in graph["caller"]["target"]["evidence_edges"]} == {
+        "imports", "calls",
+    }
+    rf = GraphEngine(test_db).get_react_flow_graph("parallel")
+    assert len(rf["edges"]) == 1
+    assert len(rf["edges"][0]["data"]["evidence_edges"]) == 2

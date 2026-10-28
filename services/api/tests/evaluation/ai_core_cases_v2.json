@@ -1,0 +1,160 @@
+{
+  "dataset_version": "2026-10-28-manual-v2",
+  "repository": "examples/sample-repository",
+  "repository_snapshot": "f413b0b90d6157d5493a5603fb1245a7f4681eb6",
+  "label_policy": "Human source review. Direct = likely edit target. Indirect = caller or regression test whose behavior should be checked. Retrieval relevance is broader. Empty impact labels denote a negative case. These are hypotheses about a proposed change, not proof of required edits.",
+  "cases": [
+    {
+      "id": "email_confirmation", "requirement": "Require email verification before users can change their email address",
+      "retrieval_relevant": ["app/api/users.py", "app/services/user_service.py", "app/api/verification.py", "app/services/verification_service.py", "app/models/verification_token.py", "app/services/notification_service.py", "tests/test_users.py", "tests/test_verification.py"],
+      "impact": {"direct": ["app/api/users.py", "app/services/user_service.py", "app/api/verification.py", "app/services/verification_service.py"], "indirect": ["app/models/verification_token.py", "app/services/notification_service.py", "tests/test_users.py", "tests/test_verification.py"]},
+      "annotations": [
+        {"path": "app/api/users.py", "line": 27, "rationale": "Endpoint currently invokes immediate update."},
+        {"path": "app/services/user_service.py", "line": 31, "rationale": "Service mutates email before confirmation."},
+        {"path": "app/api/verification.py", "line": 20, "rationale": "Confirmation branch must finalize pending email."},
+        {"path": "app/services/verification_service.py", "line": 8, "rationale": "Service creates the verification token."},
+        {"path": "app/models/verification_token.py", "line": 13, "rationale": "Existing new_email field stores the pending address; inspect compatibility."},
+        {"path": "app/services/notification_service.py", "line": 15, "rationale": "Existing email-changed alert timing should be checked after flow change."},
+        {"path": "tests/test_users.py", "line": 24, "rationale": "Test expects the old immediate mutation."},
+        {"path": "tests/test_verification.py", "line": 22, "rationale": "Existing verification regression test should be checked."}
+      ]
+    },
+    {
+      "id": "password_hashing", "requirement": "Strengthen password hashing and verification",
+      "retrieval_relevant": ["app/core/security.py", "tests/test_auth.py", "app/api/auth.py"],
+      "impact": {"direct": ["app/core/security.py"], "indirect": ["tests/test_auth.py"]},
+      "annotations": [
+        {"path": "app/core/security.py", "line": 6, "rationale": "Hash and verify functions define the current password behavior."},
+        {"path": "tests/test_auth.py", "line": 5, "rationale": "Test calls both password functions."}
+      ]
+    },
+    {
+      "id": "token_expiry", "requirement": "Shorten email verification token expiry to thirty minutes",
+      "retrieval_relevant": ["app/core/config.py", "app/services/verification_service.py", "app/models/verification_token.py", "tests/test_verification.py"],
+      "impact": {"direct": ["app/core/config.py", "app/services/verification_service.py"], "indirect": ["tests/test_verification.py"]},
+      "annotations": [
+        {"path": "app/core/config.py", "line": 7, "rationale": "Current token expiry is configured in hours."},
+        {"path": "app/services/verification_service.py", "line": 10, "rationale": "Creation uses the hours setting; changing units requires this calculation."},
+        {"path": "tests/test_verification.py", "line": 18, "rationale": "Existing expiry test uses a one-hour-old token and needs boundary review."}
+      ]
+    },
+    {
+      "id": "access_token_setting", "requirement": "Change the configured access token expiry to twenty minutes",
+      "retrieval_relevant": ["app/core/config.py", "app/core/security.py"],
+      "impact": {"direct": ["app/core/config.py"], "indirect": []},
+      "annotations": [{"path": "app/core/config.py", "line": 6, "rationale": "The access-token setting is defined here; signed-token TTL is a separate mechanism."}]
+    },
+    {
+      "id": "signed_token_ttl", "requirement": "Reduce the default lifetime of signed action tokens",
+      "retrieval_relevant": ["app/core/security.py", "app/core/config.py"],
+      "impact": {"direct": ["app/core/security.py"], "indirect": []},
+      "annotations": [{"path": "app/core/security.py", "line": 12, "rationale": "The generator has a default expires_in_seconds value."}]
+    },
+    {
+      "id": "signature_key_rotation", "requirement": "Rotate the signing secret used for action tokens",
+      "retrieval_relevant": ["app/core/config.py", "app/core/security.py"],
+      "impact": {"direct": ["app/core/config.py"], "indirect": ["app/core/security.py"]},
+      "annotations": [
+        {"path": "app/core/config.py", "line": 4, "rationale": "SECRET_KEY is the configured signing value."},
+        {"path": "app/core/security.py", "line": 28, "rationale": "Both signing and verification read the configured key; inspect rotation compatibility."}
+      ]
+    },
+    {
+      "id": "token_reuse", "requirement": "Reject reused email verification tokens after confirmation",
+      "retrieval_relevant": ["app/services/verification_service.py", "app/api/verification.py", "app/models/verification_token.py", "tests/test_verification.py"],
+      "impact": {"direct": ["app/services/verification_service.py", "app/api/verification.py"], "indirect": ["tests/test_verification.py"]},
+      "annotations": [
+        {"path": "app/services/verification_service.py", "line": 31, "rationale": "Lookup filters is_used but no use is marked after success."},
+        {"path": "app/api/verification.py", "line": 16, "rationale": "Confirmation endpoint is the consuming path."},
+        {"path": "tests/test_verification.py", "line": 22, "rationale": "Existing token-verification test is a regression entry point."}
+      ]
+    },
+    {
+      "id": "email_alert_timing", "requirement": "Send the email changed alert only after the new address is confirmed",
+      "retrieval_relevant": ["app/services/user_service.py", "app/services/notification_service.py", "app/api/verification.py", "tests/test_users.py"],
+      "impact": {"direct": ["app/services/user_service.py", "app/services/notification_service.py", "app/api/verification.py"], "indirect": ["tests/test_users.py"]},
+      "annotations": [
+        {"path": "app/services/user_service.py", "line": 35, "rationale": "Alert currently fires immediately after update."},
+        {"path": "app/services/notification_service.py", "line": 15, "rationale": "Alert method and its wording may need timing review."},
+        {"path": "app/api/verification.py", "line": 20, "rationale": "Confirmation branch is a candidate trigger after the change."},
+        {"path": "tests/test_users.py", "line": 24, "rationale": "Legacy update test covers the earlier timing path."}
+      ]
+    },
+    {
+      "id": "smtp_host", "requirement": "Change the configured SMTP host for verification emails",
+      "retrieval_relevant": ["app/core/config.py", "app/services/notification_service.py"],
+      "impact": {"direct": ["app/core/config.py"], "indirect": ["app/services/notification_service.py"]},
+      "annotations": [
+        {"path": "app/core/config.py", "line": 8, "rationale": "SMTP_HOST is configured here."},
+        {"path": "app/services/notification_service.py", "line": 12, "rationale": "Sending code reads the SMTP setting; inspect behavior."}
+      ]
+    },
+    {
+      "id": "registration_response", "requirement": "Return a pending verification status from the registration API",
+      "retrieval_relevant": ["app/api/auth.py", "app/services/verification_service.py"],
+      "impact": {"direct": ["app/api/auth.py"], "indirect": []},
+      "annotations": [{"path": "app/api/auth.py", "line": 23, "rationale": "Registration endpoint currently returns created status."}]
+    },
+    {
+      "id": "profile_response", "requirement": "Include pending email in the user profile API response",
+      "retrieval_relevant": ["app/api/users.py", "app/models/user.py"],
+      "impact": {"direct": ["app/api/users.py"], "indirect": ["app/models/user.py"]},
+      "annotations": [
+        {"path": "app/api/users.py", "line": 10, "rationale": "Response schema omits pending email."},
+        {"path": "app/models/user.py", "line": 15, "rationale": "Existing pending_email field supplies the proposed response value."}
+      ]
+    },
+    {
+      "id": "verification_error", "requirement": "Return a distinct error for expired verification tokens",
+      "retrieval_relevant": ["app/api/verification.py", "app/services/verification_service.py", "tests/test_verification.py"],
+      "impact": {"direct": ["app/api/verification.py", "app/services/verification_service.py"], "indirect": ["tests/test_verification.py"]},
+      "annotations": [
+        {"path": "app/api/verification.py", "line": 18, "rationale": "Endpoint combines invalid and expired into one message."},
+        {"path": "app/services/verification_service.py", "line": 36, "rationale": "Service returns None for expiry, losing the cause."},
+        {"path": "tests/test_verification.py", "line": 22, "rationale": "Existing expired-token test covers the service behavior."}
+      ]
+    },
+    {
+      "id": "email_uniqueness", "requirement": "Make email uniqueness checks case insensitive",
+      "retrieval_relevant": ["app/services/user_service.py", "app/models/user.py", "tests/test_users.py"],
+      "impact": {"direct": ["app/services/user_service.py", "app/models/user.py"], "indirect": ["tests/test_users.py"]},
+      "annotations": [
+        {"path": "app/services/user_service.py", "line": 25, "rationale": "Service checks existing email with exact comparison."},
+        {"path": "app/models/user.py", "line": 11, "rationale": "Unique database column may need normalized indexing or migration."},
+        {"path": "tests/test_users.py", "line": 24, "rationale": "Email update regression test should cover mixed-case duplicates."}
+      ]
+    },
+    {
+      "id": "password_compare", "requirement": "Change password verification comparison behavior",
+      "retrieval_relevant": ["app/core/security.py", "tests/test_auth.py", "app/api/auth.py"],
+      "impact": {"direct": ["app/core/security.py"], "indirect": ["tests/test_auth.py"]},
+      "annotations": [
+        {"path": "app/core/security.py", "line": 10, "rationale": "verify_password uses hmac.compare_digest."},
+        {"path": "tests/test_auth.py", "line": 7, "rationale": "Test asserts verification success and failure."}
+      ]
+    },
+    {
+      "id": "authorization_gate", "requirement": "Require authorization before changing a user's email",
+      "retrieval_relevant": ["app/api/users.py", "app/services/user_service.py", "tests/test_users.py"],
+      "impact": {"direct": ["app/api/users.py"], "indirect": ["tests/test_users.py"]},
+      "annotations": [
+        {"path": "app/api/users.py", "line": 20, "rationale": "Email endpoint has no authorization dependency."},
+        {"path": "tests/test_users.py", "line": 24, "rationale": "Service test is related but does not exercise endpoint authorization; inspect coverage gap."}
+      ]
+    },
+    {
+      "id": "token_reason_field", "requirement": "Store a reason on each verification token record",
+      "retrieval_relevant": ["app/models/verification_token.py", "app/services/verification_service.py"],
+      "impact": {"direct": ["app/models/verification_token.py", "app/services/verification_service.py"], "indirect": []},
+      "annotations": [
+        {"path": "app/models/verification_token.py", "line": 6, "rationale": "Token table lacks a reason column."},
+        {"path": "app/services/verification_service.py", "line": 11, "rationale": "Creator constructs VerificationToken and must supply the new value."}
+      ]
+    },
+    {
+      "id": "billing_negative", "requirement": "Change invoice rounding for billing reports",
+      "retrieval_relevant": [], "impact": {"direct": [], "indirect": []},
+      "annotations": [], "negative_rationale": "The checked-in sample contains no billing, invoice, or report component."
+    }
+  ]
+}

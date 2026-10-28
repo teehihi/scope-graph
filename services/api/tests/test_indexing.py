@@ -54,3 +54,10 @@ def test_ast_parser_extraction():
     # Verify test detection
     test_sym = next(s for s in result.symbols if s.name == "test_user_email")
     assert test_sym.symbol_type == "test"
+
+
+def test_ast_parser_indexes_config_field_without_secret_value():
+    result = PythonASTParser.parse_code("app/core/config.py", "class Settings:\n    TOKEN_EXPIRE_HOURS: int = 24\n    SECRET_KEY = 'private'\n")
+    fields = {symbol.name: symbol for symbol in result.symbols if symbol.symbol_type == "attribute"}
+    assert fields["Settings.TOKEN_EXPIRE_HOURS"].line_start == 2
+    assert "private" not in str(fields["Settings.SECRET_KEY"].metadata)

@@ -64,16 +64,19 @@ class GraphEngine:
             )
 
         # Add edges
-        for e in edges:
+        for e in sorted(edges, key=lambda item: (item.source_file_id, item.target_file_id,
+                                                 item.edge_type, item.id)):
             if G.has_node(e.source_file_id) and G.has_node(e.target_file_id):
-                G.add_edge(
-                    e.source_file_id,
-                    e.target_file_id,
-                    edge_id=e.id,
-                    edge_type=e.edge_type,
-                    source_symbol_id=e.source_symbol_id,
-                    target_symbol_id=e.target_symbol_id,
-                )
+                evidence = {
+                    "edge_id": e.id, "edge_type": e.edge_type,
+                    "source_symbol_id": e.source_symbol_id,
+                    "target_symbol_id": e.target_symbol_id,
+                }
+                if G.has_edge(e.source_file_id, e.target_file_id):
+                    G[e.source_file_id][e.target_file_id]["evidence_edges"].append(evidence)
+                else:
+                    G.add_edge(e.source_file_id, e.target_file_id, **evidence,
+                               evidence_edges=[evidence])
 
         return G
 
@@ -162,6 +165,7 @@ class GraphEngine:
                     "target": v,
                     "animated": is_impacted_edge,
                     "label": edata.get("edge_type", "imports"),
+                    "data": {"evidence_edges": edata.get("evidence_edges", [])},
                     "style": {
                         "stroke": "#ef4444" if is_impacted_edge else "#94a3b8",
                         "strokeWidth": 2 if is_impacted_edge else 1.2,

@@ -1,7 +1,7 @@
-import os
 import json
 import logging
 import asyncio
+from pathlib import Path
 from typing import Any
 try:
     from mcp.server.mcpserver import MCPServer
@@ -12,6 +12,7 @@ from app.db.database import SessionLocal
 from app.db.models import Repository, IndexedFile, IndexedSymbol
 from app.analysis.orchestrator import AnalysisOrchestrator
 from app.graph.engine import GraphEngine
+from app.evidence.validator import _is_safe_relative_path
 
 logger = logging.getLogger("scopegraph.mcp")
 
@@ -66,7 +67,12 @@ def get_relevant_context(repository_id: str, query: str, limit: int = 5) -> str:
             return json.dumps({"status": "error", "message": f"Repository '{repository_id}' not found"})
 
         keywords = [k.lower() for k in query.split() if len(k) > 2]
-        files = db.query(IndexedFile).filter(IndexedFile.repository_id == repository_id).all()
+        root = Path(repo.workspace_path).resolve() if repo.workspace_path else None
+        files = [
+            file for file in db.query(IndexedFile).filter(IndexedFile.repository_id == repository_id).all()
+            if root and _is_safe_relative_path(file.path.replace("\\", "/"))
+            and (root / file.path).resolve().is_relative_to(root)
+        ]
         symbols = db.query(IndexedSymbol).filter(IndexedSymbol.repository_id == repository_id).all()
 
         symbols_by_file: dict[str, list[IndexedSymbol]] = {}
@@ -88,16 +94,16 @@ def get_relevant_context(repository_id: str, query: str, limit: int = 5) -> str:
                 scored_files.append((score, f, f_syms))
 
         scored_files.sort(key=lambda x: x[0], reverse=True)
-        top_files = scored_files[:limit] if scored_files else [(0, f, symbols_by_file.get(f.id, [])) for f in files[:limit]]
+        top_files = scored_files[:max(0, limit)]
 
         context_items = []
         for score, f, f_syms in top_files:
             # Read snippet if file exists
-            abs_path = os.path.join(repo.workspace_path or "", f.path)
+            abs_path = (root / f.path).resolve()
             content_preview = ""
-            if os.path.exists(abs_path):
+            if abs_path.is_file():
                 try:
-                    with open(abs_path, "r", encoding="utf-8", errors="replace") as fp:
+                    with abs_path.open("r", encoding="utf-8", errors="replace") as fp:
                         content_preview = "".join(fp.readlines()[:40])
                 except Exception:
                     pass
