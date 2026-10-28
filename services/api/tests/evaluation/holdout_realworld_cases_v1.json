@@ -1,0 +1,222 @@
+{
+  "dataset_version": "2026-10-28-realworld-holdout-v1-candidate",
+  "repository": "examples/holdout-fastapi-realworld",
+  "repository_origin": "https://github.com/nsidnev/fastapi-realworld-example-app",
+  "repository_snapshot": "029eb7781c60d5f563ee8990a0cbfb79b244538c",
+  "snapshot_manifest": "services/api/tests/evaluation/holdout_realworld_snapshot_v1.json",
+  "license": "MIT",
+  "review_status": "candidate; independent human source review pending; not frozen",
+  "label_policy": "Direct = likely implementation edit target. Indirect = dependent behavior or an existing regression test exercising the affected behavior. Retrieval-relevant = useful context, not automatically impacted. Potential = plausible relationship without enough evidence for confirmed impact. Labels are source-backed hypotheses, not instructions to edit every listed file.",
+  "cases": [
+    {
+      "id": "article_title_length",
+      "category": ["api", "model_schema"],
+      "requirement": "Reject article create and update API requests when the title exceeds 120 characters.",
+      "repository_snapshot": "029eb7781c60d5f563ee8990a0cbfb79b244538c",
+      "retrieval_relevant": ["app/models/schemas/articles.py", "app/api/routes/articles/articles_resource.py", "app/models/domain/articles.py", "tests/test_api/test_routes/test_articles.py"],
+      "impact": {"direct": ["app/models/schemas/articles.py"], "indirect": ["app/api/routes/articles/articles_resource.py"]},
+      "annotations": [
+        {"path": "app/models/schemas/articles.py", "line": 21, "rationale": "ArticleInCreate.title and ArticleInUpdate.title at line 28 are currently unrestricted strings; request validation belongs here."},
+        {"path": "app/api/routes/articles/articles_resource.py", "line": 60, "rationale": "Create and update endpoints at lines 60 and 96 consume the request schemas, so their accepted input behavior changes."}
+      ],
+      "context_annotations": [
+        {"path": "app/models/domain/articles.py", "line": 10, "rationale": "The domain Article has a title field, but the requirement is limited to API request validation."},
+        {"path": "tests/test_api/test_routes/test_articles.py", "line": 32, "rationale": "Existing create and update tests use short titles; no test asserts the new 120-character boundary."}
+      ],
+      "potential_impacts": [
+        {"path": "app/models/domain/articles.py", "line": 10, "rationale": "Could require a domain constraint if the rule is later extended beyond API inputs."}
+      ],
+      "ambiguities": [
+        {"path": "app/models/domain/articles.py", "line": 10, "note": "The current requirement does not say whether internal Article construction must enforce the same length limit."}
+      ]
+    },
+    {
+      "id": "article_slug_separator",
+      "category": ["business_logic", "cross_module", "regression_test"],
+      "requirement": "Use underscores instead of hyphens in title-derived article slugs on create and title update.",
+      "repository_snapshot": "029eb7781c60d5f563ee8990a0cbfb79b244538c",
+      "retrieval_relevant": ["app/services/articles.py", "app/api/routes/articles/articles_resource.py", "tests/test_api/test_routes/test_articles.py", "app/db/repositories/articles.py", "app/db/queries/sql/articles.sql"],
+      "impact": {"direct": ["app/services/articles.py"], "indirect": ["app/api/routes/articles/articles_resource.py", "tests/test_api/test_routes/test_articles.py"]},
+      "annotations": [
+        {"path": "app/services/articles.py", "line": 18, "rationale": "get_slug_for_article currently delegates to slugify without a separator override; this is the slug generation edit target."},
+        {"path": "app/api/routes/articles/articles_resource.py", "line": 64, "rationale": "Create calls get_slug_for_article here and title update calls it again at line 100; both route outputs depend on the generated slug."},
+        {"path": "tests/test_api/test_routes/test_articles.py", "line": 94, "rationale": "The update test explicitly expects the hyphenated slug new-title and would need to reflect the requested separator."}
+      ],
+      "context_annotations": [
+        {"path": "app/db/repositories/articles.py", "line": 75, "rationale": "The repository persists the slug passed by the route; the selected requirement does not establish a repository edit."},
+        {"path": "app/db/queries/sql/articles.sql", "line": 80, "rationale": "The SQL update stores new_slug and existing links may depend on stored slugs, but migration policy is unspecified."}
+      ],
+      "potential_impacts": [
+        {"path": "app/db/queries/sql/articles.sql", "line": 80, "rationale": "Existing persisted slugs or inbound links may need migration or compatibility handling if the product requires it."}
+      ],
+      "ambiguities": [
+        {"path": "app/db/queries/sql/articles.sql", "line": 80, "note": "No migration or backwards-compatible lookup behavior for existing hyphenated slugs is specified."}
+      ]
+    },
+    {
+      "id": "api_default_page_size",
+      "category": ["configuration", "api", "cross_module"],
+      "requirement": "Raise the default API page size for article lists and user feeds from 20 to 30, without changing explicit limit requests.",
+      "repository_snapshot": "029eb7781c60d5f563ee8990a0cbfb79b244538c",
+      "retrieval_relevant": ["app/models/schemas/articles.py", "app/api/dependencies/articles.py", "app/api/routes/articles/articles_common.py", "app/db/repositories/articles.py", "tests/test_api/test_routes/test_articles.py"],
+      "impact": {"direct": ["app/models/schemas/articles.py"], "indirect": ["app/api/dependencies/articles.py", "app/api/routes/articles/articles_common.py"]},
+      "annotations": [
+        {"path": "app/models/schemas/articles.py", "line": 8, "rationale": "DEFAULT_ARTICLES_LIMIT is 20 and is the shared API default constant."},
+        {"path": "app/api/dependencies/articles.py", "line": 25, "rationale": "The list endpoint's limit query parameter imports the shared default constant."},
+        {"path": "app/api/routes/articles/articles_common.py", "line": 28, "rationale": "The feed endpoint's limit query parameter also imports the shared default constant."}
+      ],
+      "context_annotations": [
+        {"path": "app/db/repositories/articles.py", "line": 107, "rationale": "Repository methods have separate default argument values of 20, but API callers pass limit explicitly."},
+        {"path": "tests/test_api/test_routes/test_articles.py", "line": 356, "rationale": "The feed test requests the default and then an explicit limit, but its small result set does not assert 20 versus 30."}
+      ],
+      "potential_impacts": [
+        {"path": "app/db/repositories/articles.py", "line": 107, "rationale": "Internal direct callers would still see 20 unless repository defaults are also changed; the requirement is API-scoped."}
+      ],
+      "ambiguities": [
+        {"path": "app/db/repositories/articles.py", "line": 218, "note": "Whether repository method defaults should also become 30 depends on whether the requirement covers non-API callers."}
+      ]
+    },
+    {
+      "id": "access_token_ttl",
+      "category": ["security", "configuration", "cross_module"],
+      "requirement": "Shorten issued JWT access tokens from one week to 24 hours.",
+      "repository_snapshot": "029eb7781c60d5f563ee8990a0cbfb79b244538c",
+      "retrieval_relevant": ["app/services/jwt.py", "app/api/routes/authentication.py", "app/api/routes/users.py", "tests/test_services/test_jwt.py"],
+      "impact": {"direct": ["app/services/jwt.py"], "indirect": ["app/api/routes/authentication.py", "app/api/routes/users.py"]},
+      "annotations": [
+        {"path": "app/services/jwt.py", "line": 12, "rationale": "ACCESS_TOKEN_EXPIRE_MINUTES is one week and is passed to token creation at line 31."},
+        {"path": "app/api/routes/authentication.py", "line": 41, "rationale": "Login and registration at line 81 issue access tokens through this helper, so returned token lifetime changes."},
+        {"path": "app/api/routes/users.py", "line": 23, "rationale": "Current-user and update responses at line 61 also issue access tokens through the same helper."}
+      ],
+      "context_annotations": [
+        {"path": "tests/test_services/test_jwt.py", "line": 26, "rationale": "The test creates a user token and checks username only; it does not assert expiry duration."}
+      ],
+      "potential_impacts": [
+        {"path": "tests/test_services/test_jwt.py", "line": 26, "rationale": "A new expiry-boundary regression test should be added, but the existing assertion does not encode the one-week policy."}
+      ],
+      "ambiguities": []
+    },
+    {
+      "id": "authorization_prefix",
+      "category": ["configuration", "security", "api"],
+      "requirement": "Replace the configured Authorization scheme prefix Token with Bearer for protected API requests.",
+      "repository_snapshot": "029eb7781c60d5f563ee8990a0cbfb79b244538c",
+      "retrieval_relevant": ["app/core/settings/app.py", "app/api/dependencies/authentication.py", "tests/test_api/test_routes/test_authentication.py", "tests/conftest.py"],
+      "impact": {"direct": ["app/core/settings/app.py"], "indirect": ["app/api/dependencies/authentication.py"]},
+      "annotations": [
+        {"path": "app/core/settings/app.py", "line": 29, "rationale": "jwt_token_prefix is configured as Token; replacing that setting is the likely implementation edit."},
+        {"path": "app/api/dependencies/authentication.py", "line": 57, "rationale": "Protected routes compare the supplied prefix with the configured prefix, so accepted requests change."}
+      ],
+      "context_annotations": [
+        {"path": "tests/test_api/test_routes/test_authentication.py", "line": 12, "rationale": "The wrong-prefix test uses WrongPrefix, which remains invalid; it does not verify a valid Bearer token."},
+        {"path": "tests/conftest.py", "line": 49, "rationale": "The authorization_prefix fixture reads the configured prefix, so test setup follows the setting automatically."}
+      ],
+      "potential_impacts": [
+        {"path": "tests/test_api/test_routes/test_authentication.py", "line": 12, "rationale": "A new test for valid Bearer and rejected Token prefixes is needed; current tests do not encode that migration."}
+      ],
+      "ambiguities": [
+        {"path": "app/api/dependencies/authentication.py", "line": 57, "note": "If a transition period accepts both Token and Bearer, this comparison becomes a direct edit target; the requirement says replace."}
+      ]
+    },
+    {
+      "id": "article_author_comment_delete",
+      "category": ["api", "business_logic", "security", "cross_module", "regression_test"],
+      "requirement": "Allow an article author to delete comments on their article even when another user wrote the comment.",
+      "repository_snapshot": "029eb7781c60d5f563ee8990a0cbfb79b244538c",
+      "retrieval_relevant": ["app/services/comments.py", "app/api/dependencies/comments.py", "app/api/routes/comments.py", "tests/test_api/test_routes/test_comments.py", "tests/conftest.py", "app/db/repositories/comments.py"],
+      "impact": {"direct": ["app/services/comments.py", "app/api/dependencies/comments.py"], "indirect": ["app/api/routes/comments.py", "tests/test_api/test_routes/test_comments.py"]},
+      "annotations": [
+        {"path": "app/services/comments.py", "line": 5, "rationale": "The permission predicate currently allows only the comment author; it needs the article-owner rule and article context."},
+        {"path": "app/api/dependencies/comments.py", "line": 39, "rationale": "The delete permission dependency calls that predicate without article context at line 43 and raises 403."},
+        {"path": "app/api/routes/comments.py", "line": 64, "rationale": "The delete endpoint depends on the permission check; authorized behavior changes without requiring a route body edit."},
+        {"path": "tests/test_api/test_routes/test_comments.py", "line": 61, "rationale": "The existing test expects 403 for another user's comment on test_article, which is authored by the requesting user."}
+      ],
+      "context_annotations": [
+        {"path": "tests/conftest.py", "line": 67, "rationale": "test_article is created with test_user as author; authorized_client uses that user's token at line 85."},
+        {"path": "app/db/repositories/comments.py", "line": 80, "rationale": "The repository deletes by comment id and comment author's username; it does not itself check the requesting user's identity."}
+      ],
+      "potential_impacts": [],
+      "ambiguities": [
+        {"path": "app/api/dependencies/comments.py", "line": 39, "note": "The exact function signature is design-dependent; article context is already available in get_comment_by_id_from_path at line 18."}
+      ]
+    },
+    {
+      "id": "comment_body_blank",
+      "category": ["api", "model_schema", "business_logic"],
+      "requirement": "Reject blank or whitespace-only comment bodies at the comment creation API boundary.",
+      "repository_snapshot": "029eb7781c60d5f563ee8990a0cbfb79b244538c",
+      "retrieval_relevant": ["app/models/schemas/comments.py", "app/api/routes/comments.py", "app/db/repositories/comments.py", "tests/test_api/test_routes/test_comments.py", "app/models/domain/comments.py"],
+      "impact": {"direct": ["app/models/schemas/comments.py"], "indirect": ["app/api/routes/comments.py"]},
+      "annotations": [
+        {"path": "app/models/schemas/comments.py", "line": 15, "rationale": "CommentInCreate.body is an unrestricted string at line 16; API validation belongs in this request schema."},
+        {"path": "app/api/routes/comments.py", "line": 47, "rationale": "The create endpoint consumes CommentInCreate before passing its body to the repository, so request acceptance changes."}
+      ],
+      "context_annotations": [
+        {"path": "app/db/repositories/comments.py", "line": 64, "rationale": "The repository accepts a body string, but the requirement specifies only the API boundary."},
+        {"path": "tests/test_api/test_routes/test_comments.py", "line": 15, "rationale": "The existing creation test submits a nonblank body and does not test blank rejection."},
+        {"path": "app/models/domain/comments.py", "line": 7, "rationale": "The response/domain Comment body is a plain string and need not be constrained for API-only validation."}
+      ],
+      "potential_impacts": [
+        {"path": "app/models/domain/comments.py", "line": 7, "rationale": "Would matter if the blank-body policy is later required for all internal Comment construction."}
+      ],
+      "ambiguities": []
+    },
+    {
+      "id": "favorite_post_idempotency",
+      "category": ["api", "business_logic", "regression_test"],
+      "requirement": "Make repeated POST requests to favorite an already-favorited article return the unchanged article with HTTP 200 instead of HTTP 400.",
+      "repository_snapshot": "029eb7781c60d5f563ee8990a0cbfb79b244538c",
+      "retrieval_relevant": ["app/api/routes/articles/articles_common.py", "tests/test_api/test_routes/test_articles.py", "app/db/queries/sql/articles.sql", "app/db/repositories/articles.py"],
+      "impact": {"direct": ["app/api/routes/articles/articles_common.py"], "indirect": ["tests/test_api/test_routes/test_articles.py"]},
+      "annotations": [
+        {"path": "app/api/routes/articles/articles_common.py", "line": 71, "rationale": "The favorite POST branch raises HTTP 400 when article.favorited is already true; response construction must handle the unchanged state."},
+        {"path": "tests/test_api/test_routes/test_articles.py", "line": 222, "rationale": "The parameterized test explicitly expects HTTP 400 for a repeated favorite POST and must be updated for this new contract."}
+      ],
+      "context_annotations": [
+        {"path": "app/db/queries/sql/articles.sql", "line": 5, "rationale": "Favorite insert already uses ON CONFLICT DO NOTHING, so duplicate persistence does not establish a SQL edit."},
+        {"path": "app/db/repositories/articles.py", "line": 275, "rationale": "The repository calls the existing insertion query; the route rejects the duplicate before reaching it."}
+      ],
+      "potential_impacts": [],
+      "ambiguities": [
+        {"path": "tests/test_api/test_routes/test_articles.py", "line": 215, "note": "The existing test is parameterized for POST and DELETE; only the POST expectation changes under this requirement."}
+      ]
+    },
+    {
+      "id": "profile_bio_length",
+      "category": ["api", "model_schema"],
+      "requirement": "Reject current-user profile update API requests when bio exceeds 160 characters.",
+      "repository_snapshot": "029eb7781c60d5f563ee8990a0cbfb79b244538c",
+      "retrieval_relevant": ["app/models/schemas/users.py", "app/api/routes/users.py", "app/models/domain/users.py", "app/db/repositories/users.py", "tests/test_api/test_routes/test_users.py"],
+      "impact": {"direct": ["app/models/schemas/users.py"], "indirect": ["app/api/routes/users.py"]},
+      "annotations": [
+        {"path": "app/models/schemas/users.py", "line": 22, "rationale": "UserInUpdate.bio is an optional unrestricted string; the API payload limit belongs in this request schema."},
+        {"path": "app/api/routes/users.py", "line": 40, "rationale": "The current-user update endpoint consumes UserInUpdate before persisting the bio at line 59."}
+      ],
+      "context_annotations": [
+        {"path": "app/models/domain/users.py", "line": 11, "rationale": "The domain bio field is a string; API-only validation does not require changing it."},
+        {"path": "app/db/repositories/users.py", "line": 57, "rationale": "The repository accepts bio and persists it, but the requirement is scoped to API requests."},
+        {"path": "tests/test_api/test_routes/test_users.py", "line": 69, "rationale": "The existing profile update test uses a short bio and does not assert the new boundary."}
+      ],
+      "potential_impacts": [
+        {"path": "app/models/domain/users.py", "line": 11, "rationale": "Could be affected if the product later requires all internal user records to obey the same limit."}
+      ],
+      "ambiguities": []
+    },
+    {
+      "id": "invoice_rounding_negative",
+      "category": ["negative"],
+      "requirement": "Change rounding of invoice totals in billing reports to banker's rounding.",
+      "repository_snapshot": "029eb7781c60d5f563ee8990a0cbfb79b244538c",
+      "retrieval_relevant": [],
+      "impact": {"direct": [], "indirect": []},
+      "annotations": [],
+      "context_annotations": [],
+      "potential_impacts": [],
+      "ambiguities": [],
+      "negative_evidence": [
+        {"path": "app/api/routes/api.py", "line": 7, "rationale": "The included API router registers users, profiles, articles, comments, and tags, with no billing or invoice route."}
+      ],
+      "negative_rationale": "The complete selected app/ and tests/ trees in the snapshot manifest contain no billing, invoice, or report component. This is a negative case only for the selected snapshot, not a claim about outside code."
+    }
+  ]
+}

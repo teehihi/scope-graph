@@ -1,5 +1,7 @@
 # ScopeGraph AI Core evaluation
 
+The [SG-AI-09B RealWorld holdout candidate](HOLDOUT_LABEL_REVIEW.md) is a separate 10-case source-labeled dataset, pinned to upstream commit `029eb7781c60d5f563ee8990a0cbfb79b244538c`. Its [AI-assisted source review record](HOLDOUT_AI_ASSISTED_REVIEW_V1.md) retains all 10 direct and 13 indirect labels without changing the fixture. [Technical readiness](HOLDOUT_EVALUATION_READINESS.md) passed; the [independent human sign-off form](HOLDOUT_HUMAN_SIGNOFF.md) is blank. **BLOCKED: HUMAN_SIGNOFF_REQUIRED** for fixture freezing and evaluation. It has **not** been evaluated with offline or paid model inference, so this document reports no holdout score.
+
 ## SG-AI-09 label-only v3 replay (2026-10-28)
 
 The [v3 fixture](../services/api/tests/evaluation/ai_core_cases_v3.json) applies **exactly six removals** to the frozen v2 labels: 17 scenarios, **25 direct + 10 indirect = 35** impact pairs, versus 26 direct + 15 indirect = 41 in v2. The [review decision record](AI_CORE_LABEL_REVIEW_V3.md) gives the six rationales and source lines. This was an **AI-assisted source review**, not independent human sign-off. Both fixtures refer to sample repository snapshot `f413b0b90d6157d5493a5603fb1245a7f4681eb6`; the sample source in this checkout matches that snapshot. No evaluation false positive was promoted into ground truth.
@@ -22,7 +24,7 @@ $env:PYTHONPATH='services/api'
 | Unique raw claims outside labels | 91 / 111 | 93 / 111 |
 | Hybrid retrieval Recall@8 | 0.956 | 0.956 |
 
-Three removed labels were true positives under v2 and became false positives under v3; three were false negatives under v2 and disappeared from the denominator. Raw claims matched two removed labels. These score changes are **entirely caused by label revision**, with identical predictions, retrieval context, provider, and inference latency. The macro strict score averages only the 16 cases with nonempty gold impact labels; micro strict scores pool 35 v3 gold pairs. Retrieval labels and rankings did not change. No offline inference rerun was needed for this controlled label comparison, and no paid Meta request was made. The 17 cases come from one small Python sample; they cannot establish production accuracy, generalization, or a model improvement. Human sign-off and a separate repository holdout remain open.
+Three removed labels were true positives under v2 and became false positives under v3; three were false negatives under v2 and disappeared from the denominator. Raw claims matched two removed labels. These score changes are **entirely caused by label revision**, with identical predictions, retrieval context, provider, and inference latency. Macro ratios omit cases where their individual denominator is undefined; micro strict scores pool 35 v3 gold pairs. Retrieval labels and rankings did not change. No offline inference rerun was needed for this controlled label comparison, and no paid Meta request was made. The 17 cases come from one small Python sample; they cannot establish production accuracy, generalization, or a model improvement. Human sign-off remains open; the separate holdout candidate is prepared but unevaluated.
 
 ## SG-AI-07B/07C/08/09 offline checkpoint (2026-10-28)
 
