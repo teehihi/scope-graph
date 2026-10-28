@@ -23,7 +23,8 @@ def test_db():
     yield session
     session.close()
 
-def test_full_e2e_indexing_and_analysis(test_db):
+def test_full_e2e_indexing_and_analysis(test_db, monkeypatch):
+    monkeypatch.setattr(settings, "META_AI_PROVIDER", "offline_demo")
     sample_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../examples/sample-repository"))
     assert os.path.exists(sample_dir), f"Sample repository dir not found at {sample_dir}"
 

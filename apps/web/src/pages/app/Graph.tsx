@@ -1,19 +1,20 @@
 import React from 'react';
 import { useRouter } from '../../router';
 import { useRepo } from '../../context/RepoContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { AppLayout } from '../../components/layouts/AppLayout';
 import { GraphCanvas } from '../../components/GraphCanvas';
 import { EvidenceDrawer } from '../../components/EvidenceDrawer';
+import { RepoSelectorDropdown } from '../../components/RepoSelectorDropdown';
 import { Zap, RotateCcw } from 'lucide-react';
 import { Node } from '@xyflow/react';
 import { NodeData } from '../../types';
 
 export const GraphPage: React.FC = () => {
   const { navigate } = useRouter();
+  const { t } = useLanguage();
   const {
     activeRepo,
-    repositories,
-    setActiveRepo,
     nodes,
     edges,
     onNodesChange,
@@ -46,33 +47,19 @@ export const GraphPage: React.FC = () => {
 
   return (
     <AppLayout
-      title="Dependency Graph"
-      subtitle={`${activeRepo?.name || 'Sample Repository'} • Layered Architecture`}
+      title={t('graph.title')}
+      subtitle={`${activeRepo?.name || t('graph.sample_repo')} • ${t('graph.subtitle')}`}
       actions={
-        <div className="flex items-center gap-2">
-          {repositories.length > 0 && (
-            <select
-              value={activeRepo?.id || ''}
-              onChange={(e) => {
-                const found = repositories.find((r) => r.id === e.target.value);
-                if (found) setActiveRepo(found);
-              }}
-              className="text-xs font-medium bg-slate-50 border border-[#E4E7E1] rounded-lg px-2.5 py-1.5 text-[#151923]"
-            >
-              {repositories.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
-          )}
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <RepoSelectorDropdown />
 
           <button
             onClick={() => navigate('/app/impact')}
-            className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-[#151923] text-white hover:bg-slate-800 transition-colors shadow-sm"
+            className="flex items-center gap-1.5 text-xs font-bold px-2.5 sm:px-3 py-1.5 rounded-lg bg-[#151923] text-white hover:bg-slate-800 transition-colors shadow-sm shrink-0"
+            title={t('graph.analyze_impact')}
           >
             <Zap className="w-3.5 h-3.5 text-[#C7F36B]" />
-            <span>Analyze Impact</span>
+            <span className="hidden sm:inline">{t('graph.analyze_impact')}</span>
           </button>
         </div>
       }
@@ -100,9 +87,9 @@ export const GraphPage: React.FC = () => {
               className="w-20 h-20 opacity-80"
             />
             <div>
-              <h3 className="text-base font-bold text-[#151923]">No Graph Data Loaded</h3>
+              <h3 className="text-base font-bold text-[#151923]">{t('graph.empty_title')}</h3>
               <p className="text-xs text-[#8B929E] max-w-sm mt-1">
-                Load our sample Auth &amp; User microservice or upload a repository ZIP to view the graph.
+                {t('graph.empty_desc')}
               </p>
             </div>
             <button
@@ -110,8 +97,8 @@ export const GraphPage: React.FC = () => {
               disabled={isLoadingSample}
               className="flex items-center gap-2 text-xs font-bold px-4 py-2.5 rounded-xl bg-[#151923] text-white hover:bg-slate-800 transition-colors shadow-sm"
             >
-              <RotateCcw className="w-4 h-4 text-[#C7F36B]" />
-              <span>{isLoadingSample ? 'Loading Demo...' : 'Load Sample Repository'}</span>
+              <RotateCcw className={`w-4 h-4 text-[#C7F36B] ${isLoadingSample ? 'animate-spin' : ''}`} />
+              <span>{isLoadingSample ? t('graph.loading_demo') : t('graph.load_sample')}</span>
             </button>
           </div>
         )}

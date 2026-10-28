@@ -14,6 +14,23 @@ async def lifespan(app: FastAPI):
     logger.info("Starting ScopeGraph API server (env=%s, port=%s)...", settings.ENVIRONMENT, settings.PORT)
     os.makedirs(settings.WORKSPACE_DIR, exist_ok=True)
     init_db()
+
+    # Auto-seed sample repository if database is fresh
+    try:
+        from app.db.database import SessionLocal
+        from app.db.models import Repository
+        from app.api.routes.repositories import load_sample_repository
+        db = SessionLocal()
+        try:
+            if db.query(Repository).count() == 0:
+                logger.info("Fresh database detected — auto-seeding sample repository...")
+                load_sample_repository(db)
+                logger.info("Sample repository auto-seeded successfully!")
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning("Could not auto-seed sample repository: %s", e)
+
     yield
     logger.info("Shutting down ScopeGraph API server...")
 

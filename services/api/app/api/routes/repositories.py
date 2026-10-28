@@ -141,13 +141,18 @@ def load_sample_repository(db: Session = Depends(get_db)):
     1-Click demo helper: Copies the bundled sample auth & user repository,
     creates the repository record, and triggers deterministic indexing immediately.
     """
-    sample_src = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../../examples/sample-repository"))
-    if not os.path.exists(sample_src):
-        # Fallback to local path relative to workspace
-        sample_src = os.path.abspath("./examples/sample-repository")
+    candidates = [
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../../examples/sample-repository")),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../examples/sample-repository")),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../examples/sample-repository")),
+        "/app/examples/sample-repository",
+        "./examples/sample-repository",
+        "../examples/sample-repository",
+    ]
+    sample_src = next((p for p in candidates if os.path.exists(p)), None)
 
-    if not os.path.exists(sample_src):
-        raise HTTPException(status_code=404, detail=f"Sample repository not found at {sample_src}")
+    if not sample_src:
+        raise HTTPException(status_code=404, detail="Sample repository not found in search paths")
 
     repo = Repository(
         name="Sample Auth & User Service",

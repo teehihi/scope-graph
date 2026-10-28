@@ -14,6 +14,7 @@ import '@xyflow/react/dist/style.css';
 import { ScopeNode } from './ScopeNode';
 import { Eye, Layers } from 'lucide-react';
 import { LayerType } from '../types';
+import { useLanguage } from '../context/LanguageContext';
 
 interface GraphCanvasProps {
   nodes: Node[];
@@ -80,14 +81,20 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       const colIndex = LAYER_ORDER[layer] ?? 1;
       const rowIndex = columns[colIndex].findIndex((item) => item.id === n.id);
 
+      // Preserve dragged / custom node position so user can freely arrange cards
+      const position =
+        n.position && typeof n.position.x === 'number' && typeof n.position.y === 'number'
+          ? n.position
+          : {
+              x: START_X + colIndex * COL_WIDTH,
+              y: START_Y + (rowIndex >= 0 ? rowIndex : 0) * ROW_GAP,
+            };
+
       return {
         ...n,
         sourcePosition: Position.Right,
         targetPosition: Position.Left,
-        position: {
-          x: START_X + colIndex * COL_WIDTH,
-          y: START_Y + (rowIndex >= 0 ? rowIndex : 0) * ROW_GAP,
-        },
+        position,
       };
     });
   }, [nodes, selectedLayer]);
@@ -129,13 +136,15 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       });
   }, [edges, visibleNodeIds]);
 
+  const { t } = useLanguage();
+
   const layers: Array<{ id: LayerType | 'all'; label: string }> = [
-    { id: 'all', label: 'All Layers' },
-    { id: 'api', label: 'API Routes' },
-    { id: 'service', label: 'Services' },
-    { id: 'model', label: 'Data Models' },
-    { id: 'test', label: 'Tests' },
-    { id: 'core', label: 'Core / Security' },
+    { id: 'all', label: t('graph.all_layers') },
+    { id: 'api', label: t('graph.api_routes') },
+    { id: 'service', label: t('graph.services') },
+    { id: 'model', label: t('graph.data_models') },
+    { id: 'test', label: t('graph.tests') },
+    { id: 'core', label: t('graph.core') },
   ];
 
   return (
@@ -146,7 +155,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         <div className="flex items-center gap-1.5 flex-wrap">
           <div className="flex items-center gap-1 pr-1 text-[#8B929E] text-xs font-semibold">
             <Layers className="w-3.5 h-3.5 text-[#526BEE]" />
-            <span>Filter:</span>
+            <span>{t('graph.filter')}</span>
           </div>
           {layers.map((l) => (
             <button
@@ -174,7 +183,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
                 }`}
               >
                 <Eye className="w-3.5 h-3.5 text-[#526BEE]" />
-                <span>Focus Impact ({impactedCount})</span>
+                <span>{t('graph.focus_impact')} ({impactedCount})</span>
               </button>
             </div>
           )}
@@ -184,15 +193,15 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         <div className="flex items-center gap-3.5 text-xs text-[#8B929E] border-l border-[#E4E7E1] pl-3">
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-[#C7F36B] ring-2 ring-[#C7F36B]/40" />
-            <span className="text-[#151923] font-medium text-[11px]">Trigger Node</span>
+            <span className="text-[#151923] font-medium text-[11px]">{t('graph.trigger_node')}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-[#526BEE] ring-2 ring-[#526BEE]/40" />
-            <span className="text-[#151923] font-medium text-[11px]">Affected Path</span>
+            <span className="text-[#151923] font-medium text-[11px]">{t('graph.affected_path')}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-[#CBD5E1]" />
-            <span className="text-[11px]">Unchanged</span>
+            <span className="text-[11px]">{t('graph.unchanged')}</span>
           </div>
         </div>
       </div>
@@ -211,10 +220,21 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           fitViewOptions={{ padding: 0.2 }}
           minZoom={0.2}
           maxZoom={1.5}
+          nodesDraggable={true}
+          nodesConnectable={false}
+          elementsSelectable={true}
+          panOnScroll={true}
+          panOnDrag={[0, 1, 2]}
+          zoomOnPinch={true}
+          zoomOnScroll={false}
+          preventScrolling={false}
+          panOnScrollMode={undefined}
         >
           <Background color="#E4E7E1" gap={24} size={1} />
-          <Controls className="!bg-white !border-[#E4E7E1] !rounded-xl !shadow-sm overflow-hidden" />
-          {/* Note: Unstyled MiniMap removed to eliminate the empty grey skeleton panel */}
+          <Controls
+            showInteractive={false}
+            className="!bg-white !border-[#E4E7E1] !rounded-xl !shadow-sm overflow-hidden"
+          />
         </ReactFlow>
       </div>
     </div>
