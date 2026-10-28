@@ -79,7 +79,7 @@ export const Landing: React.FC = () => {
               <span className="text-[10px] font-bold uppercase tracking-wider text-[#8B929E] block">
                 API Routes
               </span>
-              <div className="p-3.5 rounded-xl border-2 border-[#151923] bg-white ring-2 ring-[#C7F36B] shadow-sm">
+              <div className="p-3.5 rounded-xl border-2 border-[#151923] bg-white shadow-sm">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800">
                     POST /verify-email
@@ -98,7 +98,7 @@ export const Landing: React.FC = () => {
               <span className="text-[10px] font-bold uppercase tracking-wider text-[#8B929E] block">
                 Services
               </span>
-              <div className="p-3.5 rounded-xl border-2 border-[#526BEE] bg-white ring-2 ring-[#526BEE]/20 shadow-sm">
+              <div className="p-3.5 rounded-xl border-2 border-[#526BEE] bg-white shadow-sm">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
                     SERVICE
@@ -134,7 +134,7 @@ export const Landing: React.FC = () => {
               <span className="text-[10px] font-bold uppercase tracking-wider text-[#8B929E] block">
                 Suggested Tests
               </span>
-              <div className="p-3.5 rounded-xl border-2 border-[#526BEE] bg-white ring-2 ring-[#526BEE]/20 shadow-sm">
+              <div className="p-3.5 rounded-xl border-2 border-[#526BEE] bg-white shadow-sm">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-cyan-100 text-cyan-800">
                     TEST

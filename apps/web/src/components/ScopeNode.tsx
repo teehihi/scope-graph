@@ -52,16 +52,16 @@ export const ScopeNode: React.FC<NodeProps> = memo(({ data, selected }) => {
 
   let containerBorder = 'border-[#E4E7E1] bg-white hover:border-[#8B929E]';
   if (selected) {
-    containerBorder = 'border-[#151923] ring-2 ring-[#526BEE] bg-white';
+    containerBorder = 'border-[#526BEE] ring-2 ring-[#526BEE]/40 bg-white shadow-md';
   } else if (isDirect) {
-    containerBorder = 'border-[#151923] bg-white ring-2 ring-[#C7F36B] shadow-sm';
+    containerBorder = 'border-[#151923] bg-white shadow-md';
   } else if (isIndirect) {
-    containerBorder = 'border-[#526BEE] bg-white ring-2 ring-[#526BEE]/30 shadow-sm';
+    containerBorder = 'border-[#526BEE] bg-white shadow-sm';
   }
 
   return (
     <div
-      className={`w-72 rounded-xl border-2 p-3.5 shadow-sm transition-all duration-150 cursor-pointer ${containerBorder}`}
+      className={`w-72 rounded-xl border-2 p-3.5 shadow-sm transition-colors cursor-grab active:cursor-grabbing select-none ${containerBorder}`}
     >
       <Handle type="target" position={Position.Left} className="!w-2.5 !h-2.5 !bg-[#526BEE] !border-2 !border-white" />
 

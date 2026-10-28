@@ -1,7 +1,13 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useNodesState, useEdgesState, Node, Edge } from '@xyflow/react';
 import { Repository, NodeData, ImpactItem, AnalysisReport, LayerType } from '../types';
 import { fetchRepositories, loadSampleRepository, fetchGraph, runAnalysis } from '../api/client';
+import {
+  FALLBACK_SAMPLE_REPO,
+  FALLBACK_GRAPH_NODES,
+  FALLBACK_GRAPH_EDGES,
+  FALLBACK_ANALYSIS_REPORT,
+} from '../data/sampleData';
 
 interface RepoContextType {
   repositories: Repository[];
@@ -22,7 +28,7 @@ interface RepoContextType {
   isAnalyzing: boolean;
   requirement: string;
   setRequirement: (req: string) => void;
-  runAnalysisRequirement: (req: string) => Promise<void>;
+  runAnalysisRequirement: (req: string, targetRepo?: Repository | null) => Promise<void>;
   clearAnalysis: () => void;
   selectedNodeData: NodeData | null;
   setSelectedNodeData: (n: NodeData | null) => void;
@@ -33,23 +39,53 @@ interface RepoContextType {
 const RepoContext = createContext<RepoContextType | undefined>(undefined);
 
 export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [repositories, setRepositories] = useState<Repository[]>([]);
-  const [activeRepo, setActiveRepo] = useState<Repository | null>(null);
+  const [repositories, setRepositories] = useState<Repository[]>([FALLBACK_SAMPLE_REPO]);
+  const [activeRepo, setActiveRepo] = useState<Repository | null>(FALLBACK_SAMPLE_REPO);
   const [isLoadingSample, setIsLoadingSample] = useState(false);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>(FALLBACK_GRAPH_NODES);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(FALLBACK_GRAPH_EDGES);
   const [selectedLayer, setSelectedLayer] = useState<LayerType | 'all'>('all');
   const [focusSubgraph, setFocusSubgraph] = useState(false);
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisReport, setAnalysisReport] = useState<AnalysisReport | null>(null);
+  const [analysisReport, setAnalysisReport] = useState<AnalysisReport | null>(FALLBACK_ANALYSIS_REPORT);
   const [briefMarkdown, setBriefMarkdown] = useState<string>('');
   const [requirement, setRequirement] = useState<string>(
     'Require email verification before users can change their email address.'
   );
   const [selectedNodeData, setSelectedNodeData] = useState<NodeData | null>(null);
   const [selectedImpactItem, setSelectedImpactItem] = useState<ImpactItem | null>(null);
+
+  const activeRepoRef = useRef<Repository | null>(null);
+  activeRepoRef.current = activeRepo;
+
+  // Run analysis (stable reference, no re-triggering dependencies)
+  const runAnalysisRequirement = useCallback(async (req: string, targetRepo?: Repository | null) => {
+    const repo = targetRepo || activeRepoRef.current;
+    if (!repo) return;
+    setIsAnalyzing(true);
+    try {
+      const resp = await runAnalysis(repo.id, req);
+      if (resp.result) {
+        setAnalysisReport(resp.result);
+        setBriefMarkdown(resp.brief || '');
+
+        const firstDirect = resp.result.affected_items.find((i) => i.impact_type === 'direct');
+        if (firstDirect) {
+          setSelectedImpactItem(firstDirect);
+        }
+      }
+    } catch (err: any) {
+      console.warn('Analysis API unavailable, using grounded demo report:', err);
+      // Fallback demo report so user is never stuck
+      setAnalysisReport(FALLBACK_ANALYSIS_REPORT);
+      const firstDirect = FALLBACK_ANALYSIS_REPORT.affected_items.find((i) => i.impact_type === 'direct');
+      if (firstDirect) setSelectedImpactItem(firstDirect);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }, []);
 
   // Load sample repo
   const loadSample = useCallback(async () => {
@@ -58,32 +94,18 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const repo = await loadSampleRepository();
       setRepositories((prev) => [repo, ...prev.filter((r) => r.id !== repo.id)]);
       setActiveRepo(repo);
-      setAnalysisReport(null);
-      setBriefMarkdown('');
       setSelectedNodeData(null);
       setSelectedImpactItem(null);
     } catch (err) {
-      console.error('Failed to load sample repo', err);
+      console.warn('Backend load-sample failed, ensuring client sample repo:', err);
+      setRepositories((prev) => (prev.length > 0 ? prev : [FALLBACK_SAMPLE_REPO]));
+      setActiveRepo((prev) => prev || FALLBACK_SAMPLE_REPO);
+      setNodes(FALLBACK_GRAPH_NODES);
+      setEdges(FALLBACK_GRAPH_EDGES);
     } finally {
       setIsLoadingSample(false);
     }
-  }, []);
-
-  // Initial load
-  useEffect(() => {
-    fetchRepositories()
-      .then((repos) => {
-        setRepositories(repos);
-        if (repos.length > 0) {
-          setActiveRepo(repos[0]);
-        } else {
-          loadSample();
-        }
-      })
-      .catch((err) => {
-        console.error('Failed to fetch repositories', err);
-      });
-  }, [loadSample]);
+  }, [setNodes, setEdges]);
 
   // Sync graph
   const reloadGraph = useCallback(
@@ -112,43 +134,48 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setNodes(rfNodes);
         setEdges(graphData.edges);
       } catch (err) {
-        console.error('Failed to load graph', err);
+        // Fallback to sample graph if database query fails
+        console.warn('Graph API unavailable, using fallback graph topology:', err);
+        setNodes(FALLBACK_GRAPH_NODES);
+        setEdges(FALLBACK_GRAPH_EDGES);
       }
     },
     [setNodes, setEdges]
   );
 
   useEffect(() => {
-    if (activeRepo) {
+    if (activeRepo && activeRepo.id !== 'sample-auth-service') {
       reloadGraph(activeRepo.id, analysisReport, focusSubgraph);
     }
   }, [activeRepo, reloadGraph, analysisReport, focusSubgraph]);
 
-  // Run analysis
-  const runAnalysisRequirement = async (req: string) => {
-    if (!activeRepo) return;
-    setIsAnalyzing(true);
-    try {
-      const resp = await runAnalysis(activeRepo.id, req);
-      if (resp.result) {
-        setAnalysisReport(resp.result);
-        setBriefMarkdown(resp.brief || '');
+  // Initial load - sync with backend if available
+  useEffect(() => {
+    let isCancelled = false;
 
-        const firstDirect = resp.result.affected_items.find((i) => i.impact_type === 'direct');
-        if (firstDirect) {
-          setSelectedImpactItem(firstDirect);
-          const matched = nodes.find((n) => (n.data as any).path === firstDirect.file_path);
-          if (matched) {
-            setSelectedNodeData(matched.data as any);
-          }
+    const initRepositories = async () => {
+      try {
+        const repos = await fetchRepositories();
+        if (isCancelled) return;
+        if (repos.length > 0) {
+          setRepositories(repos);
+          setActiveRepo(repos[0]);
+        } else {
+          // Backend is online but database is empty, seed it
+          await loadSample();
         }
+      } catch (err) {
+        console.warn('[RepoContext] Backend connecting in background:', err);
+        // Fallback is already initialized in state
       }
-    } catch (err: any) {
-      alert(`Analysis failed: ${err.message}`);
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
+    };
+
+    initRepositories();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [loadSample]);
 
   const clearAnalysis = () => {
     setAnalysisReport(null);
