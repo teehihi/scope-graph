@@ -9,6 +9,8 @@ from app.analysis.retriever import HybridRetriever
 from app.analysis.causal import CausalImpactVerifier
 from app.analysis.explanations import explain_item
 from app.ai.provider import get_ai_provider
+from app.ai.image_input import ValidatedScreenshot
+from app.ai.schemas import StructuredVisualIntent
 from app.core.config import settings
 from app.evidence.validator import EvidenceValidator
 
@@ -22,7 +24,12 @@ class AnalysisOrchestrator:
         self, repository_id: str, requirement: str, analysis_id: str | None = None,
         evaluation_trace: dict[str, Any] | None = None,
         target_language: str = "en",
+        screenshot: ValidatedScreenshot | None = None,
     ) -> AnalysisRun:
+        if screenshot is not None and not isinstance(screenshot, ValidatedScreenshot):
+            raise TypeError("screenshot must be a ValidatedScreenshot")
+        if screenshot is not None and not requirement.strip():
+            raise ValueError("A text requirement is required with a screenshot")
         repo = self.db.query(Repository).filter(Repository.id == repository_id).first()
         if not repo:
             raise ValueError(f"Repository {repository_id} not found")
@@ -53,6 +60,19 @@ class AnalysisOrchestrator:
             run.model = getattr(provider, "model", run.model)
             self.db.commit()
 
+            visual_resp = None
+            visual_intent = None
+            if screenshot is not None:
+                logger.info("Interpreting validated screenshot for repository %s", repository_id)
+                try:
+                    visual_resp = provider.interpret_screenshot(requirement, screenshot)
+                    visual_intent = StructuredVisualIntent.model_validate(visual_resp.data)
+                except Exception as error:
+                    if (type(error) is ValueError
+                            and error.args == ("Screenshot interpretation unavailable in offline demo mode",)):
+                        raise ValueError("Screenshot interpretation unavailable in offline demo mode") from None
+                    raise ValueError("Screenshot interpretation failed or returned invalid visual intent") from None
+
             # Step 1: Interpret Requirement
             logger.info("Step 1: Interpreting requirement '%s'", requirement[:60])
             interpretation_resp = provider.interpret_requirement(requirement)
@@ -67,6 +87,7 @@ class AnalysisOrchestrator:
                 affected_layers=interpretation.get("affected_layers", []),
                 top_k=settings.AI_RETRIEVAL_TOP_K,
                 context_token_budget=settings.AI_CONTEXT_TOKEN_BUDGET,
+                visual_intent=visual_intent,
             )
             retrieved_files = retrieval.items
             seed_paths = retrieval.seed_paths
@@ -95,7 +116,10 @@ class AnalysisOrchestrator:
                 repository_context=repo_file_map,
             )
             completeness = completeness_resp.data
-            inference_responses = (interpretation_resp, reasoning_resp, completeness_resp)
+            inference_responses = (
+                (visual_resp, interpretation_resp, reasoning_resp, completeness_resp)
+                if visual_resp is not None else (interpretation_resp, reasoning_resp, completeness_resp)
+            )
             usage_records = [resp.token_usage for resp in inference_responses if resp.token_usage]
             token_usage = (
                 {key: sum(usage.get(key, 0) for usage in usage_records) for key in set().union(*(usage.keys() for usage in usage_records))}
@@ -211,10 +235,26 @@ class AnalysisOrchestrator:
                     "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 }
             }
+            if visual_resp is not None:
+                final_report["visual_context"] = {
+                    "image_sha256": screenshot.sha256,
+                    "mime_type": screenshot.mime_type,
+                    "width": screenshot.width,
+                    "height": screenshot.height,
+                    "screen_type": visual_intent.screen_type,
+                    "provider": visual_resp.provider,
+                    "model": visual_resp.model,
+                    "is_demo_mode": visual_resp.is_mock_or_demo,
+                    "retrieval": retrieval.visual_metadata,
+                    "uncertainties": visual_intent.uncertainties,
+                }
 
             # Step 7: Generate Implementation Brief
             logger.info("Step 7: Generating implementation brief for coding agents (lang=%s)", target_language)
-            brief_md = provider.generate_implementation_brief(requirement, final_report, language=target_language)
+            # Visual observations are untrusted context. The brief receives grounded results only.
+            brief_input = (final_report if visual_resp is None else
+                           {key: value for key, value in final_report.items() if key != "visual_context"})
+            brief_md = provider.generate_implementation_brief(requirement, brief_input, language=target_language)
             metadata = final_report["operational_metadata"]
             brief_latency = getattr(provider, "brief_latency_seconds", 0.0)
             metadata["inference_latency_seconds"] = round(
@@ -269,6 +309,8 @@ class AnalysisOrchestrator:
                     "token_usage": metadata["token_usage"],
                     "analysis_latency_seconds": run.execution_time_seconds,
                 })
+                if visual_resp is not None:
+                    evaluation_trace["visual_context"] = final_report["visual_context"]
             return run
 
         except Exception as e:
