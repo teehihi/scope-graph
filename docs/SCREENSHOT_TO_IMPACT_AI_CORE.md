@@ -1,6 +1,6 @@
-# Screenshot-to-Impact AI Core: SG-AI-15 through SG-AI-17
+# Screenshot-to-Impact AI Core: SG-AI-15 through SG-AI-19
 
-SG-AI-15 adds a dedicated screenshot interpretation capability. SG-AI-16 adds optional visual hints to the existing `HybridRetriever`. SG-AI-17 connects both to the existing orchestrator through an internal, optional input. REST and MCP still accept text only; no public upload flow exists. The text-only pipeline is unchanged.
+SG-AI-15 adds a dedicated screenshot interpretation capability. SG-AI-16 adds optional visual hints to the existing `HybridRetriever`. SG-AI-17 connects both to the existing orchestrator through an internal, optional input. SG-AI-18 records a synthetic offline checkpoint. SG-AI-19 adds a synchronous REST upload route. MCP and the frontend still accept text only; the existing JSON analysis route is unchanged.
 
 ## Input and output
 
@@ -12,7 +12,7 @@ SG-AI-15 adds a dedicated screenshot interpretation capability. SG-AI-16 adds op
 
 `ValidatedScreenshot.from_bytes(data, mime_type)` accepts only `image/png` and `image/jpeg`, checks content signatures, PNG chunk CRC and compressed stream integrity or JPEG marker structure, extracts dimensions, checks that declared MIME matches content, and computes a SHA-256 identity. It rejects absent, truncated, structurally malformed, over-size and over-dimension inputs with fixed messages that do not include image content. Configurable settings are `MAX_SCREENSHOT_BYTES` (default 5,000,000), `MAX_SCREENSHOT_DIMENSION` (default 4,096 per side) and `MAX_SCREENSHOT_PIXELS` (default 8,000,000). The type keeps bytes in process memory only and excludes them from `repr`.
 
-This standard-library check is **not a full PNG/JPEG pixel decode**. In particular, JPEG entropy and every PNG color/interlace rule are not validated. The future backend upload handler must perform a full, bounded decode and, if required by the privacy policy, strip metadata before constructing this input. The repository does not declare an image decoder dependency; adding one requires backend-owner approval. Filename extensions and caller MIME alone are insufficient. The provider accepts no user-supplied URL and does not fetch images server-side.
+This structural check is **not a full PNG/JPEG pixel decode**. The public REST boundary uses Pillow to load every pixel, apply EXIF orientation and re-encode to PNG without source metadata before constructing the provider input. The normalized image is checked against the same limits. The hash in the public report identifies that normalized image. Filename extensions and caller MIME alone are insufficient. The provider accepts no user-supplied URL and does not fetch images server-side.
 
 ## Meta request and failures
 
@@ -36,9 +36,9 @@ Hint normalization considers `screen_type`, `visible_elements`, `user_actions` a
 
 For screenshot calls only, the report gains `visual_context`: SHA-256 image identity, MIME, dimensions, screen type, vision provider/model/demo flag, retrieval status/hints/counts and explicit uncertainties. The evaluation trace receives the same metadata. OCR `visible_text`, model requirement paraphrase, raw image bytes and data URLs are omitted from report, trace and brief input. `operational_metadata` includes vision latency and reported token usage in the existing totals. The visual result is not cached. Existing REST/MCP signatures and jobs remain text-only and do not pass an image to this internal method.
 
-### Future upload handler contract for backend review
+## SG-AI-19: synchronous REST upload
 
-This is a proposed boundary, **not an implemented endpoint**. The backend handler should accept one multipart `image/png` or `image/jpeg` file and one nonempty requirement for an indexed, ready repository; reject URLs and malformed content; enforce configured byte, dimension and pixel caps before decoding; perform a bounded full pixel decode and MIME/content match; then construct `ValidatedScreenshot` and invoke the internal orchestrator synchronously while bytes remain in process memory. It should never enqueue raw images in Redis, save them in a workspace or database, or pass them through the existing text-only analysis cache. If asynchronous execution is required, define an ephemeral, access-controlled image lifecycle with a short retention limit first. A future cache would need image SHA-256, repository index version, provider, model, requirement and relevant settings in its key. Return the existing analysis envelope with additive `visual_context` on success, and a sanitized validation or provider failure on error. The backend owner must approve the upload route, full decoder dependency, metadata/EXIF policy, sync/async lifecycle and cache policy before public integration.
+`POST /api/v1/repositories/{repository_id}/analyze-screenshot` accepts one multipart PNG/JPEG file, a nonempty text requirement and optional `target_language`, then invokes the existing orchestrator synchronously. It rejects malformed and over-limit images, bypasses the text-only cache and never enqueues image bytes. The route returns the existing synchronous `{analysis_id, status, result, brief}` envelope. The [integration contract](SCREENSHOT_TO_IMPACT_CONTRACT.md) records exact fields, errors, metadata stripping, temporary framework spooling, and the remaining repository access and upstream body-limit gates. No paid Meta request was used to implement or test this route.
 
 ## SG-AI-18: synthetic offline checkpoint
 
@@ -46,5 +46,6 @@ This is a proposed boundary, **not an implemented endpoint**. The backend handle
 
 ## Remaining work
 
-- **Public integration:** Implement the reviewed full-decode upload boundary and endpoint. No paid Meta vision call has been made in this workstream.
-- **Real vision evaluation:** Review rights and labels, then obtain explicit approval before any paid Muse Spark screenshot evaluation. The [typed integration contract](SCREENSHOT_TO_IMPACT_CONTRACT.md) lists backend decisions for a public route.
+- **Frontend integration:** Add a local screenshot picker and display visual context only after product review. MCP remains text-only.
+- **Production access:** Add repository ownership/session enforcement and an upstream multipart body limit before exposing the upload route publicly.
+- **Real vision evaluation:** Review rights and labels, then obtain explicit approval before any paid Muse Spark screenshot evaluation. No paid Meta vision call has been made in this workstream.

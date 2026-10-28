@@ -1,13 +1,13 @@
-"""Bounded in-memory screenshot input for the provider boundary.
-
-This checks PNG/JPEG structure and dimensions without a new decoder dependency.
-The eventual upload handler must additionally perform a full image decode.
-"""
+"""Bounded screenshot input and full decoding at the public upload boundary."""
 
 import base64
 import hashlib
+import io
 import struct
+import warnings
 import zlib
+
+from PIL import Image, ImageOps
 
 from app.core.config import settings
 
@@ -152,3 +152,35 @@ class ValidatedScreenshot:
 
     def __repr__(self) -> str:
         return f"ValidatedScreenshot(mime_type={self.mime_type!r}, width={self.width}, height={self.height})"
+
+
+def decode_uploaded_screenshot(data: bytes, mime_type: str) -> ValidatedScreenshot:
+    """Fully decode PNG/JPEG pixels and strip metadata before provider inference.
+
+    The returned hash identifies the normalized PNG sent to the provider, rather
+    than the original upload. Neither version is stored by this function.
+    """
+    original = ValidatedScreenshot.from_bytes(data, mime_type)
+    expected_format = "PNG" if mime_type == "image/png" else "JPEG"
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(io.BytesIO(data), formats=("PNG", "JPEG")) as decoded:
+                if decoded.format != expected_format or decoded.size != (original.width, original.height):
+                    raise ValueError("Screenshot format does not match its MIME type")
+                if getattr(decoded, "n_frames", 1) != 1:
+                    raise ValueError("Animated screenshots are not supported")
+                decoded.load()
+                oriented = ImageOps.exif_transpose(decoded)
+                mode = "RGBA" if "A" in oriented.getbands() or "transparency" in oriented.info else "RGB"
+                pixels = oriented.convert(mode)
+                with io.BytesIO() as output:
+                    pixels.save(output, format="PNG")
+                    normalized = output.getvalue()
+    except (OSError, ValueError, Image.DecompressionBombWarning) as error:
+        if type(error) is ValueError and str(error) in (
+            "Screenshot format does not match its MIME type", "Animated screenshots are not supported",
+        ):
+            raise
+        raise ValueError("Screenshot pixels could not be decoded") from None
+    return ValidatedScreenshot.from_bytes(normalized, "image/png")
