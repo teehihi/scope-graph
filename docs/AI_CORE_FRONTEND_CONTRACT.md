@@ -15,7 +15,7 @@ Updated 2026-10-28. This describes additive fields in the existing analysis repo
 | `risk_explanations` | `{summary, evidence_status}[]` | Existing risks labeled `potential`. |
 | `recommended_checks` | string[] | Mirrors `suggested_tests`. |
 | `coverage_review` | object | Existing review fields plus `promoted_files` and `rejected_file_suggestions`. |
-| `validation_metrics` | object | Existence counts plus `impact_supported_claims`, `potential_claims`, `duplicate_claims`, `promoted_suggestions`. |
+| `validation_metrics` | object | Existence counts plus `impact_supported_claims`, `potential_claims`, `duplicate_claims`, `promoted_suggestions`, and `promoted_graph_tests`. |
 | `rejected_hallucinations` | array | Invalid or ambiguous file/symbol claims with rejection reasons. |
 | `retrieval_metadata`, `operational_metadata` | object | Context budget, retrieval counts, provider/model, timing, and token usage when reported. |
 
@@ -27,6 +27,7 @@ An impact item preserves legacy `file_path`, `symbol`, `impact_type`, `category`
 | `impact_supported` | boolean | Conservative static support was found. This is not a probability or runtime proof. |
 | `evidence_status` | `supported` or `potential` | Presentation label. Invalid claims are in `rejected_hallucinations`, not an impact item. |
 | `support_reason` | string, when available | Why the static gate supported or deferred this claim. |
+| `original_impact_type` | `direct` or `indirect`, when available | Model classification before a source-supported direct/indirect correction. The current `impact_type` is used for scoring and display. |
 | `dependency_path` | string[], when available | Direct target to dependent for a supported indirect call. |
 | `sources`, `dependency_paths` | object fields on potential items | Origin and graph paths for review. |
 | `technical_explanation` | object | `component`, `reason`, `dependency_path`, `evidence_refs`, `regression_considerations`. |
@@ -80,4 +81,4 @@ An impact item preserves legacy `file_path`, `symbol`, `impact_type`, `category`
 }
 ```
 
-Consumers may display indexed paths, symbols, and cited lines as source facts. Label supported impacts as **source-supported predictions**, and all `potential_impacts`, risks, and suggested tests as items to review. An empty evidence reference list means the explanation has no safe source citation. Preserve unknown values and the uncertainty text rather than filling them with inferred behavior. Existing fields and REST/MCP envelopes retain their meaning; this is an additive contract. The frontend TypeScript interfaces have not yet been extended to type the new fields.
+Consumers may display indexed paths, symbols, and cited lines as source facts. Label supported impacts as **source-supported predictions**, and all `potential_impacts`, risks, and suggested tests as items to review. An empty evidence reference list means the explanation has no safe source citation. Preserve unknown values and the uncertainty text rather than filling them with inferred behavior. Existing fields and REST/MCP envelopes retain their meaning; this is an additive contract. The frontend TypeScript interfaces have not yet been extended to type the new fields. A test recovered from a source call can appear in `affected_items` even when the model did not name it; `promoted_graph_tests` counts such additions.

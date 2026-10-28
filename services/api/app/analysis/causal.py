@@ -36,6 +36,10 @@ class CausalImpactVerifier:
             lower = value.lower()
             return any(term in lower for term in terms)
 
+        def term_hits(value: str) -> int:
+            lower = value.lower()
+            return sum(term in lower for term in terms)
+
         def support(item: dict[str, Any], explanation: str, dependency_path: list[str]) -> dict[str, Any]:
             return {**item, "impact_supported": True, "evidence_status": "supported",
                     "support_reason": explanation, "dependency_path": dependency_path}
@@ -60,35 +64,63 @@ class CausalImpactVerifier:
         duplicates = len(items) - len(best_by_pair)
         items = list(best_by_pair.values())
         for item in items:
-            if item["impact_type"] != "direct":
+            if item["impact_type"] != "direct" or item["file_path"].startswith("tests/") or item.get("symbol_type") == "test":
                 continue
             symbol = item.get("symbol") or ""
             snippet = item.get("evidence_snippet") or ""
-            is_test = item["file_path"].startswith("tests/") or item.get("symbol_type") == "test"
-            if symbol and snippet and not is_test and matching(symbol) and matching(item.get("reason", "")):
+            if symbol and snippet and matching(symbol) and matching(item.get("reason", "")):
                 supported.append(support(item, "Requirement terms match an indexed source symbol and cited reason", []))
             else:
                 potential.append(potential_item(item, "Direct change target is not established by indexed source evidence"))
 
+        reclassified_direct: set[str] = set()
+        for item in items:
+            if (item["impact_type"] == "indirect" and item.get("symbol_type") in {"function", "method", "endpoint"}
+                    and not item["file_path"].startswith("tests/")
+                    and item.get("evidence_snippet") and term_hits(item.get("symbol") or "") >= 2
+                    and not any(candidate["file_path"] == item["file_path"] for candidate in supported)):
+                corrected = {**item, "original_impact_type": "indirect", "impact_type": "direct"}
+                supported.append(support(corrected, "Indexed function matches multiple requirement terms", []))
+                reclassified_direct.add(item["file_path"])
+
         direct_paths = {item["file_path"] for item in supported}
+        direct_symbols_by_path: dict[str, set[str]] = defaultdict(set)
+        for item in supported:
+            if item.get("symbol"):
+                direct_symbols_by_path[item["file_path"]].add(item["symbol"])
 
         def supported_call(path: str) -> tuple[DependencyEdge, str] | None:
             for edge in calls_by_source.get(path, []):
                 target = files[edge.target_file_id].path
-                if target in direct_paths and edge.target_symbol_id in symbols:
+                target_symbol = symbols.get(edge.target_symbol_id)
+                if target in direct_paths and target_symbol and any(
+                    target_symbol.name == name or target_symbol.name.startswith(name + ".")
+                    for name in direct_symbols_by_path[target]
+                ):
                     return edge, target
             return None
 
         for item in items:
-            if item["impact_type"] == "direct":
+            is_test_direct = item["impact_type"] == "direct" and (
+                item["file_path"].startswith("tests/") or item.get("symbol_type") == "test"
+            )
+            if item["impact_type"] == "direct" and not is_test_direct:
+                continue
+            if item["impact_type"] == "indirect" and item["file_path"] in reclassified_direct:
                 continue
             call = supported_call(item["file_path"])
-            if call and item.get("evidence_snippet") and matching(item.get("reason", "")):
+            if call and item.get("evidence_snippet") and (
+                matching(item.get("reason", "")) or term_hits(item.get("symbol") or "") >= 2
+            ):
                 _, target = call
-                supported.append(support(item, f"Indexed call reaches supported direct target {target}",
+                corrected = ({**item, "original_impact_type": "direct", "impact_type": "indirect"}
+                             if is_test_direct else item)
+                supported.append(support(corrected, f"Indexed call reaches supported direct target {target}",
                                          [target, item["file_path"]]))
             else:
-                potential.append(potential_item(item, "No requirement-specific call to a supported direct target was established"))
+                explanation = ("Test was claimed direct but no supported downstream call was found" if is_test_direct else
+                               "No requirement-specific call to a supported direct target was established")
+                potential.append(potential_item(item, explanation))
 
         promoted = []
         repo = self.db.query(Repository).filter_by(id=repository_id).first()
@@ -115,9 +147,34 @@ class CausalImpactVerifier:
                                      [target, path]))
             promoted.append(path)
 
+        promoted_tests = []
+        for path in sorted(calls_by_source):
+            if not path.startswith("tests/") or any(item["file_path"] == path for item in supported):
+                continue
+            call = supported_call(path)
+            if not call:
+                continue
+            edge, target = call
+            source_symbol = symbols.get(edge.source_symbol_id)
+            if not source_symbol or source_symbol.symbol_type != "test" or term_hits(source_symbol.name) < 2:
+                continue
+            candidate = validator.validate_ai_claims(repository_id, {"affected_items": [{
+                "file_path": path, "symbol": source_symbol.name, "impact_type": "indirect",
+                "category": "test", "reason": f"Test calls a supported target in {target}", "confidence": 0.0,
+            }]})["affected_items"]
+            if not candidate or not candidate[0].get("evidence_snippet"):
+                continue
+            supported.append(support(candidate[0], f"Indexed regression test calls supported target {target}",
+                                     [target, path]))
+            promoted_tests.append(path)
+
+        supported = list({(item["file_path"], item["impact_type"]): item for item in supported}.values())
+        supported_pairs = {(item["file_path"], item["impact_type"]) for item in supported}
+        potential = [item for item in potential if (item["file_path"], item["impact_type"]) not in supported_pairs]
         metrics = {**existence_validated["validation_metrics"],
                    "impact_supported_claims": len(supported),
                    "potential_claims": len(potential), "duplicate_claims": duplicates,
-                   "promoted_suggestions": len(promoted)}
+                   "promoted_suggestions": len(promoted), "promoted_graph_tests": len(promoted_tests)}
         return {"affected_items": supported, "potential_claims": potential,
-                "promoted_suggestions": promoted, "validation_metrics": metrics}
+                "promoted_suggestions": promoted, "promoted_graph_tests": promoted_tests,
+                "validation_metrics": metrics}
