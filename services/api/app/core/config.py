@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     MAX_EXTRACTED_SIZE_MB: int = Field(default=100, description="Max extracted size in MB")
     MAX_FILE_COUNT: int = Field(default=500, description="Max files to scan")
     MAX_FILE_SIZE_KB: int = Field(default=500, description="Max individual file size to read in KB")
+    MAX_SCREENSHOT_BYTES: int = Field(default=5_000_000, ge=1, description="Maximum screenshot payload bytes")
+    MAX_SCREENSHOT_DIMENSION: int = Field(default=4096, ge=1, description="Maximum screenshot width or height")
+    MAX_SCREENSHOT_PIXELS: int = Field(default=8_000_000, ge=1, description="Maximum screenshot pixel count")
 
     # AI context retrieval
     AI_RETRIEVAL_TOP_K: int = Field(default=8, ge=1, le=100, description="Maximum files sent to impact reasoning")
