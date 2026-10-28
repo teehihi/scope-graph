@@ -21,6 +21,7 @@ class AnalysisOrchestrator:
     def run_analysis(
         self, repository_id: str, requirement: str, analysis_id: str | None = None,
         evaluation_trace: dict[str, Any] | None = None,
+        target_language: str = "en",
     ) -> AnalysisRun:
         repo = self.db.query(Repository).filter(Repository.id == repository_id).first()
         if not repo:
@@ -212,8 +213,8 @@ class AnalysisOrchestrator:
             }
 
             # Step 7: Generate Implementation Brief
-            logger.info("Step 7: Generating implementation brief for coding agents")
-            brief_md = provider.generate_implementation_brief(requirement, final_report)
+            logger.info("Step 7: Generating implementation brief for coding agents (lang=%s)", target_language)
+            brief_md = provider.generate_implementation_brief(requirement, final_report, language=target_language)
             metadata = final_report["operational_metadata"]
             brief_latency = getattr(provider, "brief_latency_seconds", 0.0)
             metadata["inference_latency_seconds"] = round(

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from '../router';
 import { useAuth } from '../context/AuthContext';
 import { ScopeGraphLogoMark } from '../components/BrandIcons';
@@ -8,6 +8,7 @@ import { AlertCircle, ArrowLeft, RefreshCw, CheckCircle2 } from 'lucide-react';
 export const AuthCallback: React.FC = () => {
   const { navigate, search } = useRouter();
   const { login } = useAuth();
+  const hasExchangedRef = useRef(false);
 
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -29,6 +30,9 @@ export const AuthCallback: React.FC = () => {
       setErrorMessage('No authorization code provided in the callback URL.');
       return;
     }
+
+    if (hasExchangedRef.current) return;
+    hasExchangedRef.current = true;
 
     const exchangeCode = async () => {
       try {
@@ -58,7 +62,7 @@ export const AuthCallback: React.FC = () => {
         const hasOnboarded =
           localStorage.getItem(`scopegraph_onboarded_${user.email}`) === 'true';
 
-        // Store user in AuthContext
+        // Store user in AuthContext with GitHub access token
         login(
           user.email,
           user.name,
@@ -66,12 +70,19 @@ export const AuthCallback: React.FC = () => {
           user.avatar_url,
           'github',
           user.username,
-          hasOnboarded
+          hasOnboarded,
+          data.access_token
         );
 
-        // Redirect to onboarding if new user, or dashboard if already onboarded
+        // Check if there is a saved return URL from where the user started OAuth (e.g. /app/repositories)
+        const returnUrl = sessionStorage.getItem('scopegraph_auth_return_url');
+        sessionStorage.removeItem('scopegraph_auth_return_url');
+
+        // Redirect to previous return URL if present, onboarding if new user, or dashboard if already onboarded
         setTimeout(() => {
-          if (hasOnboarded) {
+          if (returnUrl) {
+            navigate(returnUrl);
+          } else if (hasOnboarded) {
             navigate('/app/dashboard');
           } else {
             navigate('/onboarding');
@@ -102,7 +113,7 @@ export const AuthCallback: React.FC = () => {
         {/* Loading State */}
         {status === 'loading' && (
           <div className="pt-1 pb-4 space-y-4 flex flex-col items-center justify-center">
-            <Loader size={64} color="#151923" />
+            <Loader color="#151923" />
             <div className="space-y-1">
               <p className="text-xs font-bold text-[#151923]">
                 Verifying authorization...

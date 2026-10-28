@@ -1,10 +1,72 @@
-import { Repository, AnalysisReport } from '../types';
+import { Repository, AnalysisReport, GitHubRepoItem, SystemInfo, UpdateSystemSettingsRequest } from '../types';
 
 const API_BASE = '/api/v1';
 
 export async function fetchHealth(): Promise<{ status: string; database: string; redis: string }> {
-  const res = await fetch('/ready');
+  const res = await fetch(`${API_BASE}/ready`);
   if (!res.ok) throw new Error('Health check failed');
+  return res.json();
+}
+
+export async function fetchSystemInfo(): Promise<SystemInfo> {
+  const res = await fetch(`${API_BASE}/system/info`);
+  if (!res.ok) throw new Error('Failed to fetch system info');
+  return res.json();
+}
+
+export async function updateSystemSettings(payload: UpdateSystemSettingsRequest): Promise<SystemInfo> {
+  const res = await fetch(`${API_BASE}/system/settings`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to update settings' }));
+    throw new Error(err.detail || 'Failed to update system settings');
+  }
+  return res.json();
+}
+
+export async function testAiConnection(): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`${API_BASE}/system/test-ai`, {
+    method: 'POST',
+  });
+  if (!res.ok) {
+    return { success: false, message: 'Server error during connectivity test' };
+  }
+  return res.json();
+}
+
+export async function fetchGitHubRepos(token: string, refresh: boolean = false): Promise<GitHubRepoItem[]> {
+  const url = `${API_BASE}/auth/github/repos?token=${encodeURIComponent(token)}${refresh ? '&refresh=true' : ''}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to fetch GitHub repos' }));
+    throw new Error(err.detail || 'Failed to fetch GitHub repositories');
+  }
+  const data = await res.json();
+  if (Array.isArray(data)) {
+    return data;
+  }
+  return data.repos || [];
+}
+
+export async function importGitHubRepo(params: {
+  clone_url: string;
+  name: string;
+  full_name?: string;
+  default_branch?: string;
+  access_token: string;
+}): Promise<Repository> {
+  const res = await fetch(`${API_BASE}/repositories/import-github`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Import failed' }));
+    throw new Error(err.detail || 'Failed to import repository from GitHub');
+  }
   return res.json();
 }
 
@@ -12,6 +74,16 @@ export async function fetchRepositories(): Promise<Repository[]> {
   const res = await fetch(`${API_BASE}/repositories`);
   if (!res.ok) throw new Error('Failed to fetch repositories');
   return res.json();
+}
+
+export async function deleteRepository(repoId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/repositories/${repoId}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to delete repository' }));
+    throw new Error(err.detail || 'Failed to delete repository');
+  }
 }
 
 export async function loadSampleRepository(): Promise<Repository> {
@@ -81,12 +153,13 @@ export async function fetchGraph(
 
 export async function runAnalysis(
   repoId: string,
-  requirement: string
+  requirement: string,
+  targetLanguage: string = 'en'
 ): Promise<{ analysis_id: string; status: string; result?: AnalysisReport; brief?: string }> {
   const res = await fetch(`${API_BASE}/repositories/${repoId}/analyze`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ requirement, run_sync: true }),
+    body: JSON.stringify({ requirement, run_sync: true, target_language: targetLanguage }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: 'Analysis failed' }));

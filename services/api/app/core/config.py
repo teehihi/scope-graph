@@ -3,6 +3,18 @@ from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 
+def _find_env_file() -> tuple[str, ...]:
+    candidates = [
+        Path.cwd() / ".env",
+        Path("/app/.env"),
+        Path(__file__).resolve().parent / ".env",
+        Path(__file__).resolve().parents[1] / ".env" if len(Path(__file__).resolve().parents) > 1 else None,
+        Path(__file__).resolve().parents[2] / ".env" if len(Path(__file__).resolve().parents) > 2 else None,
+        Path(__file__).resolve().parents[3] / ".env" if len(Path(__file__).resolve().parents) > 3 else None,
+    ]
+    existing = [str(p) for p in candidates if p and p.exists()]
+    return tuple(existing) if existing else (".env",)
+
 class Settings(BaseSettings):
     ENVIRONMENT: str = Field(default="development", description="Runtime environment")
     LOG_LEVEL: str = Field(default="INFO", description="Log level")
@@ -53,7 +65,7 @@ class Settings(BaseSettings):
     )
 
     model_config = SettingsConfigDict(
-        env_file=(".env", Path(__file__).resolve().parents[4] / ".env"),
+        env_file=_find_env_file(),
         env_file_encoding="utf-8",
         extra="ignore"
     )

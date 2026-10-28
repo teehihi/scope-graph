@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, ChevronLeft, ChevronRight, Sparkles, X } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 export type TourPlacement = 'auto' | 'top' | 'bottom' | 'left' | 'right';
 
@@ -29,19 +30,51 @@ interface OnboardingTourProps {
   onSkip?: () => void;
 }
 
-function renderFormattedText(content: React.ReactNode): React.ReactNode {
-  if (typeof content !== 'string') return content;
-  const parts = content.split(/(\*\*[^*]+\*\*)/g);
+function renderFormattedInline(text: string): React.ReactNode[] {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
   return parts.map((part, index) => {
     if (part.startsWith('**') && part.endsWith('**')) {
       return (
-        <strong key={index} className="font-semibold text-[#151923]">
+        <strong key={index} className="font-bold text-[#151923]">
           {part.slice(2, -2)}
         </strong>
       );
     }
     return part;
   });
+}
+
+function renderFormattedText(content: React.ReactNode): React.ReactNode {
+  if (typeof content !== 'string') return content;
+  
+  if (content.includes('\n')) {
+    const lines = content.split('\n').filter(Boolean);
+    return (
+      <div className="space-y-1.5 pt-0.5">
+        {lines.map((line, idx) => {
+          const trimmed = line.trim();
+          const isBullet = trimmed.startsWith('•') || trimmed.startsWith('-') || trimmed.startsWith('*');
+          const cleanText = isBullet ? trimmed.replace(/^[•\-*]\s*/, '') : trimmed;
+
+          if (isBullet) {
+            return (
+              <div key={idx} className="flex items-start gap-2 pl-0.5">
+                <span className="text-[#526BEE] font-bold text-xs leading-relaxed shrink-0">•</span>
+                <span className="leading-relaxed flex-1">{renderFormattedInline(cleanText)}</span>
+              </div>
+            );
+          }
+          return (
+            <p key={idx} className="leading-relaxed">
+              {renderFormattedInline(trimmed)}
+            </p>
+          );
+        })}
+      </div>
+    );
+  }
+
+  return renderFormattedInline(content);
 }
 
 export const OnboardingTour: React.FC<OnboardingTourProps> = ({
@@ -266,16 +299,19 @@ const TooltipCard: React.FC<TooltipCardProps> = ({
   onClose,
   onSkip,
 }) => {
+  const { t } = useLanguage();
   const tooltipRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{
     top: number;
     left: number;
-    arrowLeft: number;
-    arrowPlacement: 'top' | 'bottom';
+    arrowLeft?: number;
+    arrowTop?: number;
+    arrowPlacement: 'top' | 'bottom' | 'left' | 'right';
   }>({
     top: 100,
     left: 20,
     arrowLeft: 40,
+    arrowTop: 40,
     arrowPlacement: 'top',
   });
 
@@ -295,6 +331,7 @@ const TooltipCard: React.FC<TooltipCardProps> = ({
           top: Math.max(16, (viewportHeight - tooltipHeight) / 2),
           left: Math.max(16, (viewportWidth - tooltipWidth) / 2),
           arrowLeft: tooltipWidth / 2,
+          arrowTop: tooltipHeight / 2,
           arrowPlacement: 'top',
         });
         return;
@@ -302,12 +339,17 @@ const TooltipCard: React.FC<TooltipCardProps> = ({
 
       const boxTop = Math.max(0, targetRect.top - padding);
       const boxBottom = targetRect.top + targetRect.height + padding;
+      const boxHeight = targetRect.height + padding * 2;
       const boxLeft = Math.max(0, targetRect.left - padding);
       const boxWidth = targetRect.width + padding * 2;
+      const boxRight = boxLeft + boxWidth;
       const targetCenterX = boxLeft + boxWidth / 2;
+      const targetCenterY = boxTop + boxHeight / 2;
 
       const spaceBelow = viewportHeight - boxBottom;
       const spaceAbove = boxTop;
+      const spaceLeft = boxLeft;
+      const spaceRight = viewportWidth - boxRight;
 
       let placement = step.placement ?? 'auto';
       if (placement === 'auto') {
@@ -315,32 +357,64 @@ const TooltipCard: React.FC<TooltipCardProps> = ({
           placement = 'bottom';
         } else if (spaceAbove >= tooltipHeight + gap + 16) {
           placement = 'top';
+        } else if (spaceRight >= tooltipWidth + gap + 16) {
+          placement = 'right';
+        } else if (spaceLeft >= tooltipWidth + gap + 16) {
+          placement = 'left';
         } else {
           placement = spaceBelow >= spaceAbove ? 'bottom' : 'top';
         }
       }
 
       let top = 0;
-      const left = Math.max(
-        16,
-        Math.min(targetCenterX - tooltipWidth / 2, viewportWidth - tooltipWidth - 16)
-      );
-      let arrowPlacement: 'top' | 'bottom' = 'top';
+      let left = 0;
+      let arrowPlacement: 'top' | 'bottom' | 'left' | 'right' = 'top';
+      let arrowLeft = tooltipWidth / 2;
+      let arrowTop = tooltipHeight / 2;
+
+      if (placement === 'right') {
+        if (spaceRight >= tooltipWidth + gap + 16) {
+          left = boxRight + gap;
+          top = Math.max(16, Math.min(targetCenterY - tooltipHeight / 2, viewportHeight - tooltipHeight - 16));
+          arrowPlacement = 'left';
+          arrowTop = Math.max(24, Math.min(targetCenterY - top, tooltipHeight - 24));
+        } else {
+          placement = spaceBelow >= spaceAbove ? 'bottom' : 'top';
+        }
+      } else if (placement === 'left') {
+        if (spaceLeft >= tooltipWidth + gap + 16) {
+          left = boxLeft - tooltipWidth - gap;
+          top = Math.max(16, Math.min(targetCenterY - tooltipHeight / 2, viewportHeight - tooltipHeight - 16));
+          arrowPlacement = 'right';
+          arrowTop = Math.max(24, Math.min(targetCenterY - top, tooltipHeight - 24));
+        } else {
+          placement = spaceBelow >= spaceAbove ? 'bottom' : 'top';
+        }
+      }
 
       if (placement === 'top') {
         top = Math.max(16, boxTop - tooltipHeight - gap);
+        left = Math.max(
+          16,
+          Math.min(targetCenterX - tooltipWidth / 2, viewportWidth - tooltipWidth - 16)
+        );
         arrowPlacement = 'bottom';
-      } else {
+        arrowLeft = Math.max(24, Math.min(targetCenterX - left, tooltipWidth - 24));
+      } else if (placement === 'bottom') {
         top = Math.min(viewportHeight - tooltipHeight - 16, boxBottom + gap);
+        left = Math.max(
+          16,
+          Math.min(targetCenterX - tooltipWidth / 2, viewportWidth - tooltipWidth - 16)
+        );
         arrowPlacement = 'top';
+        arrowLeft = Math.max(24, Math.min(targetCenterX - left, tooltipWidth - 24));
       }
-
-      const arrowLeft = Math.max(20, Math.min(targetCenterX - left, tooltipWidth - 20));
 
       setPosition({
         top,
         left,
         arrowLeft,
+        arrowTop,
         arrowPlacement,
       });
     }
@@ -373,14 +447,19 @@ const TooltipCard: React.FC<TooltipCardProps> = ({
       {targetRect && (
         <div
           aria-hidden="true"
-          style={{
-            left: `${position.arrowLeft}px`,
-            transform: 'translateX(-50%)',
-          }}
-          className={`absolute size-3.5 rotate-45 border-[#E4E7E1] bg-white ${
+          style={
+            position.arrowPlacement === 'top' || position.arrowPlacement === 'bottom'
+              ? { left: `${position.arrowLeft}px`, transform: 'translateX(-50%)' }
+              : { top: `${position.arrowTop}px`, transform: 'translateY(-50%)' }
+          }
+          className={`absolute size-3.5 rotate-45 bg-white ${
             position.arrowPlacement === 'top'
-              ? '-top-2 border-t border-l'
-              : '-bottom-2 border-b border-r'
+              ? '-top-1.5'
+              : position.arrowPlacement === 'bottom'
+              ? '-bottom-1.5'
+              : position.arrowPlacement === 'left'
+              ? '-left-1.5'
+              : '-right-1.5'
           }`}
         />
       )}
@@ -400,7 +479,7 @@ const TooltipCard: React.FC<TooltipCardProps> = ({
           </div>
           <div>
             <span className="inline-flex items-center rounded-full bg-[#151923] px-2 py-0.5 text-[10px] font-mono font-bold text-[#C7F36B] uppercase tracking-wider">
-              Step {currentStep + 1} of {totalSteps}
+              {t('tour.step')} {currentStep + 1} {t('tour.of')} {totalSteps}
             </span>
             <h3 className="text-sm font-bold text-[#151923] tracking-tight mt-0.5">
               {step.title}
@@ -411,7 +490,7 @@ const TooltipCard: React.FC<TooltipCardProps> = ({
         <button
           type="button"
           onClick={onClose}
-          aria-label="Close tour"
+          aria-label={t('tour.close')}
           className="text-[#8B929E] hover:text-[#151923] p-1.5 rounded-lg hover:bg-[#F7F8F5] transition-colors cursor-pointer"
         >
           <X className="w-4 h-4" />
@@ -427,7 +506,7 @@ const TooltipCard: React.FC<TooltipCardProps> = ({
       {step.interactiveTip && (
         <div className="flex items-start gap-2 rounded-2xl border border-[#C7F36B]/50 bg-[#F7F8F5] p-3 text-[11px] text-[#151923]">
           <Sparkles className="h-3.5 w-3.5 shrink-0 text-[#526BEE] mt-0.5" />
-          <span className="leading-relaxed">{renderFormattedText(step.interactiveTip)}</span>
+          <div className="leading-relaxed flex-1 min-w-0">{renderFormattedText(step.interactiveTip)}</div>
         </div>
       )}
 
@@ -438,7 +517,7 @@ const TooltipCard: React.FC<TooltipCardProps> = ({
           onClick={onSkip}
           className="text-xs font-medium text-[#8B929E] hover:text-[#151923] transition-colors cursor-pointer"
         >
-          Skip tour
+          {t('tour.skip')}
         </button>
 
         <div className="flex items-center gap-2">
@@ -449,7 +528,7 @@ const TooltipCard: React.FC<TooltipCardProps> = ({
               className="inline-flex items-center gap-1 rounded-xl border border-[#E4E7E1] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#151923] hover:bg-[#F7F8F5] transition-colors cursor-pointer"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
-              Back
+              {t('tour.back')}
             </button>
           )}
 
@@ -458,7 +537,7 @@ const TooltipCard: React.FC<TooltipCardProps> = ({
             onClick={onNext}
             className="group inline-flex items-center gap-1.5 rounded-xl bg-[#151923] px-3.5 py-1.5 text-xs font-bold text-[#F7F8F5] hover:bg-[#C7F36B] hover:text-[#151923] transition-all cursor-pointer shadow-xs"
           >
-            <span>{isLastStep ? 'Finish' : 'Next'}</span>
+            <span>{isLastStep ? t('tour.finish') : t('tour.next')}</span>
             {isLastStep ? (
               <Check className="h-3.5 w-3.5 stroke-[3]" />
             ) : (

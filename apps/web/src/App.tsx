@@ -64,7 +64,12 @@ export const App: React.FC = () => {
   }
 
   // OAuth Callback Route
-  if (pathname === '/auth/callback/github' || pathname === '/auth/callback/github/') {
+  if (
+    pathname === '/auth/callback/github' ||
+    pathname === '/auth/callback/github/' ||
+    pathname === '/auth/callback' ||
+    pathname === '/auth/callback/'
+  ) {
     return <AuthCallback />;
   }
 
