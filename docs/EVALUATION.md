@@ -1,5 +1,29 @@
 # ScopeGraph AI Core evaluation
 
+## SG-AI-09 label-only v3 replay (2026-10-28)
+
+The [v3 fixture](../services/api/tests/evaluation/ai_core_cases_v3.json) applies **exactly six removals** to the frozen v2 labels: 17 scenarios, **25 direct + 10 indirect = 35** impact pairs, versus 26 direct + 15 indirect = 41 in v2. The [review decision record](AI_CORE_LABEL_REVIEW_V3.md) gives the six rationales and source lines. This was an **AI-assisted source review**, not independent human sign-off. Both fixtures refer to sample repository snapshot `f413b0b90d6157d5493a5603fb1245a7f4681eb6`; the sample source in this checkout matches that snapshot. No evaluation false positive was promoted into ground truth.
+
+We replaced only `trace.labels` in the saved offline schema-v2 artifact `data/ai_core_evaluation_v2_setting_reads.json` with the corresponding v3 labels, then ran the existing pure `replay_evaluation` function. The local, Git-ignored result is `data/ai_core_evaluation_v3_label_replay.json`; it records `prediction_source` and `label_revision`, including the source artifact's `commit_sha` (`6e4a0cbddbdcda92ac2dca9df2baf2d6679687ef`) and the label-review checkout HEAD (`897b930887dc13a60ac037f9c41ae7ef93bb17c7`). The artifact's top-level `commit_sha` remains the **original inference run's** SHA, not a new inference run. The original artifact replayed to identical stored macro and micro metrics before relabeling. The v3 replay was checked with:
+
+```powershell
+$env:PYTHONPATH='services/api'
+.\.venv\Scripts\python.exe scripts/replay_ai_core.py --input data/ai_core_evaluation_v3_label_replay.json
+```
+
+| Metric on unchanged saved offline predictions | v2 labels | v3 labels |
+| --- | ---: | ---: |
+| Macro strict impact precision / recall / F1 | 0.352 / 0.552 / 0.427 | 0.309 / 0.579 / 0.395 |
+| Macro direct / indirect recall | 0.573 / 0.542 | 0.583 / 0.500 |
+| Micro strict TP / FP / FN | 23 / 42 / 18 | 20 / 45 / 15 |
+| Micro strict precision / recall / F1 | 0.354 / 0.561 / 0.434 | 0.308 / 0.571 / 0.400 |
+| Micro direct / indirect recall | 0.577 / 0.533 | 0.600 / 0.500 |
+| Macro raw impact precision / recall / F1 | 0.170 / 0.453 / 0.240 | 0.154 / 0.511 / 0.229 |
+| Unique raw claims outside labels | 91 / 111 | 93 / 111 |
+| Hybrid retrieval Recall@8 | 0.956 | 0.956 |
+
+Three removed labels were true positives under v2 and became false positives under v3; three were false negatives under v2 and disappeared from the denominator. Raw claims matched two removed labels. These score changes are **entirely caused by label revision**, with identical predictions, retrieval context, provider, and inference latency. The macro strict score averages only the 16 cases with nonempty gold impact labels; micro strict scores pool 35 v3 gold pairs. Retrieval labels and rankings did not change. No offline inference rerun was needed for this controlled label comparison, and no paid Meta request was made. The 17 cases come from one small Python sample; they cannot establish production accuracy, generalization, or a model improvement. Human sign-off and a separate repository holdout remain open.
+
 ## SG-AI-07B/07C/08/09 offline checkpoint (2026-10-28)
 
 The [expanded v2 fixture](../services/api/tests/evaluation/ai_core_cases_v2.json) has **17** source-annotated scenarios over one 14-file Python sample, including authentication, authorization, API responses, a model-field change, configuration, security, cross-module behavior, tests, and one no-impact billing case. Each impact label has a checked-in path, line, and written rationale; the billing case has a negative rationale. These labels were reviewed against sample source during implementation but **have not received independent team adjudication**. The fixture is diagnostic and is not a production accuracy estimate. The repository snapshot identifier is recorded in the dataset; the ignored output also records the Git HEAD at run time.
