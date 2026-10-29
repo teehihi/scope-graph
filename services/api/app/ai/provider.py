@@ -66,12 +66,19 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
     (Fireworks, Baseten, Together, Groq, or OpenAI-compatible Meta inference proxies).
     """
 
-    def __init__(self, api_key: str, base_url: str, model: str, provider_name: str = "meta_model_api"):
+    def __init__(self, api_key: str, base_url: str, model: str, provider_name: str = "meta_model_api",
+                 timeout_seconds: float = 45.0, max_retries: int | None = None,
+                 max_tokens: int | None = None, request_budget: int | None = None):
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.provider_name = provider_name
-        self.max_retries = settings.META_AI_MAX_RETRIES
+        self.max_retries = settings.META_AI_MAX_RETRIES if max_retries is None else max_retries
+        self.max_tokens = settings.META_AI_MAX_TOKENS if max_tokens is None else max_tokens
+        self.request_budget = request_budget
+        self.request_count = 0
+        self.last_request_attempts = 0
+        self.last_actual_model: str | None = None
         self.retry_backoff_seconds = settings.META_AI_RETRY_BACKOFF_SECONDS
         self.brief_latency_seconds = 0.0
         self.brief_token_usage: dict[str, int] | None = None
@@ -80,11 +87,12 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
             },
-            timeout=45.0,
+            timeout=timeout_seconds,
         )
 
     def _call_model(self, system_prompt: str, user_prompt: str | list[dict[str, Any]], expect_json: bool = True, schema: type[BaseModel] | None = None) -> tuple[dict[str, Any] | str, float, str, dict[str, int] | None]:
         start = time.perf_counter()
+        self.last_request_attempts = 0
         url = f"{self.base_url}/chat/completions"
         payload = {
             "model": self.model,
@@ -92,7 +100,7 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
                 {"role": "developer" if self.provider_name == "meta_model_api" else "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            "max_tokens": settings.META_AI_MAX_TOKENS,
+            "max_tokens": self.max_tokens,
         }
         if self.provider_name != "meta_model_api":
             payload["temperature"] = settings.META_AI_TEMPERATURE
@@ -106,6 +114,10 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
                 payload["response_format"] = {"type": "json_object"}
 
         for attempt in range(self.max_retries + 1):
+            if self.request_budget is not None and self.request_count >= self.request_budget:
+                raise ValueError("Provider request budget exhausted")
+            self.request_count += 1
+            self.last_request_attempts += 1
             try:
                 response = self.client.post(url, json=payload)
             except httpx.TimeoutException:
@@ -137,7 +149,7 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
         if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
             raise ValueError("Meta AI response is missing choices")
         if choices[0].get("finish_reason") == "length":
-            raise ValueError(f"Meta AI response exceeded completion token limit ({settings.META_AI_MAX_TOKENS}) on {self.provider_name}")
+            raise ValueError(f"Meta AI response exceeded completion token limit ({self.max_tokens}) on {self.provider_name}")
         message = choices[0].get("message")
         content = message.get("content") if isinstance(message, dict) else None
         if not isinstance(content, str) or not content.strip():
@@ -145,6 +157,7 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
         actual_model = resp_json.get("model")
         if not isinstance(actual_model, str) or not actual_model.strip():
             raise ValueError("Meta AI response is missing model identity")
+        self.last_actual_model = actual_model
 
         raw_usage = resp_json.get("usage")
         token_usage = (

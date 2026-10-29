@@ -11,6 +11,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.ai.image_input import ValidatedScreenshot
 from app.ai.provider import AIProviderResponse, MetaAIHttpProvider, OfflineDemoProvider
+from app.ai.routing import AIStage, ProviderCapabilities, ProviderConfig, ProviderRegistry, StageProviderRouter
 from app.db.database import Base
 from app.db.models import IndexedFile, IndexedSymbol, Repository
 from app.analysis import orchestrator as orchestrator_module
@@ -73,6 +74,82 @@ class VisionProvider(OfflineDemoProvider):
         response = super().reason_about_impact(requirement_interpretation, retrieved_files, dependency_context)
         response.data["affected_items"] = []
         return response
+
+
+def _stage_router():
+    registry = ProviderRegistry()
+    providers = {name: VisionProvider() for name in ("vision", "meta", "reasoning")}
+    memberships = {
+        "vision": {AIStage.VISION},
+        "meta": {AIStage.REQUIREMENT_INTERPRETATION, AIStage.COMPLETENESS_REVIEW, AIStage.BRIEF_GENERATION},
+        "reasoning": {AIStage.IMPACT_REASONING},
+    }
+    for name, stages in memberships.items():
+        registry.register(ProviderConfig(
+            provider_id=name, model_id=f"{name}-model", base_url="", credential_ref="",
+            capabilities=ProviderCapabilities(frozenset(stages)), timeout_seconds=10,
+            max_retries=0, max_response_tokens=1000, request_budget=5,
+        ), providers[name])
+    router = StageProviderRouter(registry, {
+        AIStage.VISION: "vision", AIStage.REQUIREMENT_INTERPRETATION: "meta",
+        AIStage.IMPACT_REASONING: "reasoning", AIStage.COMPLETENESS_REVIEW: "meta",
+        AIStage.BRIEF_GENERATION: "meta",
+    }, profile="multi_ai")
+    return router, providers
+
+
+def test_orchestrator_uses_each_configured_stage_and_skips_vision_for_text(db):
+    router, providers = _stage_router()
+    screenshot = ValidatedScreenshot.from_bytes(_png(), "image/png")
+    trace = {}
+    run = AnalysisOrchestrator(db, stage_router=router).run_analysis(
+        "visual-repo", "Add author filtering to the article page",
+        screenshot=screenshot, evaluation_trace=trace,
+    )
+
+    assert run.status == "completed"
+    assert providers["vision"].visual_calls == 1
+    assert [entry["provider"] for entry in run.result_json["operational_metadata"]["stages"]] == [
+        "vision", "meta", "reasoning", "meta", "meta",
+    ]
+    assert trace["stage_execution"] == run.result_json["operational_metadata"]["stages"]
+    assert run.result_json["affected_items"] == []
+
+    text_router, text_providers = _stage_router()
+    text_run = AnalysisOrchestrator(db, stage_router=text_router).run_analysis(
+        "visual-repo", "Add author filtering to the article page",
+    )
+    assert text_run.status == "completed"
+    assert text_providers["vision"].visual_calls == 0
+    assert len(text_run.result_json["operational_metadata"]["stages"]) == 4
+
+
+def test_failed_stage_records_sanitized_error_metadata_in_trace(db):
+    router, providers = _stage_router()
+    def fail_vision(_requirement, _image):
+        raise ValueError("Meta AI request timeout on vision")
+    providers["vision"].interpret_screenshot = fail_vision
+    trace = {}
+
+    run = AnalysisOrchestrator(db, stage_router=router).run_analysis(
+        "visual-repo", "Add author filtering to the article page",
+        screenshot=ValidatedScreenshot.from_bytes(_png(), "image/png"), evaluation_trace=trace,
+    )
+
+    assert run.status == "failed"
+    assert "Screenshot interpretation failed" in run.error_message
+    assert trace["stage_execution"][0]["error_classification"] == "timeout"
+    assert "Meta AI request timeout" not in str(trace)
+
+
+def test_orchestrator_logs_no_raw_requirement_text(db, monkeypatch, caplog):
+    monkeypatch.setattr(orchestrator_module, "get_ai_provider", OfflineDemoProvider)
+    requirement = "private-marker Add author filtering to the article page"
+    with caplog.at_level("INFO", logger="app.analysis.orchestrator"):
+        run = AnalysisOrchestrator(db).run_analysis("visual-repo", requirement)
+
+    assert run.status == "completed"
+    assert "private-marker" not in caplog.text
 
 
 def test_visual_context_flows_through_retrieval_without_becoming_impact_evidence(db, monkeypatch):

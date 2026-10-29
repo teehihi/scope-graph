@@ -18,6 +18,8 @@ from sqlalchemy.orm import sessionmaker
 
 from app.analysis.evaluation import redact_evaluation_artifact, replay_evaluation
 from app.analysis.orchestrator import AnalysisOrchestrator
+from app.ai.provider import OfflineDemoProvider
+from app.ai.routing import AIStage, ProviderCapabilities, ProviderConfig, ProviderRegistry, StageProviderRouter
 from app.core.config import settings
 from app.db.database import Base
 from app.db.models import IndexedFile, IndexedSymbol, Repository
@@ -72,7 +74,33 @@ def old_keyword_retrieval(files, symbols_by_file, keywords):
     return result
 
 
-def run(mode: str, output: Path, allow_paid_request: bool, dataset_path: Path | None = None) -> dict:
+def _mock_multi_ai_router() -> StageProviderRouter:
+    """Exercise routing on development fixtures without representing partner intelligence."""
+    registry = ProviderRegistry()
+    for name, stages in (
+        ("mock_meta", {AIStage.REQUIREMENT_INTERPRETATION, AIStage.COMPLETENESS_REVIEW, AIStage.BRIEF_GENERATION}),
+        ("mock_modal_reasoning", {AIStage.IMPACT_REASONING}),
+        ("mock_baseten_vision", {AIStage.VISION}),
+    ):
+        registry.register(ProviderConfig(
+            provider_id=name, model_id="deterministic-semantic-matcher", base_url="",
+            credential_ref="", capabilities=ProviderCapabilities(frozenset(stages)),
+            timeout_seconds=10, max_retries=0, max_response_tokens=1000,
+            request_budget=10,
+        ), OfflineDemoProvider())
+    return StageProviderRouter(registry, {
+        AIStage.VISION: "mock_baseten_vision",
+        AIStage.REQUIREMENT_INTERPRETATION: "mock_meta",
+        AIStage.IMPACT_REASONING: "mock_modal_reasoning",
+        AIStage.COMPLETENESS_REVIEW: "mock_meta",
+        AIStage.BRIEF_GENERATION: "mock_meta",
+    }, profile="multi_ai_mock")
+
+
+def run(mode: str, output: Path, allow_paid_request: bool, dataset_path: Path | None = None,
+        *, mock_multi_ai: bool = False) -> dict:
+    if mock_multi_ai and mode != "offline":
+        raise ValueError("Mock Multi-AI evaluation is offline only")
     ignored_data = (ROOT / "data").resolve()
     # Ensure traces stay out of version control, or allow pytest tmp_path during automated testing
     try:
@@ -94,6 +122,8 @@ def run(mode: str, output: Path, allow_paid_request: bool, dataset_path: Path | 
         settings.META_AI_API_KEY = ""
 
     selected_dataset = dataset_path or ROOT / "services/api/tests/evaluation/ai_core_cases.json"
+    if mock_multi_ai and "holdout" in selected_dataset.name.lower():
+        raise ValueError("Holdout data must not be used for Multi-AI development comparison")
     dataset_bytes = selected_dataset.read_bytes()
     dataset = json.loads(dataset_bytes)
     manifest_bytes = (ROOT / dataset["snapshot_manifest"]).read_bytes() if dataset.get("snapshot_manifest") else None
@@ -122,7 +152,10 @@ def run(mode: str, output: Path, allow_paid_request: bool, dataset_path: Path | 
             if not labels <= indexed_paths:
                 raise ValueError(f"Labels refer to unindexed paths in {case['id']}: {sorted(labels - indexed_paths)}")
             trace = {}
-            run_record = AnalysisOrchestrator(session).run_analysis(repo.id, case["requirement"], evaluation_trace=trace)
+            router = _mock_multi_ai_router() if mock_multi_ai else None
+            run_record = AnalysisOrchestrator(session, stage_router=router).run_analysis(
+                repo.id, case["requirement"], evaluation_trace=trace,
+            )
             if run_record.status != "completed":
                 raise RuntimeError(f"Analysis failed for {case['id']}: {run_record.error_message}")
             trace["scenario_id"] = case["id"]
@@ -167,11 +200,12 @@ def run(mode: str, output: Path, allow_paid_request: bool, dataset_path: Path | 
                 "indirect": sum(len(case["impact"]["indirect"]) for case in dataset["cases"]),
                 "total": sum(len(case["impact"][kind]) for case in dataset["cases"] for kind in ("direct", "indirect")),
             },
-            "indexed_file_count": len(files), "mode": mode,
+            "indexed_file_count": len(files), "mode": "mock" if mock_multi_ai else mode,
             "timestamp_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
             "commit_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
             "config": {"top_k": settings.AI_RETRIEVAL_TOP_K, "context_token_budget": settings.AI_CONTEXT_TOKEN_BUDGET,
-                       "provider": settings.META_AI_PROVIDER, "requested_model": settings.META_AI_MODEL},
+                       "provider": settings.META_AI_PROVIDER, "requested_model": settings.META_AI_MODEL,
+                       "profile": "multi_ai_mock" if mock_multi_ai else "meta_only"},
             "cases": cases,
         }
         result = replay_evaluation(redact_evaluation_artifact(artifact))
@@ -189,6 +223,8 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=Path, default=ROOT / "data/ai_core_evaluation.json")
     parser.add_argument("--dataset", type=Path, default=ROOT / "services/api/tests/evaluation/ai_core_cases.json")
     parser.add_argument("--allow-paid-request", action="store_true")
+    parser.add_argument("--mock-multi-ai", action="store_true", help="Use separate local scripted providers; no network")
     args = parser.parse_args()
-    summary = run(args.mode, args.output, args.allow_paid_request, args.dataset)
+    summary = run(args.mode, args.output, args.allow_paid_request, args.dataset,
+                  mock_multi_ai=args.mock_multi_ai)
     print(json.dumps({"output": str(args.output), "dataset_size": summary["dataset_size"], "macro": summary["macro"]}, indent=2))

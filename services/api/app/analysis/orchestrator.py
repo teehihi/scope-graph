@@ -9,6 +9,7 @@ from app.analysis.retriever import HybridRetriever
 from app.analysis.causal import CausalImpactVerifier
 from app.analysis.explanations import explain_item
 from app.ai.provider import get_ai_provider
+from app.ai.routing import AIStage, StageExecutionError, StageProviderRouter, build_stage_router
 from app.ai.image_input import ValidatedScreenshot
 from app.ai.schemas import StructuredVisualIntent
 from app.core.config import settings
@@ -17,8 +18,9 @@ from app.evidence.validator import EvidenceValidator
 logger = logging.getLogger(__name__)
 
 class AnalysisOrchestrator:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, stage_router: StageProviderRouter | None = None):
         self.db = db
+        self.stage_router = stage_router
 
     def run_analysis(
         self, repository_id: str, requirement: str, analysis_id: str | None = None,
@@ -54,10 +56,10 @@ class AnalysisOrchestrator:
         run.model = settings.META_AI_MODEL
         self.db.commit()
 
+        router: StageProviderRouter | None = None
         try:
-            provider = get_ai_provider()
-            run.provider = getattr(provider, "provider_name", run.provider)
-            run.model = getattr(provider, "model", run.model)
+            router = self.stage_router or build_stage_router(get_ai_provider())
+            run.provider = router.profile
             self.db.commit()
 
             visual_resp = None
@@ -65,17 +67,20 @@ class AnalysisOrchestrator:
             if screenshot is not None:
                 logger.info("Interpreting validated screenshot for repository %s", repository_id)
                 try:
-                    visual_resp = provider.interpret_screenshot(requirement, screenshot)
+                    visual_resp = router.execute(AIStage.VISION, "interpret_screenshot", requirement, screenshot)
                     visual_intent = StructuredVisualIntent.model_validate(visual_resp.data)
                 except Exception as error:
-                    if (type(error) is ValueError
-                            and error.args == ("Screenshot interpretation unavailable in offline demo mode",)):
+                    if (isinstance(error, StageExecutionError) and error.code == "vision_unavailable_offline"
+                            and router.profile == "meta_only"
+                            and router.routes[AIStage.VISION] == "offline_demo"):
                         raise ValueError("Screenshot interpretation unavailable in offline demo mode") from None
                     raise ValueError("Screenshot interpretation failed or returned invalid visual intent") from None
 
             # Step 1: Interpret Requirement
-            logger.info("Step 1: Interpreting requirement '%s'", requirement[:60])
-            interpretation_resp = provider.interpret_requirement(requirement)
+            logger.info("Step 1: Interpreting requirement for repository %s", repository_id)
+            interpretation_resp = router.execute(
+                AIStage.REQUIREMENT_INTERPRETATION, "interpret_requirement", requirement,
+            )
             interpretation = interpretation_resp.data
 
             # Step 2: Retrieve Relevant Files and Context from Index
@@ -100,7 +105,7 @@ class AnalysisOrchestrator:
 
             # Step 4: AI Semantic Reasoning
             logger.info("Step 4: Performing AI semantic impact reasoning")
-            reasoning_resp = provider.reason_about_impact(
+            reasoning_resp = router.execute(AIStage.IMPACT_REASONING, "reason_about_impact",
                 requirement_interpretation=interpretation,
                 retrieved_files=retrieved_files,
                 dependency_context=dependency_context,
@@ -110,7 +115,7 @@ class AnalysisOrchestrator:
             # Step 5: Completeness Review
             logger.info("Step 5: Reviewing impact analysis completeness")
             repo_file_map = {f.path: f.id for f in db_files}
-            completeness_resp = provider.review_completeness(
+            completeness_resp = router.execute(AIStage.COMPLETENESS_REVIEW, "review_completeness",
                 requirement=requirement,
                 proposed_impact=raw_impact,
                 repository_context=repo_file_map,
@@ -228,6 +233,7 @@ class AnalysisOrchestrator:
                 "operational_metadata": {
                     "provider": reasoning_resp.provider,
                     "model": reasoning_resp.model,
+                    "profile": router.profile,
                     "is_demo_mode": reasoning_resp.is_mock_or_demo,
                     "structured_inference_latency_seconds": round(sum(resp.latency_seconds for resp in inference_responses), 3),
                     "token_usage": token_usage,
@@ -254,18 +260,21 @@ class AnalysisOrchestrator:
             # Visual observations are untrusted context. The brief receives grounded results only.
             brief_input = (final_report if visual_resp is None else
                            {key: value for key, value in final_report.items() if key != "visual_context"})
-            brief_md = provider.generate_implementation_brief(requirement, brief_input, language=target_language)
+            brief_md = router.execute(AIStage.BRIEF_GENERATION, "generate_implementation_brief",
+                                      requirement, brief_input, language=target_language)
             metadata = final_report["operational_metadata"]
-            brief_latency = getattr(provider, "brief_latency_seconds", 0.0)
+            brief_stage = router.metadata[-1]
+            brief_latency = brief_stage.duration_seconds
             metadata["inference_latency_seconds"] = round(
                 sum(resp.latency_seconds for resp in inference_responses) + brief_latency, 3
             )
-            brief_usage = getattr(provider, "brief_token_usage", None)
+            brief_usage = brief_stage.token_usage
             if brief_usage:
                 total_usage = metadata["token_usage"] or {}
                 for key, value in brief_usage.items():
                     total_usage[key] = total_usage.get(key, 0) + value
                 metadata["token_usage"] = total_usage
+            metadata["stages"] = [entry.as_dict() for entry in router.metadata]
 
             # Update database record
             total_duration = time.time() - start_time
@@ -308,6 +317,7 @@ class AnalysisOrchestrator:
                     "model": run.model,
                     "token_usage": metadata["token_usage"],
                     "analysis_latency_seconds": run.execution_time_seconds,
+                    "stage_execution": metadata["stages"],
                 })
                 if visual_resp is not None:
                     evaluation_trace["visual_context"] = final_report["visual_context"]
@@ -315,8 +325,13 @@ class AnalysisOrchestrator:
 
         except Exception as e:
             logger.exception("Analysis execution failed for repo %s", repository_id)
+            if evaluation_trace is not None and router is not None:
+                evaluation_trace["stage_execution"] = [entry.as_dict() for entry in router.metadata]
             run.status = "failed"
             run.error_message = str(e)
             run.completed_at = datetime.datetime.now(datetime.timezone.utc)
             self.db.commit()
             return run
+        finally:
+            if router is not None and self.stage_router is None:
+                router.close()
