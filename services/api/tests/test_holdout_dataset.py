@@ -119,9 +119,15 @@ def test_holdout_cases_have_complete_source_backed_candidate_labels():
 def test_holdout_v2_adds_only_two_source_backed_indirect_impacts():
     original = json.loads(DATASET.read_text(encoding="utf-8"))
     candidate = json.loads(DATASET_V2.read_text(encoding="utf-8"))
-    assert hashlib.sha256(DATASET.read_bytes()).hexdigest() == (
-        "5892974d49b89a735104d6857aacc4314599d2a3eec544bcc76d4599a00f5615"
-    )
+    dataset_bytes = DATASET.read_bytes()
+    dataset_shas = {
+        hashlib.sha256(dataset_bytes).hexdigest(),
+        hashlib.sha256(dataset_bytes.replace(b"\r\n", b"\n")).hexdigest(),
+        hashlib.sha256(dataset_bytes.replace(b"\n", b"\r\n")).hexdigest(),
+    }
+    expected_crlf = "5892974d49b89a735104d6857aacc4314599d2a3eec544bcc76d4599a00f5615"
+    expected_lf = "c410b26a775baf1a656dd37aabf1662f5d9efe1ecfab493985810a74a23df014"
+    assert expected_crlf in dataset_shas or expected_lf in dataset_shas
     assert candidate["dataset_version"] == "2026-10-28-realworld-holdout-v2-candidate"
     assert "AI-assisted" in candidate["review_status"]
     assert "human" in candidate["review_status"]

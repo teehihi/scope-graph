@@ -1,2 +1,6 @@
 # Preserve the pinned third-party holdout snapshot byte-for-byte on every platform.
 examples/holdout-fastapi-realworld/** -text
+
+# Preserve consistent LF line endings for evaluation datasets cross-platform
+services/api/tests/evaluation/*.json text eol=lf
+examples/sample-repository/** text eol=lf

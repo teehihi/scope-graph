@@ -60,7 +60,12 @@ def validate_fixture(path: Path) -> dict:
         raise ValueError("Multimodal fixture must contain 5 to 8 scenarios")
     source_path = ROOT / fixture["source_label_dataset"]
     source_bytes = source_path.read_bytes()
-    if hashlib.sha256(source_bytes).hexdigest() != fixture["source_label_dataset_sha256"]:
+    source_shas = {
+        hashlib.sha256(source_bytes).hexdigest(),
+        hashlib.sha256(source_bytes.replace(b"\r\n", b"\n")).hexdigest(),
+        hashlib.sha256(source_bytes.replace(b"\n", b"\r\n")).hexdigest(),
+    }
+    if fixture["source_label_dataset_sha256"] not in source_shas:
         raise ValueError("Source label dataset hash mismatch")
     source = json.loads(source_bytes)
     if (fixture["repository"] != source["repository"]

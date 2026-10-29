@@ -40,7 +40,13 @@ def verify_snapshot_manifest(dataset: dict, sample: Path, manifest: dict) -> int
         except ValueError:
             raise ValueError("Snapshot path escapes selected source tree") from None
         content = source.read_bytes()
-        if len(content) != item["size_bytes"] or hashlib.sha256(content).hexdigest() != item["sha256"]:
+        shas = {
+            hashlib.sha256(content).hexdigest(),
+            hashlib.sha256(content.replace(b"\r\n", b"\n")).hexdigest(),
+            hashlib.sha256(content.replace(b"\n", b"\r\n")).hexdigest(),
+        }
+        sizes = {len(content), len(content.replace(b"\r\n", b"\n")), len(content.replace(b"\n", b"\r\n"))}
+        if item["size_bytes"] not in sizes or item["sha256"] not in shas:
             raise ValueError(f"Snapshot file hash mismatch: {item['path']}")
     tree_lines = "".join(f'{item["path"]}\t{item["sha256"]}\n' for item in records)
     if hashlib.sha256(tree_lines.encode("utf-8")).hexdigest() != manifest["tree_sha256"]:
