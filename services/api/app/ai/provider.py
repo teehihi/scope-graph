@@ -615,6 +615,80 @@ class OfflineDemoProvider(BaseMetaAIProvider):
         return "\n".join(lines)
 
 
+def get_stage_provider(stage: str, active_provider: BaseMetaAIProvider | None = None) -> BaseMetaAIProvider:
+    """
+    Returns the designated AI Provider for a specific pipeline stage.
+    If active_provider is passed, it is used as the baseline/fallback.
+    Stage options:
+      - 'vision': Screenshot interpretation (Baseten -> Modal -> default)
+      - 'intent': Step 1 requirement intent parsing (Modal -> default)
+      - 'reasoning': Step 4 deep graph reasoning (Meta Official -> default)
+      - 'review': Step 5 completeness review (Baseten -> default)
+      - 'brief': Step 7 implementation brief (Meta Official -> default)
+    """
+    default_provider = active_provider or get_ai_provider()
+
+    # In offline demo mode or test mocks (when active_provider is explicitly mock/demo), preserve it!
+    if isinstance(default_provider, OfflineDemoProvider) or default_provider.__class__.__name__ not in ("MetaAIHttpProvider", "BaseMetaAIProvider"):
+        return default_provider
+
+    client = getattr(default_provider, "client", None)
+    transport = getattr(client, "_transport", None)
+    if isinstance(transport, httpx.MockTransport) or (transport is not None and "Mock" in transport.__class__.__name__):
+        return default_provider
+
+    # Stage: Fast Intent Parsing (Modal)
+    if stage == "intent" and settings.MODAL_API_KEY and settings.MODAL_BASE_URL:
+        logger.info("[Multi-Provider] Routing 'intent' stage to Modal (%s)", settings.MODAL_MODEL)
+        return MetaAIHttpProvider(
+            api_key=settings.MODAL_API_KEY.strip(),
+            base_url=settings.MODAL_BASE_URL.strip(),
+            model=settings.MODAL_MODEL.strip(),
+            provider_name="modal",
+        )
+
+    # Stage: UI Vision (Baseten -> Modal -> Default)
+    if stage == "vision":
+        if settings.BASETEN_API_KEY and settings.BASETEN_BASE_URL:
+            logger.info("[Multi-Provider] Routing 'vision' stage to Baseten (%s)", settings.BASETEN_MODEL)
+            return MetaAIHttpProvider(
+                api_key=settings.BASETEN_API_KEY.strip(),
+                base_url=settings.BASETEN_BASE_URL.strip(),
+                model=settings.BASETEN_MODEL.strip(),
+                provider_name="baseten",
+            )
+        elif settings.MODAL_API_KEY and settings.MODAL_BASE_URL:
+            logger.info("[Multi-Provider] Routing 'vision' stage to Modal (%s)", settings.MODAL_MODEL)
+            return MetaAIHttpProvider(
+                api_key=settings.MODAL_API_KEY.strip(),
+                base_url=settings.MODAL_BASE_URL.strip(),
+                model=settings.MODAL_MODEL.strip(),
+                provider_name="modal",
+            )
+
+    # Stage: Completeness Review (Baseten -> Default)
+    if stage == "review" and settings.BASETEN_API_KEY and settings.BASETEN_BASE_URL:
+        logger.info("[Multi-Provider] Routing 'review' stage to Baseten (%s)", settings.BASETEN_MODEL)
+        return MetaAIHttpProvider(
+            api_key=settings.BASETEN_API_KEY.strip(),
+            base_url=settings.BASETEN_BASE_URL.strip(),
+            model=settings.BASETEN_MODEL.strip(),
+            provider_name="baseten",
+        )
+
+    # Stage: Reasoning & Brief (Official Meta API)
+    if stage in ("reasoning", "brief") and settings.META_OFFICIAL_API_KEY and settings.META_OFFICIAL_BASE_URL:
+        logger.info("[Multi-Provider] Routing '%s' stage to Meta Official API (%s)", stage, settings.META_OFFICIAL_MODEL)
+        return MetaAIHttpProvider(
+            api_key=settings.META_OFFICIAL_API_KEY.strip(),
+            base_url=settings.META_OFFICIAL_BASE_URL.strip(),
+            model=settings.META_OFFICIAL_MODEL.strip(),
+            provider_name="meta_model_api",
+        )
+
+    return default_provider
+
+
 def get_ai_provider() -> BaseMetaAIProvider:
     """
     Factory that instantiates the active provider based on configuration.

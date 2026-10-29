@@ -133,7 +133,9 @@ cp .env.example .env
 
 # For real Meta inference, edit the root .env file:
 # META_AI_PROVIDER=meta_model_api
-# META_AI_API_KEY=<your Meta Model API key>
+# META_OFFICIAL_API_KEY=<your Meta Model API key>
+# MODAL_API_KEY=<your Modal proxy token for fast intent parsing>
+# BASETEN_API_KEY=<your Baseten API key for UI vision & completeness review>
 
 # 3. Start containers
 docker compose up --build -d

@@ -8,7 +8,7 @@ from app.graph.engine import GraphEngine
 from app.analysis.retriever import HybridRetriever
 from app.analysis.causal import CausalImpactVerifier
 from app.analysis.explanations import explain_item
-from app.ai.provider import get_ai_provider
+from app.ai.provider import get_ai_provider, get_stage_provider
 from app.ai.image_input import ValidatedScreenshot
 from app.ai.schemas import StructuredVisualIntent
 from app.core.config import settings
@@ -65,7 +65,8 @@ class AnalysisOrchestrator:
             if screenshot is not None:
                 logger.info("Interpreting validated screenshot for repository %s", repository_id)
                 try:
-                    visual_resp = provider.interpret_screenshot(requirement, screenshot)
+                    vision_provider = get_stage_provider("vision", provider)
+                    visual_resp = vision_provider.interpret_screenshot(requirement, screenshot)
                     visual_intent = StructuredVisualIntent.model_validate(visual_resp.data)
                 except Exception as error:
                     if (type(error) is ValueError
@@ -75,7 +76,8 @@ class AnalysisOrchestrator:
 
             # Step 1: Interpret Requirement
             logger.info("Step 1: Interpreting requirement '%s'", requirement[:60])
-            interpretation_resp = provider.interpret_requirement(requirement)
+            intent_provider = get_stage_provider("intent", provider)
+            interpretation_resp = intent_provider.interpret_requirement(requirement)
             interpretation = interpretation_resp.data
 
             # Step 2: Retrieve Relevant Files and Context from Index
@@ -100,7 +102,8 @@ class AnalysisOrchestrator:
 
             # Step 4: AI Semantic Reasoning
             logger.info("Step 4: Performing AI semantic impact reasoning")
-            reasoning_resp = provider.reason_about_impact(
+            reasoning_provider = get_stage_provider("reasoning", provider)
+            reasoning_resp = reasoning_provider.reason_about_impact(
                 requirement_interpretation=interpretation,
                 retrieved_files=retrieved_files,
                 dependency_context=dependency_context,
@@ -110,7 +113,8 @@ class AnalysisOrchestrator:
             # Step 5: Completeness Review
             logger.info("Step 5: Reviewing impact analysis completeness")
             repo_file_map = {f.path: f.id for f in db_files}
-            completeness_resp = provider.review_completeness(
+            review_provider = get_stage_provider("review", provider)
+            completeness_resp = review_provider.review_completeness(
                 requirement=requirement,
                 proposed_impact=raw_impact,
                 repository_context=repo_file_map,
@@ -231,6 +235,12 @@ class AnalysisOrchestrator:
                     "is_demo_mode": reasoning_resp.is_mock_or_demo,
                     "structured_inference_latency_seconds": round(sum(resp.latency_seconds for resp in inference_responses), 3),
                     "token_usage": token_usage,
+                    "stage_routing": {
+                        **({"vision": {"provider": visual_resp.provider, "model": visual_resp.model}} if visual_resp is not None else {}),
+                        "intent": {"provider": interpretation_resp.provider, "model": interpretation_resp.model},
+                        "reasoning": {"provider": reasoning_resp.provider, "model": reasoning_resp.model},
+                        "review": {"provider": completeness_resp.provider, "model": completeness_resp.model},
+                    },
                     "execution_time_seconds": round(time.time() - start_time, 2),
                     "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 }
@@ -254,18 +264,24 @@ class AnalysisOrchestrator:
             # Visual observations are untrusted context. The brief receives grounded results only.
             brief_input = (final_report if visual_resp is None else
                            {key: value for key, value in final_report.items() if key != "visual_context"})
-            brief_md = provider.generate_implementation_brief(requirement, brief_input, language=target_language)
+            brief_provider = get_stage_provider("brief", provider)
+            brief_md = brief_provider.generate_implementation_brief(requirement, brief_input, language=target_language)
             metadata = final_report["operational_metadata"]
-            brief_latency = getattr(provider, "brief_latency_seconds", 0.0)
+            brief_latency = getattr(brief_provider, "brief_latency_seconds", 0.0)
             metadata["inference_latency_seconds"] = round(
                 sum(resp.latency_seconds for resp in inference_responses) + brief_latency, 3
             )
-            brief_usage = getattr(provider, "brief_token_usage", None)
+            brief_usage = getattr(brief_provider, "brief_token_usage", None)
             if brief_usage:
                 total_usage = metadata["token_usage"] or {}
                 for key, value in brief_usage.items():
                     total_usage[key] = total_usage.get(key, 0) + value
                 metadata["token_usage"] = total_usage
+            if "stage_routing" in metadata:
+                metadata["stage_routing"]["brief"] = {
+                    "provider": getattr(brief_provider, "provider_name", reasoning_resp.provider),
+                    "model": getattr(brief_provider, "model", reasoning_resp.model),
+                }
 
             # Update database record
             total_duration = time.time() - start_time
