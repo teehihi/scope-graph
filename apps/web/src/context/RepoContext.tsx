@@ -37,7 +37,7 @@ const RepoContext = createContext<RepoContextType | undefined>(undefined);
 
 export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { language } = useLanguage();
-  const { user } = useAuth();
+  const { user, isLoading: isAuthLoading } = useAuth();
   const userEmailRef = useRef<string | undefined>(user?.email);
   userEmailRef.current = user?.email;
 
@@ -156,6 +156,8 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Initial load - sync with backend if available
   useEffect(() => {
+    if (isAuthLoading) return; // Wait until AuthContext finishes reading stored user from localStorage!
+
     let isCancelled = false;
     let retryTimer: any = null;
 
@@ -194,7 +196,7 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isCancelled = true;
       if (retryTimer) clearTimeout(retryTimer);
     };
-  }, []);
+  }, [isAuthLoading]);
 
   // React to user change (e.g. switching from Demo User to logged in user or vice versa)
   useEffect(() => {
