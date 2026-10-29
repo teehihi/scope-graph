@@ -91,6 +91,7 @@ export const GitHubImportModal: React.FC<GitHubImportModalProps> = ({
       // Save current page and intent to reopen GitHub modal after OAuth returns
       sessionStorage.setItem('scopegraph_auth_return_url', window.location.pathname + window.location.search);
       sessionStorage.setItem('scopegraph_reopen_github_modal', 'true');
+      sessionStorage.setItem('scopegraph_oauth_action', 'link_account');
       window.location.href = url;
     } catch (err) {
       if (err instanceof GitHubOAuthConfigurationError) {
@@ -117,6 +118,7 @@ export const GitHubImportModal: React.FC<GitHubImportModalProps> = ({
         full_name: repoItem.full_name,
         default_branch: repoItem.default_branch,
         access_token: token,
+        owner_email: user?.email,
       });
 
       // 2. Keep the button in "Đang nhập..." state for ~2.5 - 3 seconds for visual feedback

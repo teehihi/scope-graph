@@ -19,6 +19,7 @@ class Repository(Base):
     status = Column(String(50), default="pending")  # pending, indexing, ready, error
     error_message = Column(Text, nullable=True)
     workspace_path = Column(String(1024), nullable=True)
+    owner_email = Column(String(255), nullable=True, index=True)
     stats = Column(JSON, default=dict)
     created_at = Column(DateTime, default=utc_now)
     indexed_at = Column(DateTime, nullable=True)

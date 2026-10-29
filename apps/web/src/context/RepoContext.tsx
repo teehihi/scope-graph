@@ -3,6 +3,7 @@ import { useNodesState, useEdgesState, Node, Edge } from '@xyflow/react';
 import { Repository, NodeData, ImpactItem, AnalysisReport, LayerType } from '../types';
 import { fetchRepositories, loadSampleRepository, fetchGraph, runAnalysis, analyzeScreenshot, ScreenshotAnalysisFailedError } from '../api/client';
 import { useLanguage } from './LanguageContext';
+import { useAuth } from './AuthContext';
 
 interface RepoContextType {
   repositories: Repository[];
@@ -37,6 +38,9 @@ const RepoContext = createContext<RepoContextType | undefined>(undefined);
 
 export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { language, t } = useLanguage();
+  const { user, isLoading: isAuthLoading } = useAuth();
+  const userEmailRef = useRef<string | undefined>(user?.email);
+  userEmailRef.current = user?.email;
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [activeRepo, setActiveRepo] = useState<Repository | null>(null);
   const [isLoadingSample, setIsLoadingSample] = useState(false);
@@ -93,7 +97,7 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshRepositories = useCallback(async () => {
     try {
-      const repos = await fetchRepositories();
+      const repos = await fetchRepositories(userEmailRef.current);
       setRepositories(repos);
       return repos;
     } catch (err) {
@@ -107,7 +111,7 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoadingSample(true);
     try {
       const repo = await loadSampleRepository();
-      const freshRepos = await fetchRepositories();
+      const freshRepos = await fetchRepositories(userEmailRef.current);
       setRepositories(freshRepos);
       setActiveRepo(repo);
       setSelectedNodeData(null);
@@ -160,12 +164,14 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Initial load - sync with backend if available
   useEffect(() => {
+    if (isAuthLoading) return; // Wait until AuthContext finishes reading stored user from localStorage!
+
     let isCancelled = false;
     let retryTimer: any = null;
 
     const initRepositories = async (attempt: number = 1) => {
       try {
-        const repos = await fetchRepositories();
+        const repos = await fetchRepositories(userEmailRef.current);
         if (isCancelled) return;
         if (repos.length > 0) {
           setRepositories(repos);
@@ -198,7 +204,19 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isCancelled = true;
       if (retryTimer) clearTimeout(retryTimer);
     };
-  }, []);
+  }, [isAuthLoading]);
+
+  // React to user change (e.g. switching from Demo User to logged in user or vice versa)
+  useEffect(() => {
+    refreshRepositories().then((repos) => {
+      if (repos.length > 0) {
+        setActiveRepo((current) => {
+          if (current && repos.some((r) => r.id === current.id)) return current;
+          return repos[0];
+        });
+      }
+    });
+  }, [user?.email, refreshRepositories]);
 
   const clearAnalysis = () => {
     setAnalysisReport(null);
