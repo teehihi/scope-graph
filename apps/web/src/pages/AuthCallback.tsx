@@ -7,7 +7,7 @@ import { AlertCircle, ArrowLeft, RefreshCw, CheckCircle2 } from 'lucide-react';
 
 export const AuthCallback: React.FC = () => {
   const { navigate, search } = useRouter();
-  const { login } = useAuth();
+  const { user: currentUser, login, updateUser } = useAuth();
   const hasExchangedRef = useRef(false);
 
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -58,21 +58,35 @@ export const AuthCallback: React.FC = () => {
         setUserName(user.name || user.username || 'Developer');
         setStatus('success');
 
-        // Check if this user has already completed onboarding
-        const hasOnboarded =
-          localStorage.getItem(`scopegraph_onboarded_${user.email}`) === 'true';
+        const oauthAction = sessionStorage.getItem('scopegraph_oauth_action');
+        sessionStorage.removeItem('scopegraph_oauth_action');
 
-        // Store user in AuthContext with GitHub access token
-        login(
-          user.email,
-          user.name,
-          false,
-          user.avatar_url,
-          'github',
-          user.username,
-          hasOnboarded,
-          data.access_token
-        );
+        // Check if user was already in a session and simply linking GitHub (e.g. from Demo or Email account)
+        if (oauthAction === 'link_account' && currentUser) {
+          // Keep current identity (Demo User or Email user), attach GitHub token and metadata
+          updateUser({
+            githubToken: data.access_token,
+            username: user.username,
+          });
+          if (currentUser.email) {
+            localStorage.setItem(`scopegraph_gh_token_${currentUser.email}`, data.access_token);
+          }
+        } else {
+          // Regular "Login with GitHub" flow
+          const hasOnboarded =
+            localStorage.getItem(`scopegraph_onboarded_${user.email}`) === 'true';
+
+          login(
+            user.email,
+            user.name,
+            false,
+            user.avatar_url,
+            'github',
+            user.username,
+            hasOnboarded,
+            data.access_token
+          );
+        }
 
         // Check if there is a saved return URL from where the user started OAuth (e.g. /app/repositories)
         const returnUrl = sessionStorage.getItem('scopegraph_auth_return_url');
@@ -82,7 +96,7 @@ export const AuthCallback: React.FC = () => {
         setTimeout(() => {
           if (returnUrl) {
             navigate(returnUrl);
-          } else if (hasOnboarded) {
+          } else if (currentUser?.onboarded) {
             navigate('/app/dashboard');
           } else {
             navigate('/onboarding');

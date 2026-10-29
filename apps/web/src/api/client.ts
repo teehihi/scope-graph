@@ -57,6 +57,7 @@ export async function importGitHubRepo(params: {
   full_name?: string;
   default_branch?: string;
   access_token: string;
+  owner_email?: string;
 }): Promise<Repository> {
   const res = await fetch(`${API_BASE}/repositories/import-github`, {
     method: 'POST',
@@ -70,8 +71,9 @@ export async function importGitHubRepo(params: {
   return res.json();
 }
 
-export async function fetchRepositories(): Promise<Repository[]> {
-  const res = await fetch(`${API_BASE}/repositories`);
+export async function fetchRepositories(ownerEmail?: string): Promise<Repository[]> {
+  const url = ownerEmail ? `${API_BASE}/repositories?owner_email=${encodeURIComponent(ownerEmail)}` : `${API_BASE}/repositories`;
+  const res = await fetch(url);
   if (!res.ok) throw new Error('Failed to fetch repositories');
   return res.json();
 }
@@ -97,13 +99,13 @@ export async function loadSampleRepository(): Promise<Repository> {
   return res.json();
 }
 
-export async function uploadRepositoryZip(file: File): Promise<Repository> {
+export async function uploadRepositoryZip(file: File, ownerEmail?: string): Promise<Repository> {
   // First create repository
   const repoName = file.name.replace(/\.zip$/i, '');
   const createRes = await fetch(`${API_BASE}/repositories`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: repoName, description: 'Uploaded via ZIP archive' }),
+    body: JSON.stringify({ name: repoName, description: 'Uploaded via ZIP archive', owner_email: ownerEmail }),
   });
   if (!createRes.ok) throw new Error('Failed to create repository');
   const repo: Repository = await createRes.json();

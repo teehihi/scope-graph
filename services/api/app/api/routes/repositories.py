@@ -24,12 +24,14 @@ router = APIRouter(prefix="/repositories", tags=["repositories"])
 class CreateRepoRequest(BaseModel):
     name: str
     description: str = ""
+    owner_email: str | None = None
 
 @router.post("")
 def create_repository(payload: CreateRepoRequest, db: Session = Depends(get_db)):
     repo = Repository(
         name=payload.name,
         description=payload.description,
+        owner_email=payload.owner_email,
         status="pending"
     )
     db.add(repo)
@@ -46,12 +48,39 @@ def create_repository(payload: CreateRepoRequest, db: Session = Depends(get_db))
     return repo
 
 @router.get("")
-def list_repositories(db: Session = Depends(get_db)):
-    repos = db.query(Repository).order_by(Repository.created_at.desc()).all()
+def list_repositories(owner_email: str | None = Query(None), db: Session = Depends(get_db)):
+    query = db.query(Repository)
+    if owner_email:
+        # If user is a demo user, only show public sample or repos owned explicitly by demo
+        if "demo" in owner_email.lower():
+            query = query.filter(
+                (Repository.owner_email == owner_email) |
+                (Repository.name == "Sample Auth & User Service")
+            )
+        else:
+            # Regular or GitHub user: show sample repo + their own imported repos
+            query = query.filter(
+                (Repository.owner_email == owner_email) |
+                (Repository.name == "Sample Auth & User Service")
+            )
+
+    repos = query.order_by(Repository.created_at.desc()).all()
     if not repos:
         try:
             load_sample_repository(db)
-            repos = db.query(Repository).order_by(Repository.created_at.desc()).all()
+            query_after = db.query(Repository)
+            if owner_email:
+                if "demo" in owner_email.lower():
+                    query_after = query_after.filter(
+                        (Repository.owner_email == owner_email) |
+                        (Repository.name == "Sample Auth & User Service")
+                    )
+                else:
+                    query_after = query_after.filter(
+                        (Repository.owner_email == owner_email) |
+                        (Repository.name == "Sample Auth & User Service")
+                    )
+            repos = query_after.order_by(Repository.created_at.desc()).all()
         except Exception:
             pass
     else:
@@ -63,7 +92,19 @@ def list_repositories(db: Session = Depends(get_db)):
                     shutil.rmtree(dup.workspace_path, ignore_errors=True)
                 db.delete(dup)
             db.commit()
-            repos = db.query(Repository).order_by(Repository.created_at.desc()).all()
+            query_after = db.query(Repository)
+            if owner_email:
+                if "demo" in owner_email.lower():
+                    query_after = query_after.filter(
+                        (Repository.owner_email == owner_email) |
+                        (Repository.name == "Sample Auth & User Service")
+                    )
+                else:
+                    query_after = query_after.filter(
+                        (Repository.owner_email == owner_email) |
+                        (Repository.name == "Sample Auth & User Service")
+                    )
+            repos = query_after.order_by(Repository.created_at.desc()).all()
     return repos
 
 @router.get("/{repository_id}")
@@ -250,6 +291,7 @@ class ImportGitHubRepoRequest(BaseModel):
     full_name: str | None = None
     default_branch: str = "main"
     access_token: str
+    owner_email: str | None = None
 
 def task_import_and_index_github(
     repo_id: str,
@@ -345,6 +387,7 @@ async def import_github_repository(
     repo = Repository(
         name=payload.name,
         description=f"Imported from GitHub: {payload.full_name or payload.name}",
+        owner_email=payload.owner_email,
         status="indexing"
     )
     db.add(repo)

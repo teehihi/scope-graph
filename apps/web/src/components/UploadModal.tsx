@@ -4,6 +4,7 @@ import { X, Upload, FileArchive, AlertCircle, Loader2 } from 'lucide-react';
 import { uploadRepositoryZip } from '../api/client';
 import { Repository } from '../types';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -13,6 +14,7 @@ interface UploadModalProps {
 
 export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onUploadSuccess }) => {
   const { t } = useLanguage();
+  const { user } = useAuth();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +39,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onUpl
     setError(null);
 
     try {
-      const repo = await uploadRepositoryZip(selectedFile);
+      const repo = await uploadRepositoryZip(selectedFile, user?.email);
       onUploadSuccess(repo);
       onClose();
     } catch (err: any) {
