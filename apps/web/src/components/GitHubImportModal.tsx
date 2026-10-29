@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Search, Github, Lock, Globe, Loader2, ArrowRight, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
 import { Loader } from './Loader';
-import { fetchGitHubRepos, importGitHubRepo } from '../api/client';
+import { fetchGitHubAuthUrl, fetchGitHubRepos, GitHubOAuthConfigurationError, importGitHubRepo } from '../api/client';
 import { Repository, GitHubRepoItem } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -26,6 +26,8 @@ export const GitHubImportModal: React.FC<GitHubImportModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [importingId, setImportingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [oauthUnavailable, setOauthUnavailable] = useState(false);
 
   // GitHub token can be in user object or localStorage
   const token = user?.githubToken || (user?.email ? localStorage.getItem(`scopegraph_gh_token_${user.email}`) : null);
@@ -71,25 +73,34 @@ export const GitHubImportModal: React.FC<GitHubImportModalProps> = ({
     }
   }, [isOpen, token]);
 
+  useEffect(() => {
+    if (!isOpen) {
+      setError(null);
+      setOauthUnavailable(false);
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const handleConnectGitHub = async () => {
+    if (isConnecting || oauthUnavailable) return;
+    setIsConnecting(true);
+    setError(null);
     try {
+      const url = await fetchGitHubAuthUrl();
       // Save current page and intent to reopen GitHub modal after OAuth returns
       sessionStorage.setItem('scopegraph_auth_return_url', window.location.pathname + window.location.search);
       sessionStorage.setItem('scopegraph_reopen_github_modal', 'true');
-
-      const apiUrl = import.meta.env.VITE_API_URL || '';
-      const endpoint = `${apiUrl}/api/v1/auth/github/url?redirect_uri=${encodeURIComponent(
-        window.location.origin + '/auth/callback/github'
-      )}`;
-      const res = await fetch(endpoint);
-      const data = await res.json();
-      if (data.url) {
-        window.location.href = data.url;
+      window.location.href = url;
+    } catch (err) {
+      if (err instanceof GitHubOAuthConfigurationError) {
+        setOauthUnavailable(true);
+        setError(t('github_modal.error_unconfigured'));
+      } else {
+        setError(t('github_modal.error_connect'));
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to start GitHub OAuth flow');
+    } finally {
+      setIsConnecting(false);
     }
   };
 
@@ -172,11 +183,18 @@ export const GitHubImportModal: React.FC<GitHubImportModalProps> = ({
                 {t('github_modal.connect_desc')}
               </p>
             </div>
+            {error && (
+              <div role="alert" className="w-full max-w-md flex items-center gap-2.5 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
             <button
               onClick={handleConnectGitHub}
-              className="flex items-center gap-2.5 px-5 py-3 rounded-2xl bg-[#151923] text-white text-xs font-bold hover:bg-[#C7F36B] hover:text-[#151923] transition-all shadow-md cursor-pointer"
+              disabled={isConnecting || oauthUnavailable}
+              className="flex items-center gap-2.5 px-5 py-3 rounded-2xl bg-[#151923] text-white text-xs font-bold hover:bg-[#C7F36B] hover:text-[#151923] transition-all shadow-md cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <Github className="w-4 h-4" />
+              {isConnecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Github className="w-4 h-4" />}
               <span>{t('github_modal.connect_btn')}</span>
               <ArrowRight className="w-4 h-4 ml-1" />
             </button>

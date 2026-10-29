@@ -11,6 +11,7 @@ def _find_env_file() -> tuple[str, ...]:
         Path(__file__).resolve().parents[1] / ".env" if len(Path(__file__).resolve().parents) > 1 else None,
         Path(__file__).resolve().parents[2] / ".env" if len(Path(__file__).resolve().parents) > 2 else None,
         Path(__file__).resolve().parents[3] / ".env" if len(Path(__file__).resolve().parents) > 3 else None,
+        Path(__file__).resolve().parents[4] / ".env" if len(Path(__file__).resolve().parents) > 4 else None,
     ]
     existing = [str(p) for p in candidates if p and p.exists()]
     return tuple(existing) if existing else (".env",)

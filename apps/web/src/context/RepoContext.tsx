@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useNodesState, useEdgesState, Node, Edge } from '@xyflow/react';
 import { Repository, NodeData, ImpactItem, AnalysisReport, LayerType } from '../types';
-import { fetchRepositories, loadSampleRepository, fetchGraph, runAnalysis, analyzeScreenshot } from '../api/client';
+import { fetchRepositories, loadSampleRepository, fetchGraph, runAnalysis, analyzeScreenshot, ScreenshotAnalysisFailedError } from '../api/client';
 import { useLanguage } from './LanguageContext';
 
 interface RepoContextType {
@@ -20,6 +20,7 @@ interface RepoContextType {
   focusSubgraph: boolean;
   setFocusSubgraph: (val: boolean) => void;
   analysisReport: AnalysisReport | null;
+  analysisError: string | null;
   briefMarkdown: string;
   isAnalyzing: boolean;
   requirement: string;
@@ -35,7 +36,7 @@ interface RepoContextType {
 const RepoContext = createContext<RepoContextType | undefined>(undefined);
 
 export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [activeRepo, setActiveRepo] = useState<Repository | null>(null);
   const [isLoadingSample, setIsLoadingSample] = useState(false);
@@ -47,6 +48,7 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisReport, setAnalysisReport] = useState<AnalysisReport | null>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [briefMarkdown, setBriefMarkdown] = useState<string>('');
   const [requirement, setRequirement] = useState<string>(
     'Require email verification before users can change their email address.'
@@ -62,6 +64,7 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const repo = targetRepo || activeRepoRef.current;
     if (!repo) return;
     setIsAnalyzing(true);
+    setAnalysisError(null);
     try {
       const resp = screenshot
         ? await analyzeScreenshot(repo.id, req, screenshot, language)
@@ -75,12 +78,18 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setSelectedImpactItem(firstDirect);
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       console.warn('Analysis API unavailable:', err);
+      setAnalysisReport(null);
+      setBriefMarkdown('');
+      setSelectedNodeData(null);
+      setSelectedImpactItem(null);
+      setAnalysisError(t(err instanceof ScreenshotAnalysisFailedError
+        ? 'impact.error_provider' : 'impact.error_request'));
     } finally {
       setIsAnalyzing(false);
     }
-  }, [language]);
+  }, [language, t]);
 
   const refreshRepositories = useCallback(async () => {
     try {
@@ -193,6 +202,7 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const clearAnalysis = () => {
     setAnalysisReport(null);
+    setAnalysisError(null);
     setBriefMarkdown('');
     setSelectedNodeData(null);
     setSelectedImpactItem(null);
@@ -217,6 +227,7 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
         focusSubgraph,
         setFocusSubgraph,
         analysisReport,
+        analysisError,
         briefMarkdown,
         isAnalyzing,
         requirement,

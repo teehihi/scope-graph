@@ -38,6 +38,11 @@ export interface GitHubRepoItem {
   updated_at: string;
 }
 
+export interface GitHubAuthUrlResponse {
+  url: string;
+  client_id: string;
+}
+
 export interface SystemInfo {
   provider: string;
   model: string;

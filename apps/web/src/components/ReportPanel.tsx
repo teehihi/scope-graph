@@ -143,6 +143,17 @@ export const ReportPanel: React.FC<ReportPanelProps> = ({
                   )}
                 </div>
 
+                <p className="text-[11px] leading-relaxed text-slate-600">
+                  {t('report.visual_observation_note')}
+                </p>
+
+                {report.visual_context.uncertainties && report.visual_context.uncertainties.length > 0 && (
+                  <div className="text-[11px] text-amber-800">
+                    <span className="font-semibold">{t('report.uncertainty_note')}: </span>
+                    {report.visual_context.uncertainties.join(' ')}
+                  </div>
+                )}
+
                 {report.visual_context.visible_elements && report.visual_context.visible_elements.length > 0 && (
                   <div className="flex items-center gap-1.5 flex-wrap text-xs pt-1">
                     <span className="text-[11px] text-[#8B929E] font-medium">

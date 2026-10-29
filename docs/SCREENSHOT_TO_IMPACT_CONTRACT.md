@@ -1,6 +1,6 @@
 # Screenshot-to-Impact integration contract
 
-Status: **synchronous REST upload implemented** (2026-10-29). MCP and the frontend remain text-only.
+Status: **synchronous REST upload and web screenshot attachment implemented** (2026-10-29). SG-AI-23 exercised the browser flow against a local API with deterministic mock vision; see [final validation](SG_AI_23_FINAL_VALIDATION.md). MCP remains text-only.
 
 ## Input and full decoding
 
@@ -22,8 +22,8 @@ The existing `AnalysisRun.result_json` remains the report. Screenshot runs add `
 
 ## Compatibility and frontend integration
 
-Existing JSON REST and MCP request signatures remain text-only and unchanged. The new REST route is additive. Frontend code has not been modified and cannot upload screenshots yet. A future client should send a local PNG/JPEG plus text, display validation and provider-unavailable states, and mark `visual_context` as tentative observations rather than source facts. It should keep direct, indirect and potential impact labels distinct and cite indexed source lines from the report.
+Existing JSON REST and MCP request signatures remain text-only and unchanged. The new REST route is additive. The web client now attaches a local PNG/JPEG plus text through `analyzeScreenshot` in `apps/web/src/api/client.ts` and the attachment controls in `RequirementPanel.tsx`. SG-AI-23 verified the browser upload and report display against a running local API with mocked vision, including validation and provider-unavailable states. The UI marks `visual_context` as tentative observations rather than source facts and keeps direct, indirect and potential impact labels distinct with indexed source lines from the report.
 
 ## Remaining production gates
 
-Repository ownership/authentication, upstream multipart body limits, and visual metadata retention/access policy require deployment review. The backend owner approved this synchronous multipart route, Pillow, normalization, and image-cache bypass. No paid Meta inference was made for this integration. See [AI Core implementation](SCREENSHOT_TO_IMPACT_AI_CORE.md) and [offline evaluation](MULTIMODAL_EVALUATION_V1.md).
+Repository ownership/authentication, runtime-settings authorization, upstream multipart body limits, and visual metadata retention/access policy require deployment review. The backend owner approved this synchronous multipart route, Pillow, normalization, and image-cache bypass. The later [SG-AI-22 smoke](SCREENSHOT_TO_IMPACT_LIVE_TEST.md) made one approved Meta vision interpretation request, separately from this route; no live end-to-end screenshot impact run has been made. See [AI Core implementation](SCREENSHOT_TO_IMPACT_AI_CORE.md) and [offline evaluation](MULTIMODAL_EVALUATION_V1.md).

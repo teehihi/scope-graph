@@ -63,13 +63,13 @@ export const RequirementPanel: React.FC<RequirementPanelProps> = ({
 
   const handleFileSelect = (file: File) => {
     setFormatError(null);
-    const validTypes = ['image/png', 'image/jpeg', 'image/jpg'];
+    const validTypes = ['image/png', 'image/jpeg'];
     if (!validTypes.includes(file.type.toLowerCase())) {
       setFormatError(t('impact.screenshot_format_error'));
       return;
     }
-    // Max 5MB limit
-    if (file.size > 5 * 1024 * 1024) {
+    // Match the backend's decimal-byte limit.
+    if (file.size > 5_000_000) {
       setFormatError(t('impact.screenshot_format_error'));
       return;
     }
@@ -256,7 +256,7 @@ export const RequirementPanel: React.FC<RequirementPanelProps> = ({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/png,image/jpeg,image/jpg"
+                  accept="image/png,image/jpeg"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) handleFileSelect(file);

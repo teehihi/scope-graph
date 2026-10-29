@@ -1,6 +1,34 @@
-import { Repository, AnalysisReport, GitHubRepoItem, SystemInfo, UpdateSystemSettingsRequest } from '../types';
+import { Repository, AnalysisReport, GitHubRepoItem, GitHubAuthUrlResponse, SystemInfo, UpdateSystemSettingsRequest } from '../types';
 
 const API_BASE = '/api/v1';
+
+export class GitHubOAuthConfigurationError extends Error {
+  constructor() {
+    super('GitHub OAuth is not configured');
+    this.name = 'GitHubOAuthConfigurationError';
+  }
+}
+
+export class ScreenshotAnalysisFailedError extends Error {
+  constructor() {
+    super('Screenshot analysis provider failed');
+    this.name = 'ScreenshotAnalysisFailedError';
+  }
+}
+
+export async function fetchGitHubAuthUrl(): Promise<string> {
+  const res = await fetch(`${API_BASE}/auth/github/url`);
+  if (res.status === 400) throw new GitHubOAuthConfigurationError();
+  if (!res.ok) throw new Error('Failed to start GitHub OAuth');
+
+  const data: GitHubAuthUrlResponse = await res.json();
+  if (typeof data?.url !== 'string') throw new Error('Invalid GitHub OAuth URL');
+  const url = new URL(data.url);
+  if (url.origin !== 'https://github.com' || url.pathname !== '/login/oauth/authorize') {
+    throw new Error('Invalid GitHub OAuth URL');
+  }
+  return url.toString();
+}
 
 export async function fetchHealth(): Promise<{ status: string; database: string; redis: string }> {
   const res = await fetch(`${API_BASE}/ready`);
@@ -187,7 +215,9 @@ export async function analyzeScreenshot(
     const err = await res.json().catch(() => ({ detail: 'Screenshot analysis failed' }));
     throw new Error(err.detail || 'Screenshot analysis failed');
   }
-  return res.json();
+  const body = await res.json();
+  if (body.status === 'failed') throw new ScreenshotAnalysisFailedError();
+  return body;
 }
 
 export async function fetchAnalysisReport(analysisId: string): Promise<AnalysisReport> {

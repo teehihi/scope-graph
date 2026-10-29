@@ -42,10 +42,10 @@ For screenshot calls only, the report gains `visual_context`: SHA-256 image iden
 
 ## SG-AI-18: synthetic offline checkpoint
 
-- The [six-case paired evaluation](MULTIMODAL_EVALUATION_V1.md) uses original synthetic screenshots and source labels copied from the provisional v3 sample fixture. Its scripted visual provider verifies image identity and supplies authored intent; it does not read pixels. Text-only and screenshot paths are compared on retrieval, supported impact, claim disagreement, latency and reported usage. Pure replay runs without images or inference. The result demonstrates pipeline mechanics and is **not** real vision-model accuracy. Human review of visual concepts and source labels is pending. Live Muse Spark evaluation still requires separate authorization.
+- The [six-case paired evaluation](MULTIMODAL_EVALUATION_V1.md) uses original synthetic screenshots and source labels copied from the provisional v3 sample fixture. Its scripted visual provider verifies image identity and supplies authored intent; it does not read pixels. Text-only and screenshot paths are compared on retrieval, supported impact, claim disagreement, latency and reported usage. Pure replay runs without images or inference. The result demonstrates pipeline mechanics and is **not** real vision-model accuracy. Human review of visual concepts and source labels is pending. A later [one-case Meta Vision smoke](SCREENSHOT_TO_IMPACT_LIVE_TEST.md) verified image interpretation only; any further paid evaluation requires separate authorization.
 
 ## Remaining work
 
-- **Frontend integration:** Add a local screenshot picker and display visual context only after product review. MCP remains text-only.
+- **Frontend integration:** The merged web client has a local screenshot picker and upload call. Verify it with a running API in a browser, including error states and tentative visual-context presentation. MCP remains text-only.
 - **Production access:** Add repository ownership/session enforcement and an upstream multipart body limit before exposing the upload route publicly.
-- **Real vision evaluation:** Review rights and labels, then obtain explicit approval before any paid Muse Spark screenshot evaluation. No paid Meta vision call has been made in this workstream.
+- **Real vision evaluation:** SG-AI-22 completed exactly one approved Muse Spark image-interpretation request with synthetic artwork. Review rights and labels, then obtain a fresh explicit request budget before any paid end-to-end or multi-case screenshot evaluation. No such full-pipeline live result has been recorded.

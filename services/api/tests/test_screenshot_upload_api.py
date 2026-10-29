@@ -208,3 +208,64 @@ def test_upload_offline_provider_fails_explicitly_without_image_in_error(client,
     status = http.get(f"/api/v1/analyses/{response.json()['analysis_id']}")
     assert "unavailable in offline demo mode" in status.json()["error_message"]
     assert base64.b64encode(image_bytes).decode("ascii") not in json.dumps(status.json())
+
+
+def test_screenshot_report_separates_visual_context_from_source_evidence(client, monkeypatch):
+    http, _ = client
+
+    class GroundedVisionProvider(VisionProvider):
+        def reason_about_impact(self, requirement_interpretation, retrieved_files, dependency_context):
+            response = super().reason_about_impact(
+                requirement_interpretation, retrieved_files, dependency_context,
+            )
+            response.data["affected_items"] = [{
+                "file_path": "app/article_listing.py", "symbol": "list_articles",
+                "impact_type": "direct", "category": "service",
+                "reason": "Change list_articles to filter by author", "confidence": 0.8,
+            }]
+            return response
+
+    provider = GroundedVisionProvider()
+    monkeypatch.setattr(orchestrator_module, "get_ai_provider", lambda: provider)
+    png = Path("services/api/tests/evaluation/screenshots_v1/account_email.png").read_bytes()
+
+    response = upload(http, png, requirement="Change list_articles to filter by author")
+
+    assert response.status_code == 200
+    report = response.json()["result"]
+    assert response.json()["status"] == "completed"
+    assert report["visual_context"]["screen_type"] == "article listing"
+    assert report["visual_context"]["uncertainties"] == ["The implementation layer is unknown."]
+    assert report["affected_items"]
+    target = report["affected_items"][0]
+    assert target["file_path"] == "app/article_listing.py"
+    assert target["symbol"] == "list_articles"
+    assert target["impact_type"] == "direct"
+    assert target["impact_supported"] is True
+    assert target["line_start"] == 1
+    assert "def list_articles():" in target["evidence_snippet"]
+    assert isinstance(report["potential_impacts"], list)
+    assert "visible_elements" not in report["visual_context"]
+    assert "Private UI text" not in json.dumps(report)
+
+
+def test_missing_screenshot_or_requirement_returns_422_without_provider_call(client):
+    http, provider = client
+    png = Path("services/api/tests/evaluation/screenshots_v1/account_email.png").read_bytes()
+    path = "/api/v1/repositories/visual-repo/analyze-screenshot"
+
+    assert http.post(path, files={"screenshot": ("screen.png", png, "image/png")}).status_code == 422
+    assert http.post(path, data={"requirement": "Change list_articles"}).status_code == 422
+    assert provider.images == []
+
+
+def test_text_only_api_remains_available_without_vision_call(client):
+    http, provider = client
+    response = http.post(
+        "/api/v1/repositories/visual-repo/analyze",
+        json={"requirement": "Change list_articles to filter by author", "run_sync": True},
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "completed"
+    assert "visual_context" not in response.json()["result"]
+    assert provider.images == []

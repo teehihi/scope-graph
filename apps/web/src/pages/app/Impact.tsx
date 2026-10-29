@@ -6,7 +6,7 @@ import { AppLayout } from '../../components/layouts/AppLayout';
 import { RequirementPanel } from '../../components/RequirementPanel';
 import { ReportPanel } from '../../components/ReportPanel';
 import { EvidenceDrawer } from '../../components/EvidenceDrawer';
-import { Network, CheckCircle } from 'lucide-react';
+import { Network, CheckCircle, AlertCircle } from 'lucide-react';
 import { ImpactItem } from '../../types';
 
 export const ImpactPage: React.FC = () => {
@@ -16,6 +16,7 @@ export const ImpactPage: React.FC = () => {
     activeRepo,
     isAnalyzing,
     analysisReport,
+    analysisError,
     briefMarkdown,
     runAnalysisRequirement,
     clearAnalysis,
@@ -82,6 +83,13 @@ export const ImpactPage: React.FC = () => {
           onClear={clearAnalysis}
           activeRepoName={activeRepo?.name || null}
         />
+
+        {analysisError && (
+          <div role="alert" className="mx-3.5 sm:mx-5 mt-3 flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-medium text-rose-800">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>{analysisError}</span>
+          </div>
+        )}
 
         {/* Content Area */}
         <div className="flex-1 flex min-h-0 min-w-0 w-full max-w-full relative overflow-hidden">
