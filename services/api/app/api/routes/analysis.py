@@ -18,6 +18,18 @@ class AnalyzeRequest(BaseModel):
     target_language: str = "en"
 
 
+def _require_safe_production_inference():
+    if (
+        settings.ENVIRONMENT.lower() == "production"
+        and (settings.AI_PROVIDER_PROFILE.lower() != "meta_only"
+             or settings.META_AI_PROVIDER.lower() != "offline_demo")
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Live analysis requires authenticated production access",
+        )
+
+
 @router.post("/repositories/{repository_id}/analyze-screenshot")
 def analyze_screenshot(
     repository_id: str,
@@ -28,6 +40,7 @@ def analyze_screenshot(
 ):
     """Run a synchronous image-assisted analysis without using the text cache."""
     try:
+        _require_safe_production_inference()
         repo = db.query(Repository).filter(Repository.id == repository_id).first()
         if not repo:
             raise HTTPException(status_code=404, detail="Repository not found")
@@ -69,6 +82,7 @@ def trigger_analysis(
     payload: AnalyzeRequest,
     db: Session = Depends(get_db)
 ):
+    _require_safe_production_inference()
     repo = db.query(Repository).filter(Repository.id == repository_id).first()
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")

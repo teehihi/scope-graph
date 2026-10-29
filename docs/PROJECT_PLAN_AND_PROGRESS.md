@@ -28,6 +28,8 @@ Updated: 2026-10-29 (Asia/Bangkok). This is the team-level status for the **whol
 
 ## Verification and measured quality
 
+The [2026-10-30 Multi-AI security follow-up](MULTI_AI_SECURITY_FOLLOWUP.md) added pre-parser screenshot body limits, a Docker Nginx screenshot limit, runtime-key redaction, production runtime-settings and paid-analysis gates, and a guarded partner smoke runner. The backend suite recorded **210 passed, 1 opt-in live skipped**. Public release remains blocked by repository/report authorization, account-wide inference limits and privacy decisions; partner live inference remains unverified.
+
 | Check | Latest recorded result on merged branch | Scope |
 | --- | --- | --- |
 | Backend suite | `200 passed, 1 skipped` on 2026-10-29 with the local Multi-AI changes; the skip is the opt-in live smoke. | Includes stage routing, provider, screenshot, evaluation, replay and holdout integrity tests; this suite made no paid inference. |
