@@ -1,6 +1,6 @@
 # AI Core response contract for frontend consumers
 
-Updated 2026-10-28. This describes additive fields in the existing analysis report. No frontend source changed. `POST /api/v1/repositories/{id}/analyze` with `run_sync: true` returns `{analysis_id, status, result, brief}`; `GET /api/v1/analyses/{id}/report` returns `result` directly. MCP `analyze_change` wraps the same `result` in `{status, analysis_id, result, brief}`.
+Updated 2026-10-29. This describes additive fields in the existing analysis report. No frontend source changed. `POST /api/v1/repositories/{id}/analyze` with `run_sync: true` returns `{analysis_id, status, result, brief}`; `GET /api/v1/analyses/{id}/report` returns `result` directly. MCP `analyze_change` wraps the same `result` in `{status, analysis_id, result, brief}`.
 
 ## Report fields
 
@@ -18,6 +18,7 @@ Updated 2026-10-28. This describes additive fields in the existing analysis repo
 | `validation_metrics` | object | Existence counts plus `impact_supported_claims`, `potential_claims`, `duplicate_claims`, `promoted_suggestions`, `promoted_graph_tests`, `promoted_index_settings`, and `promoted_setting_reads`. |
 | `rejected_hallucinations` | array | Invalid or ambiguous file/symbol claims with rejection reasons. |
 | `retrieval_metadata`, `operational_metadata` | object | Context budget, retrieval counts, provider/model, timing, and token usage when reported. |
+| `visual_context` | object, optional | Present only for internal screenshot-driven runs. Contains image SHA-256, MIME/dimensions, screen type, vision provider/model/demo flag, retrieval hint status and uncertainties. These are untrusted observations, never source evidence. No image bytes or OCR text are included. REST/MCP input remains text-only. |
 
 An impact item preserves legacy `file_path`, `symbol`, `impact_type`, `category`, `reason`, `confidence`, `is_verified_fact`, `evidence_snippet`, and line fields. New fields are:
 

@@ -4,8 +4,25 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints
 
 
 NonEmptyStr = Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1)]
+VisualShortText = Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1, max_length=160)]
+VisualLongText = Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1, max_length=500)]
+VisualEntries = Annotated[list[VisualShortText], Field(max_length=20)]
 Layer = Literal["api", "service", "model", "core", "test", "module", "database", "security"]
 ImpactCategory = Literal["api", "service", "database", "security", "test", "model", "core", "module"]
+
+
+class StructuredVisualIntent(BaseModel):
+    """Untrusted observations and hypotheses from an image, never code evidence."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    screen_type: VisualShortText
+    visible_text: VisualEntries
+    visible_elements: VisualEntries
+    user_actions: VisualEntries
+    functional_concepts: VisualEntries
+    requirement_interpretation: VisualLongText
+    uncertainties: VisualEntries
 
 
 class RequirementInterpretation(BaseModel):

@@ -49,6 +49,7 @@ apps/web/.vite/
 data/
 storage/
 workspace_storage/
+review-output/
 *.db
 *.sqlite
 *.sqlite3

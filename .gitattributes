@@ -1,0 +1,2 @@
+# Preserve the pinned third-party holdout snapshot byte-for-byte on every platform.
+examples/holdout-fastapi-realworld/** -text

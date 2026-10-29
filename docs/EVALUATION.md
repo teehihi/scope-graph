@@ -1,5 +1,13 @@
 # ScopeGraph AI Core evaluation
 
+The [SG-AI-09B RealWorld holdout candidate](HOLDOUT_LABEL_REVIEW.md) is a separate 10-case source-labeled dataset, pinned to upstream commit `029eb7781c60d5f563ee8990a0cbfb79b244538c`. Its provisional [v2 offline evaluation](HOLDOUT_EVALUATION_REPORT.md) is recorded separately. The owner accepted the AI-assisted labels as a project checkpoint; independent human source sign-off and a frozen final benchmark remain pending.
+
+## SG-AI-18 scripted screenshot comparison (2026-10-29)
+
+The [six-case synthetic screenshot fixture](../services/api/tests/evaluation/multimodal_cases_v1.json) reuses unchanged provisional v3 source labels from `examples/sample-repository` at `f413b0b90d6157d5493a5603fb1245a7f4681eb6`. Images are original locally rendered UI mockups. A hash-keyed `fixture_mock` supplies authored visual intent; it does **not** interpret image pixels. The [full report](MULTIMODAL_EVALUATION_V1.md) records image hashes, per-case outcomes, failures, reproduction commands and limits. Evaluation code commit: `033cede3e8c2b966397296c289b75ae5f930a82e`; the recorded run had a clean worktree. Its replayable prediction artifact is Git-ignored at `data/multimodal_evaluation_v1.json`.
+
+At K=8, text-only versus screenshot-plus-scripted-intent micro retrieval recall was **15/19 (0.789) versus 16/19 (0.842)**. Micro supported-impact precision/recall/F1 was **0.345/0.769/0.476 versus 0.370/0.769/0.500**; direct/indirect recall stayed **0.750/0.800**. Claims outside the provisional impact labels fell from 19 to 17. These changes show a functioning visual-hint path on this fixture, **not** a measured improvement from Muse Spark vision. Scripted visual concept agreement of 0.944 precision and 1.000 recall is a fixture sanity measure, not model accuracy. Mean local latency was 18.6 versus 18.8 ms; model-reported tokens are unavailable; paid inference cost was $0. Human label/visual review and authorized live inference remain separate gates.
+
 ## SG-AI-09 label-only v3 replay (2026-10-28)
 
 The [v3 fixture](../services/api/tests/evaluation/ai_core_cases_v3.json) applies **exactly six removals** to the frozen v2 labels: 17 scenarios, **25 direct + 10 indirect = 35** impact pairs, versus 26 direct + 15 indirect = 41 in v2. The [review decision record](AI_CORE_LABEL_REVIEW_V3.md) gives the six rationales and source lines. This was an **AI-assisted source review**, not independent human sign-off. Both fixtures refer to sample repository snapshot `f413b0b90d6157d5493a5603fb1245a7f4681eb6`; the sample source in this checkout matches that snapshot. No evaluation false positive was promoted into ground truth.
@@ -22,7 +30,7 @@ $env:PYTHONPATH='services/api'
 | Unique raw claims outside labels | 91 / 111 | 93 / 111 |
 | Hybrid retrieval Recall@8 | 0.956 | 0.956 |
 
-Three removed labels were true positives under v2 and became false positives under v3; three were false negatives under v2 and disappeared from the denominator. Raw claims matched two removed labels. These score changes are **entirely caused by label revision**, with identical predictions, retrieval context, provider, and inference latency. The macro strict score averages only the 16 cases with nonempty gold impact labels; micro strict scores pool 35 v3 gold pairs. Retrieval labels and rankings did not change. No offline inference rerun was needed for this controlled label comparison, and no paid Meta request was made. The 17 cases come from one small Python sample; they cannot establish production accuracy, generalization, or a model improvement. Human sign-off and a separate repository holdout remain open.
+Three removed labels were true positives under v2 and became false positives under v3; three were false negatives under v2 and disappeared from the denominator. Raw claims matched two removed labels. These score changes are **entirely caused by label revision**, with identical predictions, retrieval context, provider, and inference latency. Macro ratios omit cases where their individual denominator is undefined; micro strict scores pool 35 v3 gold pairs. Retrieval labels and rankings did not change. No offline inference rerun was needed for this controlled label comparison, and no paid Meta request was made. The 17 cases come from one small Python sample; they cannot establish production accuracy, generalization, or a model improvement. Human sign-off remains open; the separate holdout candidate is prepared but unevaluated.
 
 ## SG-AI-07B/07C/08/09 offline checkpoint (2026-10-28)
 

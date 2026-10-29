@@ -251,6 +251,8 @@ Configure ScopeGraph as an MCP server with Command: `python` and Args: `["-m", "
 
 See the reproducible [AI Core evaluation](docs/EVALUATION.md) for definitions, latency, model-reported token usage, and the limits of this small fixture. The evidence gate validates indexed file and symbol existence; it does not prove that an impact is causally correct.
 
+For current status across the API, web app, indexing, AI, authentication, evaluation, and release work, see the [project plan and progress](docs/PROJECT_PLAN_AND_PROGRESS.md).
+
 ---
 
 ## 🔒 Security & Safe Sandboxing

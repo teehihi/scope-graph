@@ -1,0 +1,78 @@
+{
+  "snapshot_root": "examples/sample-repository",
+  "upstream_commit": "f413b0b90d6157d5493a5603fb1245a7f4681eb6",
+  "file_count": 14,
+  "files": [
+    {
+      "path": "app/api/auth.py",
+      "size_bytes": 820,
+      "sha256": "73e2ec2fab1baa6ec97f9fefbd88c6b56df16810f706f371e95e95118eca647f"
+    },
+    {
+      "path": "app/api/users.py",
+      "size_bytes": 1137,
+      "sha256": "3dafa6c028f853ed43c8601e5c641290667e8c088569c95ec176c0290dbadd62"
+    },
+    {
+      "path": "app/api/verification.py",
+      "size_bytes": 931,
+      "sha256": "c40723727230c2193f9b16aab2f7d816c55dadfdfd01ca8ae87cf55510d3fc75"
+    },
+    {
+      "path": "app/core/config.py",
+      "size_bytes": 335,
+      "sha256": "a91944d8c3d1d17e462bf48cbfd60af77065740e3713b7fd1c34fe82c495fdbe"
+    },
+    {
+      "path": "app/core/security.py",
+      "size_bytes": 1297,
+      "sha256": "5bfec1aceebd59b653d7f3147e767c9819d3319ae8e6aeddec8387c717ddcc86"
+    },
+    {
+      "path": "app/main.py",
+      "size_bytes": 637,
+      "sha256": "f4b524ca227d9399b005bb83ced0beea850a32b48a77cc6a879f009c815e5e78"
+    },
+    {
+      "path": "app/models/user.py",
+      "size_bytes": 725,
+      "sha256": "34983d3b28640867541d3aa7781c2f5f76013321e87df6b4bdf932038bfa192d"
+    },
+    {
+      "path": "app/models/verification_token.py",
+      "size_bytes": 761,
+      "sha256": "e5789028de49b5821cd11c5fb5d60c316a38c5c03eba236cb608116f2835ed59"
+    },
+    {
+      "path": "app/services/notification_service.py",
+      "size_bytes": 956,
+      "sha256": "ad3a233f9e00e9acb826073495dc3fadcfc41bcf09bec8b3fc0c9f5f7f9b654c"
+    },
+    {
+      "path": "app/services/user_service.py",
+      "size_bytes": 1964,
+      "sha256": "aa50c8f2d6229b83ab0881f511e83fd298e197b1eeb65c72d91c8ddbda62a9e3"
+    },
+    {
+      "path": "app/services/verification_service.py",
+      "size_bytes": 1553,
+      "sha256": "0a5c0f87152aae7b6f1c4962ca54ba29013b3354abcc15598e3b560902225535"
+    },
+    {
+      "path": "tests/test_auth.py",
+      "size_bytes": 277,
+      "sha256": "def8f1de1bfd86b39c0be50b04e521790a8859a55b187697a0f4a3a53c9c119b"
+    },
+    {
+      "path": "tests/test_users.py",
+      "size_bytes": 755,
+      "sha256": "49ed2c54fc8ce531f59fb3f69ad947f531aef67d58a4adef2e1773f40e00135d"
+    },
+    {
+      "path": "tests/test_verification.py",
+      "size_bytes": 795,
+      "sha256": "14844cbc1d971eb3dcfd795848274ae5faee4798e9fec6fa987bb3caf1d319be"
+    }
+  ],
+  "tree_sha256": "df4ae5819afd5c8572f4975961c9e081aa97a6e3a9975da1a98eebeea7ab66bc"
+}

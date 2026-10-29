@@ -1,5 +1,5 @@
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.db.database import get_db
@@ -7,6 +7,7 @@ from app.db.models import Repository, AnalysisRun
 from app.jobs.queue import enqueue_job, get_cache, set_cache, make_analysis_cache_key
 from app.jobs.tasks import task_run_analysis
 from app.analysis.orchestrator import AnalysisOrchestrator
+from app.ai.image_input import decode_uploaded_screenshot
 from app.core.config import settings
 
 router = APIRouter(tags=["analysis"])
@@ -15,6 +16,52 @@ class AnalyzeRequest(BaseModel):
     requirement: str
     run_sync: bool = False
     target_language: str = "en"
+
+
+@router.post("/repositories/{repository_id}/analyze-screenshot")
+def analyze_screenshot(
+    repository_id: str,
+    requirement: str = Form(...),
+    screenshot: UploadFile = File(...),
+    target_language: str = Form("en"),
+    db: Session = Depends(get_db),
+):
+    """Run a synchronous image-assisted analysis without using the text cache."""
+    try:
+        repo = db.query(Repository).filter(Repository.id == repository_id).first()
+        if not repo:
+            raise HTTPException(status_code=404, detail="Repository not found")
+        if repo.status != "ready":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Repository is not ready for analysis (status: {repo.status})",
+            )
+        req_text = requirement.strip()
+        if not req_text:
+            raise HTTPException(status_code=400, detail="Requirement text cannot be empty")
+        if screenshot.content_type not in ("image/png", "image/jpeg"):
+            raise HTTPException(status_code=415, detail="Only PNG and JPEG screenshots are supported")
+
+        data = screenshot.file.read(settings.MAX_SCREENSHOT_BYTES + 1)
+        if len(data) > settings.MAX_SCREENSHOT_BYTES:
+            raise HTTPException(status_code=413, detail="Screenshot exceeds configured size limit")
+        try:
+            image = decode_uploaded_screenshot(data, screenshot.content_type)
+        except ValueError as error:
+            status = 413 if "size limit" in str(error) else 400
+            raise HTTPException(status_code=status, detail=str(error)) from None
+
+        run = AnalysisOrchestrator(db).run_analysis(
+            repository_id, req_text, target_language=target_language, screenshot=image,
+        )
+        return {
+            "analysis_id": run.id,
+            "status": run.status,
+            "result": run.result_json,
+            "brief": run.brief_markdown,
+        }
+    finally:
+        screenshot.file.close()
 
 @router.post("/repositories/{repository_id}/analyze")
 def trigger_analysis(
