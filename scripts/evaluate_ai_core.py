@@ -56,6 +56,16 @@ def verify_snapshot_manifest(dataset: dict, sample: Path, manifest: dict) -> int
     return len(records)
 
 
+def observed_source_tree_digest(sample: Path) -> str:
+    """Record actual selected source bytes even when a fixture has no manifest."""
+    digest = hashlib.sha256()
+    for path in sorted(p for p in sample.rglob("*") if p.is_file()):
+        digest.update(path.relative_to(sample).as_posix().encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(hashlib.sha256(path.read_bytes()).digest())
+    return digest.hexdigest()
+
+
 def old_keyword_retrieval(files, symbols_by_file, keywords):
     """Exact pre-SG-AI-03 selection rule, including its first-eight fallback."""
     result = []
@@ -193,6 +203,7 @@ def run(mode: str, output: Path, allow_paid_request: bool, dataset_path: Path | 
             "repository_snapshot": dataset.get("repository_snapshot"),
             "source_manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest() if manifest_bytes else None,
             "source_tree_sha256": manifest["tree_sha256"] if manifest else None,
+            "observed_source_tree_sha256": observed_source_tree_digest(sample),
             "verified_source_file_count": verified_source_file_count,
             "review_status": dataset.get("review_status"),
             "label_counts": {
