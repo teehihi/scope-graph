@@ -124,6 +124,40 @@ export const ReportPanel: React.FC<ReportPanelProps> = ({
         {/* Tab 1: Affected Files */}
         {activeTab === 'items' && (
           <div className="space-y-4 min-w-0 max-w-full animate-fade-in">
+            {/* Multimodal Visual Context Grounding Banner */}
+            {report.visual_context && (
+              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-50/70 via-indigo-50/40 to-white border border-blue-200/80 shadow-2xs space-y-2">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="p-1 rounded-lg bg-[#526BEE] text-white">
+                      <Sparkles className="w-3.5 h-3.5" />
+                    </span>
+                    <span className="text-xs font-bold text-[#151923]">
+                      {t('report.visual_context_title')}
+                    </span>
+                  </div>
+                  {report.visual_context.screen_type && (
+                    <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-white border border-blue-200 text-blue-700 font-semibold shadow-2xs">
+                      {t('report.screen_type')}: {report.visual_context.screen_type}
+                    </span>
+                  )}
+                </div>
+
+                {report.visual_context.visible_elements && report.visual_context.visible_elements.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap text-xs pt-1">
+                    <span className="text-[11px] text-[#8B929E] font-medium">
+                      {t('report.detected_elements')}:
+                    </span>
+                    {report.visual_context.visible_elements.map((el, i) => (
+                      <span key={i} className="text-[11px] font-mono bg-white border border-[#E4E7E1] px-2 py-0.5 rounded-md text-slate-700">
+                        {el}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Tier 1: Direct items (Chắc chắn ảnh hưởng) */}
             {directItems.length > 0 && (
               <div className="space-y-2">

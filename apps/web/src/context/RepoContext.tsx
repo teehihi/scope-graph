@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useNodesState, useEdgesState, Node, Edge } from '@xyflow/react';
 import { Repository, NodeData, ImpactItem, AnalysisReport, LayerType } from '../types';
-import { fetchRepositories, loadSampleRepository, fetchGraph, runAnalysis } from '../api/client';
+import { fetchRepositories, loadSampleRepository, fetchGraph, runAnalysis, analyzeScreenshot } from '../api/client';
 import { useLanguage } from './LanguageContext';
 
 interface RepoContextType {
@@ -24,7 +24,7 @@ interface RepoContextType {
   isAnalyzing: boolean;
   requirement: string;
   setRequirement: (req: string) => void;
-  runAnalysisRequirement: (req: string, targetRepo?: Repository | null) => Promise<void>;
+  runAnalysisRequirement: (req: string, targetRepo?: Repository | null, screenshot?: File | null) => Promise<void>;
   clearAnalysis: () => void;
   selectedNodeData: NodeData | null;
   setSelectedNodeData: (n: NodeData | null) => void;
@@ -58,12 +58,14 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
   activeRepoRef.current = activeRepo;
 
   // Run analysis (stable reference, no re-triggering dependencies)
-  const runAnalysisRequirement = useCallback(async (req: string, targetRepo?: Repository | null) => {
+  const runAnalysisRequirement = useCallback(async (req: string, targetRepo?: Repository | null, screenshot?: File | null) => {
     const repo = targetRepo || activeRepoRef.current;
     if (!repo) return;
     setIsAnalyzing(true);
     try {
-      const resp = await runAnalysis(repo.id, req, language);
+      const resp = screenshot
+        ? await analyzeScreenshot(repo.id, req, screenshot, language)
+        : await runAnalysis(repo.id, req, language);
       if (resp.result) {
         setAnalysisReport(resp.result);
         setBriefMarkdown(resp.brief || '');
@@ -78,7 +80,7 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setIsAnalyzing(false);
     }
-  }, []);
+  }, [language]);
 
   const refreshRepositories = useCallback(async () => {
     try {

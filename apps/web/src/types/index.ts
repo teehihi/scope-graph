@@ -143,6 +143,17 @@ export interface AnalysisReport {
     claimed_symbol?: string;
     reason: string;
   }>;
+  visual_context?: {
+    image_sha256?: string;
+    mime_type?: string;
+    width?: number;
+    height?: number;
+    screen_type?: string;
+    visible_elements?: string[];
+    user_actions?: string[];
+    functional_concepts?: string[];
+    uncertainties?: string[];
+  };
   operational_metadata?: {
     provider: string;
     model: string;

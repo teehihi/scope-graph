@@ -168,6 +168,28 @@ export async function runAnalysis(
   return res.json();
 }
 
+export async function analyzeScreenshot(
+  repoId: string,
+  requirement: string,
+  screenshot: File,
+  targetLanguage: string = 'en'
+): Promise<{ analysis_id: string; status: string; result?: AnalysisReport; brief?: string }> {
+  const formData = new FormData();
+  formData.append('requirement', requirement);
+  formData.append('screenshot', screenshot);
+  formData.append('target_language', targetLanguage);
+
+  const res = await fetch(`${API_BASE}/repositories/${repoId}/analyze-screenshot`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Screenshot analysis failed' }));
+    throw new Error(err.detail || 'Screenshot analysis failed');
+  }
+  return res.json();
+}
+
 export async function fetchAnalysisReport(analysisId: string): Promise<AnalysisReport> {
   const res = await fetch(`${API_BASE}/analyses/${analysisId}/report`);
   if (!res.ok) throw new Error('Failed to fetch report');

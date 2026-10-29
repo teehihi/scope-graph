@@ -185,8 +185,16 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
 
     def interpret_screenshot(self, requirement: str, image: ValidatedScreenshot) -> AIProviderResponse:
         destination = urlparse(self.base_url)
-        if (self.provider_name != "meta_model_api" or destination.scheme != "https"
-                or destination.hostname != "api.meta.ai"):
+        allowed_destinations = {
+            ("meta_model_api", "api.meta.ai"),
+            ("baseten", "inference.baseten.co"),
+            ("baseten", "bridge.baseten.co"),
+            ("modal", "modal.run"),
+        }
+        if (
+            (self.provider_name, destination.hostname) not in allowed_destinations
+            or destination.scheme != "https"
+        ):
             raise ValueError("Screenshot interpretation unavailable for configured provider")
         if not isinstance(image, ValidatedScreenshot):
             raise TypeError("Screenshot must be a ValidatedScreenshot")

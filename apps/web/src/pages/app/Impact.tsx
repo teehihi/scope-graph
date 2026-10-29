@@ -76,7 +76,7 @@ export const ImpactPage: React.FC = () => {
       <div className="flex-1 flex flex-col min-h-0 min-w-0 w-full max-w-full overflow-hidden bg-[#F7F8F5]">
         {/* Requirement Input Bar */}
         <RequirementPanel
-          onAnalyze={runAnalysisRequirement}
+          onAnalyze={(req, screenshot) => runAnalysisRequirement(req, null, screenshot)}
           isAnalyzing={isAnalyzing}
           hasReport={analysisReport !== null}
           onClear={clearAnalysis}

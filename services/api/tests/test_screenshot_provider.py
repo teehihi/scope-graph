@@ -247,6 +247,44 @@ def test_vision_rejects_non_meta_destination_before_sending_image():
             provider.client.close()
 
 
+def test_vision_accepts_baseten_hackathon_destination():
+    image = ValidatedScreenshot.from_bytes(png(), "image/png")
+    mock_payload = {
+        "screen_type": "article listing",
+        "visible_text": ["Search"],
+        "visible_elements": ["search field"],
+        "user_actions": ["search"],
+        "functional_concepts": ["search"],
+        "requirement_interpretation": "Filter articles",
+        "uncertainties": [],
+    }
+    client = httpx.Client(
+        transport=httpx.MockTransport(
+            lambda req: httpx.Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": json.dumps(mock_payload)}}],
+                    "model": "meta-models/muse-spark-open-1026",
+                },
+            )
+        )
+    )
+    provider = MetaAIHttpProvider(
+        "test-key",
+        "https://inference.baseten.co/v1",
+        "meta-models/muse-spark-open-1026",
+        "baseten",
+    )
+    provider.client = client
+    try:
+        resp = provider.interpret_screenshot("Filter articles", image)
+        assert resp.data["screen_type"] == "article listing"
+        assert resp.provider == "baseten"
+        assert resp.model == "meta-models/muse-spark-open-1026"
+    finally:
+        provider.client.close()
+
+
 def test_vision_requires_nonempty_requirement_and_validated_image(vision_provider):
     provider = vision_provider(lambda request: pytest.fail("Invalid input reached provider transport"))
     image = ValidatedScreenshot.from_bytes(png(), "image/png")

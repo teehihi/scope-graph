@@ -70,9 +70,10 @@ const PROVIDER_PRESETS: Record<string, ProviderPreset> = {
     ],
   },
   baseten: {
-    defaultModel: 'llama-3.3-70b-instruct',
-    defaultBaseUrl: 'https://bridge.baseten.co/v1',
+    defaultModel: 'meta-models/muse-spark-open-1026',
+    defaultBaseUrl: 'https://inference.baseten.co/v1',
     models: [
+      'meta-models/muse-spark-open-1026',
       'llama-3.3-70b-instruct',
       'llama-3.1-70b-instruct',
     ],
