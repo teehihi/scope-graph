@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "ScopeGraph optional Multi-AI pipeline",
+    "subtitle": "Configured stage routing; Baseten and Modal live behavior is unverified",
+    "locale": "en",
+    "output": "docs/diagrams/multi-ai-pipeline.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/teehihi/scope-graph.git",
+      "revision": "433a7ced1a41024f47d57744f9d6ad881631ee33"
+    }
+  },
+  "components": [
+    {"id":"screenshot","type":"external","label":"Screenshot","sublabel":"Validated PNG / JPEG","pos":[28,70],"size":[125,68],"sources":[{"path":"services/api/app/api/routes/analysis.py","line":33,"end_line":45}]},
+    {"id":"vision","type":"cloud","label":"Baseten vision","sublabel":"Opt-in configured endpoint","pos":[210,70],"size":[160,68],"sources":[{"path":"services/api/app/ai/routing.py","line":244,"end_line":246},{"path":"services/api/app/ai/routing.py","line":263,"end_line":281}]},
+    {"id":"requirement","type":"external","label":"Requirement","sublabel":"Text is always required","pos":[28,255],"size":[125,68],"sources":[{"path":"services/api/app/analysis/orchestrator.py","line":38,"end_line":39}]},
+    {"id":"interpret","type":"cloud","label":"Meta interpret","sublabel":"Requirement intent","pos":[210,255],"size":[160,68],"sources":[{"path":"services/api/app/analysis/orchestrator.py","line":79,"end_line":84},{"path":"services/api/app/ai/routing.py","line":301,"end_line":307}]},
+    {"id":"retrieval","type":"backend","label":"Retrieval + graph","sublabel":"Indexed local context","pos":[445,165],"size":[172,70],"sources":[{"path":"services/api/app/analysis/orchestrator.py","line":86,"end_line":104},{"path":"services/api/app/analysis/retriever.py","line":118,"end_line":124}]},
+    {"id":"reason","type":"cloud","label":"Modal reasoning","sublabel":"Opt-in configured endpoint","pos":[680,165],"size":[170,70],"sources":[{"path":"services/api/app/analysis/orchestrator.py","line":106,"end_line":112},{"path":"services/api/app/ai/routing.py","line":284,"end_line":300}]},
+    {"id":"review","type":"cloud","label":"Meta review","sublabel":"Completeness pass","pos":[925,165],"size":[150,70],"sources":[{"path":"services/api/app/analysis/orchestrator.py","line":115,"end_line":124},{"path":"services/api/app/ai/routing.py","line":301,"end_line":307}]},
+    {"id":"ground","type":"security","label":"Ground + classify","sublabel":"Evidence and causal checks","pos":[925,350],"size":[170,70],"sources":[{"path":"services/api/app/analysis/orchestrator.py","line":134,"end_line":160}]},
+    {"id":"brief","type":"cloud","label":"Meta brief","sublabel":"Uses grounded report only","pos":[680,350],"size":[170,70],"sources":[{"path":"services/api/app/analysis/orchestrator.py","line":264,"end_line":269}]},
+    {"id":"report","type":"backend","label":"Impact report","sublabel":"REST / MCP consumers","pos":[445,350],"size":[172,70],"sources":[{"path":"services/api/app/api/routes/analysis.py","line":185,"end_line":193},{"path":"services/api/app/mcp/server.py","line":23,"end_line":42}]}
+  ],
+  "connections": [
+    {"from":"screenshot","to":"vision","label":"image"},
+    {"from":"requirement","to":"interpret","label":"text"},
+    {"from":"vision","to":"retrieval","label":"visual concepts"},
+    {"from":"interpret","to":"retrieval","label":"keywords"},
+    {"from":"retrieval","to":"reason","label":"code context"},
+    {"from":"reason","to":"review","label":"claims"},
+    {"from":"review","to":"ground","label":"candidate impact"},
+    {"from":"ground","to":"brief","label":"verified result"},
+    {"from":"brief","to":"report","label":"brief + report"}
+  ],
+  "cards": [
+    {"dot":"amber","title":"Experimental partner routing","items":["The multi_ai profile requires explicit endpoints, keys and capability flags.","Baseten and Modal have only been exercised with mocks."]},
+    {"dot":"emerald","title":"Grounding stays local","items":["Visual observations never become source evidence by themselves.","The evidence gate runs after completeness review and before brief generation."]}
+  ]
+}

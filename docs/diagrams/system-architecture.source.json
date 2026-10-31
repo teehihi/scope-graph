@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "ScopeGraph system architecture",
+    "subtitle": "Repository-aware analysis with source-grounded reports",
+    "locale": "en",
+    "output": "docs/diagrams/system-architecture.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/teehihi/scope-graph.git",
+      "revision": "433a7ced1a41024f47d57744f9d6ad881631ee33"
+    }
+  },
+  "components": [
+    {"id":"developer","type":"external","label":"Developer","sublabel":"Browser workflow","pos":[28,205],"size":[122,64],"sources":[{"path":"apps/web/src/pages/app/Impact.tsx","line":15,"end_line":23}]},
+    {"id":"web","type":"frontend","label":"React dashboard","sublabel":"Graph, upload, report","pos":[218,205],"size":[154,68],"sources":[{"path":"apps/web/src/context/RepoContext.tsx","line":67,"end_line":81},{"path":"apps/web/src/context/RepoContext.tsx","line":131,"end_line":133}]},
+    {"id":"api","type":"backend","label":"FastAPI REST","sublabel":"Repository + analysis routes","pos":[440,205],"size":[158,68],"sources":[{"path":"services/api/app/main.py","line":56,"end_line":60},{"path":"services/api/app/api/routes/analysis.py","line":33,"end_line":38}]},
+    {"id":"analysis","type":"backend","label":"Analysis core","sublabel":"Retrieve, traverse, reason","pos":[670,205],"size":[166,70],"sources":[{"path":"services/api/app/analysis/orchestrator.py","line":79,"end_line":116},{"path":"services/api/app/analysis/orchestrator.py","line":134,"end_line":160}]},
+    {"id":"router","type":"backend","label":"AI stage router","sublabel":"Meta or offline; opt-in partners","pos":[895,60],"size":[172,70],"sources":[{"path":"services/api/app/ai/routing.py","line":220,"end_line":249}]},
+    {"id":"evidence","type":"security","label":"Evidence gate","sublabel":"Validate file, symbol, lines","pos":[895,385],"size":[172,70],"sources":[{"path":"services/api/app/evidence/validator.py","line":67,"end_line":76},{"path":"services/api/app/evidence/validator.py","line":103,"end_line":110}]},
+    {"id":"store","type":"database","label":"Indexed store","sublabel":"PostgreSQL or local SQLite","pos":[1120,385],"size":[165,70],"sources":[{"path":"services/api/app/db/models.py","line":13,"end_line":23},{"path":"services/api/app/db/models.py","line":32,"end_line":45}]},
+    {"id":"indexer","type":"backend","label":"Python indexer","sublabel":"Scanner + AST + edges","pos":[670,60],"size":[166,70],"sources":[{"path":"services/api/app/indexing/engine.py","line":39,"end_line":50},{"path":"services/api/app/indexing/parser.py","line":55,"end_line":60}]},
+    {"id":"agent","type":"external","label":"Coding agent","sublabel":"MCP tool client","pos":[28,390],"size":[122,64],"sources":[{"path":"services/api/app/mcp/server.py","line":23,"end_line":26}]},
+    {"id":"mcp","type":"backend","label":"FastMCP server","sublabel":"Three grounded tools","pos":[440,390],"size":[158,70],"sources":[{"path":"services/api/app/mcp/server.py","line":23,"end_line":32},{"path":"services/api/app/mcp/server.py","line":58,"end_line":66},{"path":"services/api/app/mcp/server.py","line":131,"end_line":139}]}
+  ],
+  "connections": [
+    {"from":"developer","to":"web","label":"use UI"},
+    {"from":"web","to":"api","label":"HTTP"},
+    {"from":"api","to":"analysis","label":"analyze"},
+    {"from":"api","to":"indexer","label":"index repo"},
+    {"from":"agent","to":"mcp","label":"MCP tools"},
+    {"from":"mcp","to":"analysis","label":"analyze"},
+    {"from":"analysis","to":"router","label":"AI stages"},
+    {"from":"analysis","to":"evidence","label":"ground claims"},
+    {"from":"analysis","to":"store","label":"retrieve graph"},
+    {"from":"indexer","to":"store","label":"write index"},
+    {"from":"evidence","to":"store","label":"check facts"}
+  ],
+  "cards": [
+    {"dot":"emerald","title":"Local-first grounding","items":["AST and graph facts come from the indexed repository.","The evidence gate rejects missing file and symbol references."]},
+    {"dot":"cyan","title":"Inference choices","items":["Default profile uses one Meta or offline provider.","Baseten/Modal stage routing is opt-in and not live-verified."]}
+  ]
+}

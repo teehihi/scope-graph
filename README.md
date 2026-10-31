@@ -1,333 +1,225 @@
 <div align="center">
 
+<img src="docs/assets/scopegraph-banner.png" width="100%" alt="Abstract directed dependency graph in graphite, emerald and cyan" />
+
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/scopegraph-brand-final/logo/scopegraph-logo-horizontal-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="docs/scopegraph-brand-final/logo/scopegraph-logo-horizontal.svg">
-  <img src="docs/scopegraph-brand-final/logo/scopegraph-logo-horizontal.svg" alt="ScopeGraph Logo" width="460">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/scopegraph-brand-final/logo/scopegraph-logo-horizontal-dark.svg" />
+  <img src="docs/scopegraph-brand-final/logo/scopegraph-logo-horizontal.svg" width="310" alt="ScopeGraph" />
 </picture>
 
-### *Understand the blast radius and architectural impact before writing code.*
+### Understand the impact before changing the code.
 
-**An AI-powered code intelligence and change impact analysis platform for developers and AI coding agents.**
+**ScopeGraph maps a change request to an indexed codebase, then shows the evidence behind its proposed blast radius.**
 
-Built for the **Meta Global AI Developer Hackathon** (Push the Frontier Track).
+[![Python 3.13](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](services/api/requirements.txt)
+[![React 18](https://img.shields.io/badge/React-18-149ECA?logo=react&logoColor=white)](apps/web/package.json)
+[![MCP tools](https://img.shields.io/badge/MCP-3%20tools-303741)](docs/MCP_SETUP.md)
+[![MIT](https://img.shields.io/badge/License-MIT-1E9F78)](LICENSE)
 
-[![Python 3.13](https://img.shields.io/badge/Python-3.13-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![React 18](https://img.shields.io/badge/React-18-61DAFB.svg?logo=react&logoColor=black)](https://react.dev/)
-[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg?logo=docker&logoColor=white)](https://www.docker.com/)
-[![Model Context Protocol](https://img.shields.io/badge/MCP-Protocol-7050FF.svg)](https://modelcontextprotocol.io/)
-[![Meta AI](https://img.shields.io/badge/Meta%20AI-Llama%203.3%20%2F%20Muse%20Spark-0668E1.svg?logo=meta&logoColor=white)](https://ai.meta.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-
+[Demo](#demo--product-preview) &nbsp;·&nbsp; [Features](#key-features) &nbsp;·&nbsp; [Architecture](#system-architecture) &nbsp;·&nbsp; [Quick start](#quick-start)
 
 </div>
 
----
+## Demo & product preview
 
-## 💡 The Problem
+The hero artwork is illustrative. The product images below are **captures of the running local app** using the bundled, non-private [sample repository](examples/sample-repository/). The impact report uses the deterministic `offline_demo` provider. The screenshot is shown attached **before inference**; offline mode does not interpret images. See the [three-minute demo plan](docs/HACKATHON_FINAL_READINESS.md) and [current submission status](docs/HACKATHON_SUBMISSION.md).
 
-When a developer or AI coding agent receives a change requirement such as:
+### 01 / Explore the dependency graph
 
-> *"Require email verification before users can change their email address."*
+Python files are organized by API, service, model, core and test layers. Select a node to inspect indexed symbols and connections.
 
-They face critical questions before writing any code:
-- **Which API endpoints and services are involved?**
-- **Which database models and migration files will be affected?**
-- **What downstream modules and callers could silently break?**
-- **Which automated regression tests must be updated or written?**
-- **What exact code context should an AI coding agent read first without context bloating?**
+![ScopeGraph dependency graph showing the indexed sample authentication repository](docs/assets/graph-explorer.png)
 
-Today, engineers perform this investigation manually by grepping files or reading logs. Meanwhile, AI coding agents dump whole repositories into context windows, hallucinate dependencies, and introduce regressions because they lack structured repository context.
+### 02 / Bring visual context to a change request
 
----
+Attach a PNG or JPEG alongside the requirement. A configured vision provider can interpret what is visible; screenshot observations are kept separate from verified source evidence.
 
-## 🚀 The Solution: ScopeGraph
+![ScopeGraph impact form with a locally generated account-email screenshot attached](docs/assets/screenshot-upload.png)
 
-ScopeGraph combines **deterministic static code analysis** with **Meta AI semantic reasoning** and an **anti-hallucination evidence gate**:
+### 03 / Inspect the claim and its source
 
-<table align="center" width="100%">
-<tr>
-<td width="50%" valign="top">
+The report separates direct, indirect and potential impacts, with file paths, symbols and line-numbered excerpts. This capture is from **offline demo inference**: “verified” means the cited code exists in the index, not that the proposed edit is certainly required.
 
-### 🎯 1. Deterministic AST Grounding
-- Parses source code via safe Python AST extraction.
-- Maps classes, functions, decorators, endpoints, SQLAlchemy models, and call hierarchies directly into PostgreSQL.
-- Zero guessing — all facts originate from static code structure.
+![ScopeGraph offline impact report with a source evidence drawer open](docs/assets/source-evidence.png)
 
-</td>
-<td width="50%" valign="top">
+<details>
+<summary>See the full report view</summary>
 
-### 🛡️ 2. Anti-Hallucination Evidence Gate
-- Every file path, symbol, and line reference proposed by AI models is verified against the database.
-- Non-existent files and phantom symbols are rejected.
-- Validated items are enriched with exact line ranges and code snippets.
+![ScopeGraph offline report overview with direct and potential sections](docs/assets/impact-evidence.png)
 
-</td>
-</tr>
-<tr>
-<td width="50%" valign="top">
+</details>
 
-### 🌐 3. Interactive Blast Radius Graph
-- Visualizes codebases layered by architectural tier (`api`, `service`, `model`, `core`, `test`) using **React Flow**.
-- Highlights direct impact (Red), downstream cascade (Amber), and safe modules in real time.
-- Interactive Evidence Drawer reveals symbol signatures and source lines.
+## Why ScopeGraph?
 
-</td>
-<td width="50%" valign="top">
+| Before editing | ScopeGraph gives you |
+| --- | --- |
+| A requirement with unclear blast radius | Candidate edit targets, downstream behavior and potential risks in separate categories |
+| A large repository and limited context | Relevant indexed files and graph neighbors instead of a whole-repository dump |
+| An AI suggestion without a traceable basis | A checked file/symbol reference and a source excerpt with line numbers |
 
-### 🤖 4. Native Model Context Protocol (MCP)
-- Direct integration for **Claude Code**, **Cursor**, and **Codex**.
-- Exposes tools: `analyze_change`, `get_relevant_context`, and `suggest_tests`.
-- Serves indexed context briefs; the measured comparison on the three-case sample shows about **6.4% less serialized file-summary context**, not a measured billed-token saving.
+ScopeGraph is a **planning aid**. Static indexing supplies facts; model reasoning proposes relationships; developers decide which changes are necessary.
 
-</td>
-</tr>
-</table>
+## Key features
 
----
+| Capability | What is available |
+| --- | --- |
+| Repository-aware impact analysis | Python AST indexing, hybrid retrieval, graph traversal and a multi-pass analysis report |
+| Visual dependency exploration | Interactive React Flow graph with architectural layers and file-level connections |
+| Impact separation | Direct, indirect and potential items are displayed separately; causal classification adds checks beyond file existence |
+| Screenshot-to-Impact | PNG/JPEG upload and visual-context contract are implemented; an actual vision provider is required. Local browser integration is mock-verified; one prior Meta **vision-only** smoke request succeeded. |
+| Source evidence | Indexed path/symbol validation, rejected unsupported references and line-numbered excerpts |
+| Agent access | FastMCP tools: `analyze_change`, `get_relevant_context`, `suggest_tests` |
+| Optional Multi-AI routing | Configured stage routing can select Baseten Vision and Modal reasoning; partner live inference remains **unverified** |
 
-## 🏗️ Architecture
+## How it works
+
+`Index repository → interpret requirement (and optional image) → retrieve context → traverse graph → reason about impact → review completeness → validate and classify claims → generate brief`
+
+The evidence gate rejects references to missing indexed files or symbols. It cannot, by itself, prove that an existing file needs modification. [Architecture details](docs/ARCHITECTURE.md) · [Screenshot contract](docs/SCREENSHOT_TO_IMPACT_CONTRACT.md)
+
+## System architecture
 
 ```mermaid
-flowchart TD
-    User["Developer (Web UI)"] -->|HTTP / React Flow| API["FastAPI Application"]
-    Agent["AI Coding Agent (Claude Code / Codex / Cursor)"] -->|MCP Protocol| MCP["FastMCP Server"]
-
-    subgraph Core Platform
-        API --> JobQueue["Redis RQ Task Queue / Sync Fallback"]
-        MCP --> AnalysisEngine["Analysis & Graph Engine"]
-        JobQueue --> Worker["Background Worker"]
-        Worker --> AnalysisEngine
-        
-        AnalysisEngine --> Indexer["Python AST & Repo Scanner"]
-        AnalysisEngine --> Graph["NetworkX Dependency Engine"]
-        AnalysisEngine --> MetaAI["Meta AI Provider Adapter"]
-        AnalysisEngine --> Validator["Anti-Hallucination Evidence Gate"]
-    end
-
-    subgraph Storage & Persistence
-        AnalysisEngine --> PG[("PostgreSQL / SQLite")]
-        AnalysisEngine --> Cache[("Redis Cache")]
-        Indexer --> WorkspaceStorage[("Zip-Slip Sandboxed Storage")]
-    end
-
-    MetaAI -->|Inference| MetaModelAPI["Meta AI / Llama 3.3 / Muse Spark 1.3"]
+flowchart LR
+    Dev[Developer] --> Web[React dashboard]
+    Web --> API[FastAPI REST]
+    Agent[AI coding agent] --> MCP[FastMCP tools]
+    MCP --> Core[Analysis orchestrator]
+    API --> Index[Python AST indexer]
+    API --> Core
+    Index --> DB[(PostgreSQL / SQLite)]
+    Core --> Context[Hybrid retrieval + graph]
+    Context --> DB
+    Core --> Router[AI stage router]
+    Router --> Provider[Meta or offline provider]
+    Core --> Gate[Evidence + causal checks]
+    Gate --> DB
+    Core --> Report[Impact report + brief]
 ```
 
----
+Indexing and evidence checks stay local. Redis RQ can queue background jobs; an in-process fallback keeps local development usable without Redis. [Explore the source-backed system diagram](docs/diagrams/system-architecture.html) (standalone HTML; download and open locally).
 
-## ⚡ Quickstart
+## Multi-AI architecture
 
-### Option A: Run via Docker Compose (Recommended)
+`meta_only` is the default: all inference stages use the configured Meta-compatible provider or deterministic offline demo. The **opt-in, experimental** `multi_ai` profile requires approved endpoints, credentials and capability flags:
 
-Start the entire containerized stack (PostgreSQL, Redis, FastAPI API, RQ Worker, and React Nginx Web UI):
+```mermaid
+flowchart LR
+    Image[Validated screenshot] --> Vision[Baseten Vision*]
+    Text[Change requirement] --> Interpret[Meta interpretation]
+    Vision --> Context[Local retrieval + graph]
+    Interpret --> Context
+    Context --> Reason[Modal reasoning*]
+    Reason --> Review[Meta completeness review]
+    Review --> Ground[Local evidence + causal checks]
+    Ground --> Brief[Meta brief]
+    Brief --> Report[Impact report]
+```
+
+`*` Baseten and Modal deployment behavior is **not live-verified**. Screenshot interpretation runs only when an image is supplied. The brief receives the grounded result, not raw visual observations. [Explore the source-backed pipeline](docs/diagrams/multi-ai-pipeline.html) (standalone HTML) · [Configuration and safety gates](docs/MULTI_AI_ARCHITECTURE.md)
+
+## Tech stack
+
+| Surface | Components |
+| --- | --- |
+| Web | React 18, TypeScript, Vite, Tailwind CSS, `@xyflow/react` |
+| API and analysis | Python 3.13, FastAPI, SQLAlchemy 2, Python AST, NetworkX |
+| Persistence and jobs | PostgreSQL 16 or local SQLite; Redis RQ with synchronous fallback |
+| AI and agents | Meta Model API adapter, deterministic offline provider, optional partner routing, FastMCP |
+
+## Quick start
+
+### Local offline demo
+
+The quickest safe path needs **no AI key, PostgreSQL or Redis**. Use Python 3.13 and Node.js; run the API and web app in separate terminals. An existing root `.env` can set PostgreSQL, so the commands explicitly select SQLite for this process.
+
+**Terminal A — API (bash):**
 
 ```bash
-# 1. Clone repository
 git clone https://github.com/teehihi/scope-graph.git
 cd scope-graph
-
-# 2. Configure environment (optional: add your Meta AI credentials or use zero-config offline mode)
-cp .env.example .env
-
-# For real Meta inference, edit the root .env file:
-# META_AI_PROVIDER=meta_model_api
-# META_AI_API_KEY=<your Meta Model API key>
-# AI_PROVIDER_PROFILE=meta_only
-# Opt-in partner stages require the deployment settings in docs/MULTI_AI_INTEGRATION.md.
-
-# 3. Start containers
-docker compose up --build -d
-```
-
-Services will be available at:
-- **Web Interface**: `http://localhost:3000` (or `http://localhost:5173` for dev)
-- **FastAPI OpenAPI Docs**: `http://localhost:8000/docs`
-- **Health & Readiness Check**: `http://localhost:8000/ready`
-
-To stop:
-```bash
-docker compose down -v
-```
-
----
-
-### Option B: Local Standalone Development
-
-#### 1. Backend Setup
-```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r services/api/requirements.txt
-
-# Run database migrations
+export DATABASE_URL=sqlite:///./data/scopegraph.db
+export AI_PROVIDER_PROFILE=meta_only
+export META_AI_PROVIDER=offline_demo
 cd services/api
-alembic upgrade head
-
-# Start FastAPI server
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-#### 2. Frontend Setup
+On Windows PowerShell, use `py -3.13 -m venv .venv`, `.\.venv\Scripts\Activate.ps1` and `$env:NAME='value'` for the three environment variables above.
+
+**Terminal B — web:**
+
 ```bash
-cd apps/web
+cd scope-graph/apps/web
 npm install
-npm run dev
+npm run dev -- --host 127.0.0.1
 ```
 
-Open `http://localhost:5173` in your browser.
+Open **http://127.0.0.1:5173/**. The Vite dev server proxies `/api` to the local API. Load the bundled sample repository, then analyze a text requirement. Screenshot inference requires a configured vision-capable provider and is unavailable in offline mode.
 
----
+Docker Compose configuration is included for isolated development, but the latest local audit could validate its configuration only; Docker Engine was unavailable. The Compose stack exposes development service ports and must **not** be published as-is. [Environment and release gates](docs/HACKATHON_FINAL_READINESS.md)
 
-## 🧪 1-Click Interactive Walkthrough
+## Usage
 
-ScopeGraph includes a multi-tier microservice in `examples/sample-repository/` featuring:
-- **API routes**: `app/api/users.py`, `app/api/auth.py`, `app/api/verification.py`
-- **Service layer**: `app/services/user_service.py`, `app/services/verification_service.py`, `app/services/notification_service.py`
-- **Database models**: `app/models/user.py`, `app/models/verification_token.py`
-- **Automated tests**: `tests/test_users.py`, `tests/test_auth.py`, `tests/test_verification.py`
+1. Load the bundled sample or upload a ZIP of a repository you are allowed to inspect.
+2. Open **Dependency Graph** to explore indexed files and symbols.
+3. In **Impact Analysis**, enter a requirement such as “Require email verification before users can change their email address.”
+4. Review direct, indirect and potential items, then open **View Code Evidence** for exact source lines.
+5. If a vision provider is configured, attach a PNG/JPEG to analyze visual context; inspect observations and code evidence independently.
 
-### Step-by-Step Demo:
-1. Open the ScopeGraph web UI at `http://localhost:3000`.
-2. Click **Load Sample Repo** in the top navigation bar. In under a second, ScopeGraph parses all files and renders the interactive dependency graph.
-3. Select any node (e.g. `user_service.py`) to inspect verified symbols and source snippets in the **Evidence Drawer**.
-4. In the Proposed Change bar, enter:
-   > *"Require email verification before users can change their email address."*
-5. Click **Analyze Impact**.
-6. Inspect the structured blast radius report:
-   - 🔴 **Direct Changes**: `app/services/user_service.py`, `app/api/users.py`
-   - 🟡 **Downstream Dependents**: `app/api/verification.py`, `app/services/verification_service.py`
-   - ⚠️ **Regression Risks**: Account lockout, unverified session reuse, token expiry edge cases.
-   - 🧪 **Suggested Tests**: Recommended test specifications to prevent regressions.
-   - 📋 **AI Coding Agent Brief**: 1-click copyable markdown implementation plan with line-grounded evidence.
+AI agents can call the three MCP tools for the same indexed context. [MCP setup](docs/MCP_SETUP.md) · [REST/OpenAPI](http://127.0.0.1:8000/docs)
 
----
+## Evaluation
 
-## 🤖 Model Context Protocol (MCP) Integration
+The historical **three-case** live Meta evaluation reported macro impact F1 **0.282** and indirect recall **0.111**; 27 of 38 accepted impact claims were unsupported by those manual labels. A separate deterministic replay of saved predictions on a **17-case provisional development fixture** yielded strict micro F1 **0.4651**. The datasets and scoring views differ; these numbers do **not** establish improvement or generalization. The separate RealWorld holdout labels remain provisional and should not be tuned against.
 
-ScopeGraph provides native MCP server endpoints so autonomous AI coding agents can query grounded context directly:
+[Evaluation methodology and denominators](docs/EVALUATION.md) · [AI Core progress](docs/AI_CORE_PLAN_AND_PROGRESS.md)
 
-| MCP Tool | Purpose | Output |
-| :--- | :--- | :--- |
-| `analyze_change(repository_id, requirement)` | Pre-change impact analysis | Direct files, indirect dependents, regression risks, suggested tests |
-| `get_relevant_context(repository_id, query, limit)` | Source-grounded context retrieval | Line-numbered code snippets, symbol signatures, call graph facts |
-| `suggest_tests(repository_id, requirement)` | Targeted regression test generation | Existing test inspection + recommended test specifications |
+## Limitations and security
 
-### Claude Code Setup
-```bash
-claude mcp add scopegraph -- /path/to/.venv/bin/python -m app.mcp.server
-```
+- Symbol and call resolution is currently strongest for **Python**; other languages are not at the same indexing depth.
+- Source validation proves a cited indexed element exists, not that the suggested edit is causally correct. Human review remains necessary.
+- Offline demo mode supports text analysis but **not** screenshot interpretation. Baseten/Modal live deployments are unverified.
+- Repository and report authorization, runtime inference access, token handling and deployment controls remain **public-release blockers**. Keep development deployments local and use non-sensitive repositories.
 
-### Claude Desktop Setup (`claude_desktop_config.json`)
-```json
-{
-  "mcpServers": {
-    "scopegraph": {
-      "command": "/path/to/scope-graph/.venv/bin/python",
-      "args": ["-m", "app.mcp.server"],
-      "cwd": "/path/to/scope-graph/services/api",
-      "env": {
-        "PYTHONPATH": "/path/to/scope-graph/services/api"
-      }
-    }
-  }
-}
-```
+[Full hackathon readiness and security audit](docs/HACKATHON_FINAL_READINESS.md)
 
-### Cursor & Windsurf Setup
-Configure ScopeGraph as an MCP server with Command: `python` and Args: `["-m", "app.mcp.server"]` inside your IDE's MCP configuration settings.
-
----
-
-## 📊 Evaluation & Measured Impact
-
-| Metric, three manually labeled sample cases | Keyword selection | Hybrid retrieval / authorized Meta run |
-| :--- | ---: | ---: |
-| Macro Recall@8 | 0.532 | 0.758 |
-| Macro Precision@8 | 0.292 | 0.458 |
-| Macro impact F1 | — | 0.282 |
-| Macro indirect-impact recall | — | 0.111 |
-| Invalid file/symbol references | — | 0/38 accepted claims |
-| Accepted impact claims unsupported by manual labels | — | 27/38 |
-
-See the reproducible [AI Core evaluation](docs/EVALUATION.md) for definitions, latency, model-reported token usage, and the limits of this small fixture. The evidence gate validates indexed file and symbol existence; it does not prove that an impact is causally correct.
-
-For current status across the API, web app, indexing, AI, authentication, evaluation, and release work, see the [project plan and progress](docs/PROJECT_PLAN_AND_PROGRESS.md).
-
----
-
-## 🔒 Security & Safe Sandboxing
-
-- **Zip-Slip Protection**: Strict canonical destination path resolution prevents path traversal exploits during archive extraction.
-- **Resource Quotas**: Enforces strict safety limits (max 25MB archive size, max 500 files, max 500KB per file) against archive bomb attacks.
-- **Pure AST Parsing**: Parses AST trees deterministically without executing uploaded code.
-- **Secret Redaction**: Structured logging automatically sanitizes tokens, passwords, and authorization headers.
-
----
-
-## 📁 Repository Structure
+## Project structure
 
 ```text
 scope-graph/
 ├── apps/
-│   └── web/                      # React 18 + TypeScript + Vite + Tailwind + @xyflow/react
-│       ├── src/
-│       │   ├── components/       # GraphCanvas, ScopeNode, EvidenceDrawer, OnboardingTour
-│       │   ├── context/          # RepoContext, AuthContext
-│       │   ├── pages/            # Dashboard, Graph, Repositories, Onboarding, Login
-│       │   └── types/            # TypeScript interfaces
-│       ├── nginx.conf
-│       └── package.json
+│   └── web/                         React dashboard (Vite)
+│       ├── src/api/                 HTTP client
+│       ├── src/components/          Reusable UI and graph views
+│       ├── src/context/             Shared application state and i18n
+│       ├── src/pages/               Application screens
+│       └── src/types/               API and UI types
 ├── services/
-│   └── api/                      # FastAPI Python Application (Python 3.13)
-│       ├── alembic/              # Database schema migrations
-│       ├── app/
-│       │   ├── ai/               # Meta AI provider (MetaAIHttpProvider, OfflineDemoProvider)
-│       │   ├── analysis/         # Multi-pass impact orchestrator (7-step pipeline)
-│       │   ├── api/routes/       # Endpoints: auth, repositories, analysis, health
-│       │   ├── core/             # Configuration, logging, zip-slip security sandbox
-│       │   ├── db/               # SQLAlchemy models & PostgreSQL/SQLite sessions
-│       │   ├── evidence/         # Anti-hallucination evidence validator & snippet extractor
-│       │   ├── graph/            # NetworkX dependency graph traversal engine
-│       │   ├── indexing/         # AST parser & repository workspace scanner
-│       │   ├── jobs/             # Redis RQ task queue, worker & SHA-256 analysis caching
-│       │   └── mcp/              # Model Context Protocol server (FastMCP)
-│       ├── tests/                # Automated pytest suite
-│       └── requirements.txt
+│   └── api/                         FastAPI backend
+│       ├── app/api/                 REST routes
+│       ├── app/ai/                  Inference providers
+│       ├── app/analysis/            Impact orchestration
+│       ├── app/evidence/            Source evidence validation
+│       ├── app/graph/               Dependency graph
+│       ├── app/indexing/            Repository scanning and parsing
+│       ├── app/jobs/                Background work
+│       ├── app/mcp/                 Agent tools
+│       └── tests/evaluation/        Versioned evaluation fixtures
 ├── examples/
-│   ├── sample-repository/        # Realistic auth & user microservice
-│   └── sample-repository.zip     # Ready-to-upload demo archive
+│   ├── sample-repository/           Bundled demo repository
+│   └── holdout-fastapi-realworld/   Separate evaluation snapshot
 ├── docs/
-│   ├── scopegraph-brand-final/   # Official Brand Kit v2 (logos, Scout mascot, status SVGs)
-│   ├── ARCHITECTURE.md           # Architectural specification & component boundaries
-│   ├── MCP_SETUP.md              # Model Context Protocol setup guide
-│   └── BENCHMARKS.md             # Context token reduction & precision benchmarks
-├── docker-compose.yml            # Multi-container orchestration (API, Web, Worker, Postgres, Redis)
+│   ├── assets/                     README images
+│   ├── brand/                      Team avatars
+│   └── diagrams/                   Architecture diagrams
+├── scripts/                        Evaluation and audit utilities
+├── docker-compose.yml              Local container stack
 └── README.md
 ```
-
----
-
-## 🔬 Automated Testing
-
-```bash
-# Run backend test suite
-source .venv/bin/activate
-PYTHONPATH=services/api pytest services/api/tests/ -v
-
-# Run frontend TypeScript typecheck and production build
-cd apps/web && npm run build
-```
-
----
-
-
-## 📄 License
-
-MIT License. Built for the Meta Global AI Developer Hackathon.
-
----
 
 ## 👥 Know more about my team
 
@@ -340,13 +232,13 @@ MIT License. Built for the Meta Global AI Developer Hackathon.
         <strong>Nguyen Nhat Thien (TEE)</strong>
       </a>
       <br />
-      <sub>Lead Architecture & Full-Stack</sub><br />
+      <sub>Lead Architecture &amp; Full-Stack</sub><br />
       <sub>Top 50 AI Riser Vietnam 2026</sub>
       <br /><br />
       <p align="center">
-        <a href="https://github.com/teehihi"><img src="https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub" /></a>
-        <a href="https://www.linkedin.com/in/tee21"><img src="https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white" alt="LinkedIn" /></a>
-        <a href="https://nteelab.vercel.app/"><img src="https://img.shields.io/badge/Portfolio-111827?style=for-the-badge&logo=vercel&logoColor=white" alt="Portfolio" /></a>
+        <a href="https://github.com/teehihi"><img src="https://img.shields.io/badge/GitHub-181717?style=for-the-badge&amp;logo=github&amp;logoColor=white" alt="GitHub" /></a>
+        <a href="https://www.linkedin.com/in/tee21"><img src="https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&amp;logo=linkedin&amp;logoColor=white" alt="LinkedIn" /></a>
+        <a href="https://nteelab.vercel.app/"><img src="https://img.shields.io/badge/Portfolio-111827?style=for-the-badge&amp;logo=vercel&amp;logoColor=white" alt="Portfolio" /></a>
       </p>
     </td>
     <td align="center" width="50%" valign="top">
@@ -356,26 +248,26 @@ MIT License. Built for the Meta Global AI Developer Hackathon.
         <strong>Pham Cong Truong</strong>
       </a>
       <br />
-      <sub>AI Core & Evidence Grounding Engine</sub><br />
-      <sub>Meta AI Inference & Evaluation</sub>
+      <sub>AI Core &amp; Evidence Grounding Engine</sub><br />
+      <sub>Meta AI Inference &amp; Evaluation</sub>
       <br /><br />
       <p align="center">
-        <a href="https://github.com/sai-ctruong"><img src="https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub" /></a>
-        <a href="https://www.linkedin.com/in/congtruong-ai/"><img src="https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white" alt="LinkedIn" /></a>
+        <a href="https://github.com/sai-ctruong"><img src="https://img.shields.io/badge/GitHub-181717?style=for-the-badge&amp;logo=github&amp;logoColor=white" alt="GitHub" /></a>
+        <a href="https://www.linkedin.com/in/congtruong-ai/"><img src="https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&amp;logo=linkedin&amp;logoColor=white" alt="LinkedIn" /></a>
       </p>
     </td>
   </tr>
 </table>
 
----
-
 <div align="center">
-
-<p align="center">
-  
-  <strong>ScopeGraph — Understand the blast radius before you change the code.</strong><br />
-  <sub>ScopeGraph was built with the aspiration of engineers from Vietnam 🇻🇳 to bring practical AI Code Intelligence solutions to the global community of programmers and AI Coding Agents at the <strong>Meta Global AI Developer Hackathon 2026</strong>.</sub>
-</p>
-<p align="center"><sub>Crafted with passion in Vietnam 🇻🇳 for software developers and AI agents worldwide 🌍</sub></p>
-
+  <p align="center">
+    <strong>ScopeGraph — Understand the blast radius before you change the code.</strong><br />
+    <sub>ScopeGraph was built with the aspiration of engineers from Vietnam 🇻🇳 to bring practical AI Code Intelligence solutions to the global community of programmers and AI Coding Agents at the <strong>Meta Global AI Developer Hackathon 2026</strong>.</sub>
+  </p>
 </div>
+
+*Push the Frontier* is the intended project theme; the official submission track and video URL remain to be confirmed. [Submission draft](docs/HACKATHON_SUBMISSION.md)
+
+## License
+
+ScopeGraph is released under the [MIT License](LICENSE). The separately included FastAPI RealWorld holdout snapshot has its own MIT attribution; see its repository manifest before reusing or redistributing it.
