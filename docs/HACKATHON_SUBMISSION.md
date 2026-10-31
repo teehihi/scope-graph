@@ -16,12 +16,9 @@ The evidence gate proves that a referenced indexed file or symbol exists. It doe
 
 ## Meta integration status
 
-The architecture implements specialized multi-provider stage routing across Meta model endpoints:
-- **Fast Intent Parsing**: Modal Serverless Auto Endpoint running `meta-models/Muse-Spark-Open-816B-A42B`.
-- **UI Vision Analysis & Completeness Review**: Baseten Inference running `meta-models/muse-spark-open-1026` / Modal.
-- **Deep Impact Reasoning & Implementation Brief**: Official Meta Model API (`https://api.meta.ai/v1/chat/completions`) using `muse-spark-1.3` with documented JSON Schema response format.
+The default pipeline uses one configured provider for all inference stages; the zero-key default is a deterministic offline demo. An opt-in `multi_ai` profile can send screenshot interpretation to a configured vision-capable Baseten deployment and impact reasoning to Modal, while Meta handles the other stages. This routing is mock-tested, but the partner deployments, models, latency and cost have not been verified live. The active settings are `META_AI_*`, `BASETEN_VISION_*`, `MODAL_REASONING_*` and `AI_PROVIDER_PROFILE`; see [integration details](MULTI_AI_INTEGRATION.md). No credential belongs in the repository.
 
-Partner inference endpoints are configurable via environment variables (`MODAL_*`, `BASETEN_*`, `META_OFFICIAL_*`). The code default uses a deterministic offline demo provider. Mocked tests, an authorized full-pipeline live smoke, and a three-case live evaluation passed. The local Git-ignored `.env` supplies the credentials; no credential belongs in the repository.
+Separate authorized Meta full-pipeline and three-case live evaluations were completed earlier; they do not validate the partner configuration or generalization.
 
 The live stages are requirement interpretation, impact reasoning, completeness review, and brief generation. The static index and evidence validator remain the grounding layer. See [ARCHITECTURE.md](ARCHITECTURE.md) and [EVALUATION.md](EVALUATION.md).
 

@@ -1,6 +1,7 @@
 """Conservative, source-aware classification of indexed impact claims."""
 
 from collections import defaultdict
+import re
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -21,6 +22,11 @@ class CausalImpactVerifier:
         review_paths: list[str] | tuple[str, ...] = (),
     ) -> dict[str, Any]:
         terms = set(HybridRetriever._terms(requirement, None))
+        model_edit_intent = bool(re.search(
+            r"\b(?:schema|field|column|table|migration|index(?:ed|ing)?|constraint|"
+            r"persist\w*|stor(?:e|ed|age)|uniqu\w*|nullable|database|model)\b",
+            requirement.lower(),
+        ))
         files = {file.id: file for file in self.db.query(IndexedFile).filter_by(repository_id=repository_id)}
         symbols = {symbol.id: symbol for symbol in self.db.query(IndexedSymbol).filter_by(repository_id=repository_id)}
         edges = self.db.query(DependencyEdge).filter_by(repository_id=repository_id).all()
@@ -69,6 +75,14 @@ class CausalImpactVerifier:
         items = list(best_by_pair.values())
         for item in items:
             if item["impact_type"] != "direct" or item["file_path"].startswith("tests/") or item.get("symbol_type") == "test":
+                continue
+            path = item["file_path"]
+            is_model = (item.get("symbol_type") == "model" or item.get("category") == "model"
+                        or "/models/" in f"/{path}" or path.rsplit("/", 1)[-1] == "models.py")
+            if is_model and not model_edit_intent:
+                potential.append(potential_item(
+                    item, "Behavior request does not establish a model or schema edit",
+                ))
                 continue
             symbol = item.get("symbol") or ""
             snippet = item.get("evidence_snippet") or ""

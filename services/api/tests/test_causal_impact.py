@@ -138,3 +138,44 @@ def test_config_attribute_read_recovers_indirect_impact_without_unrelated_settin
     finally:
         db.close()
         engine.dispose()
+
+
+def test_existing_model_fields_are_not_confirmed_for_behavior_only_change(tmp_path):
+    source = tmp_path / "app/models/ticket.py"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "class Ticket:\n    status = 'open'\n    closure_reason = None\n",
+        encoding="utf-8",
+    )
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    db = sessionmaker(bind=engine)()
+    db.add(Repository(id="ticket-case", name="Ticket", workspace_path=str(tmp_path), status="pending"))
+    db.commit()
+    try:
+        assert IndexingEngine(db).index_repository("ticket-case").status == "ready"
+        claim = {"affected_items": [{
+            "file_path": "app/models/ticket.py", "symbol": "Ticket", "impact_type": "direct",
+            "category": "model", "reason": "Ticket closure behavior changes", "confidence": 0.9,
+        }]}
+        existence = EvidenceValidator(db, str(tmp_path)).validate_ai_claims("ticket-case", claim)
+
+        behavior = CausalImpactVerifier(db).classify(
+            "ticket-case", "Close a ticket after payment", existence,
+        )
+        restored = CausalImpactVerifier(db).classify(
+            "ticket-case", "Restore a ticket after payment", existence,
+        )
+        schema = CausalImpactVerifier(db).classify(
+            "ticket-case", "Add a persisted closure reason field to the Ticket model", existence,
+        )
+
+        assert behavior["affected_items"] == []
+        assert restored["affected_items"] == []
+        assert behavior["potential_claims"][0]["file_path"] == "app/models/ticket.py"
+        assert ("app/models/ticket.py", "direct") in {
+            (item["file_path"], item["impact_type"]) for item in schema["affected_items"]
+        }
+    finally:
+        db.close()
+        engine.dispose()

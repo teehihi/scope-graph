@@ -60,21 +60,26 @@ class Settings(BaseSettings):
     META_AI_MAX_RETRIES: int = Field(default=2, ge=0, le=5, description="Retries after transient inference failures")
     META_AI_RETRY_BACKOFF_SECONDS: float = Field(default=0.5, ge=0, le=10, description="Initial retry delay")
 
-    # Multi-Provider Stage Overrides (Hackathon Architecture)
-    # Intent Parsing (Modal / Fast model)
-    MODAL_API_KEY: str = Field(default="", description="Modal proxy token")
-    MODAL_BASE_URL: str = Field(default="", description="Modal endpoint base URL")
-    MODAL_MODEL: str = Field(default="meta-models/Muse-Spark-Open-816B-A42B", description="Modal model name")
-
-    # UI Vision & Review (Baseten)
-    BASETEN_API_KEY: str = Field(default="", description="Baseten API key")
-    BASETEN_BASE_URL: str = Field(default="https://inference.baseten.co/v1", description="Baseten base URL")
-    BASETEN_MODEL: str = Field(default="meta-models/muse-spark-open-1026", description="Baseten model name")
-
-    # Official Meta Model API
-    META_OFFICIAL_API_KEY: str = Field(default="", description="Official Meta AI key")
-    META_OFFICIAL_BASE_URL: str = Field(default="https://api.meta.ai/v1", description="Official Meta base URL")
-    META_OFFICIAL_MODEL: str = Field(default="muse-spark-1.3", description="Official Meta model name")
+    # Explicit stage routing. Empty partner settings never activate remote inference.
+    AI_PROVIDER_PROFILE: str = Field(default="meta_only", description="meta_only or multi_ai")
+    MULTI_AI_META_REQUEST_BUDGET: int = Field(default=15, ge=1, le=50)
+    BASETEN_VISION_BASE_URL: str = ""
+    BASETEN_VISION_MODEL: str = ""
+    BASETEN_VISION_API_KEY: str = ""
+    BASETEN_VISION_CAPABLE: bool = False
+    BASETEN_VISION_TIMEOUT_SECONDS: float = Field(default=45, gt=0, le=180)
+    BASETEN_VISION_MAX_RETRIES: int = Field(default=1, ge=0, le=3)
+    BASETEN_VISION_MAX_TOKENS: int = Field(default=1500, ge=100, le=12000)
+    BASETEN_VISION_REQUEST_BUDGET: int = Field(default=2, ge=1, le=10)
+    BASETEN_VISION_META_FALLBACK: bool = False
+    MODAL_REASONING_BASE_URL: str = ""
+    MODAL_REASONING_MODEL: str = ""
+    MODAL_REASONING_API_KEY: str = ""
+    MODAL_REASONING_TIMEOUT_SECONDS: float = Field(default=60, gt=0, le=180)
+    MODAL_REASONING_MAX_RETRIES: int = Field(default=1, ge=0, le=3)
+    MODAL_REASONING_MAX_TOKENS: int = Field(default=4000, ge=100, le=12000)
+    MODAL_REASONING_REQUEST_BUDGET: int = Field(default=2, ge=1, le=10)
+    MODAL_REASONING_META_FALLBACK: bool = False
 
     # GitHub OAuth
     GITHUB_CLIENT_ID: str = Field(default="", description="GitHub OAuth Client ID")

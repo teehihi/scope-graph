@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
+from app.core.request_limits import ScreenshotRequestBodyLimit
 from app.core.logging import setup_logging
 from app.db.database import init_db
 from app.api.routes import health, repositories, analysis, auth
@@ -49,6 +50,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(ScreenshotRequestBodyLimit)
 
 # Include routes
 app.include_router(health.router)

@@ -78,8 +78,10 @@ def set_cache(key: str, data: dict[str, Any], ttl_seconds: int = 3600) -> bool:
         logger.warning("Cache write failed: %s", e)
         return False
 
-def make_analysis_cache_key(repo_id: str, requirement: str, model_id: str) -> str:
+def make_analysis_cache_key(repo_id: str, requirement: str, model_id: str, *,
+                            index_version: str = "", profile: str = "",
+                            provider_signature: str = "", target_language: str = "en") -> str:
     norm_req = " ".join(requirement.lower().strip().split())
     # Bump when indexing or impact-classification semantics change.
-    raw = f"sg-ai-07c-v2:{repo_id}:{norm_req}:{model_id}"
+    raw = f"sg-multi-ai-v1:{repo_id}:{index_version}:{norm_req}:{profile}:{provider_signature}:{model_id}:{target_language}"
     return hashlib.sha256(raw.encode()).hexdigest()
