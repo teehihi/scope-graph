@@ -16,7 +16,9 @@ The evidence gate proves that a referenced indexed file or symbol exists. It doe
 
 ## Meta integration status
 
-The adapter is configured for Meta Model API at `https://api.meta.ai/v1/chat/completions` using `muse-spark-1.3` and the documented JSON Schema response format. Partner inference endpoints are configurable. The code default uses a deterministic offline demo provider. Mocked tests, an authorized full-pipeline live smoke, and a three-case live evaluation passed. The local Git-ignored `.env` supplies the key; no credential belongs in the submission.
+The default pipeline uses one configured provider for all inference stages; the zero-key default is a deterministic offline demo. An opt-in `multi_ai` profile can send screenshot interpretation to a configured vision-capable Baseten deployment and impact reasoning to Modal, while Meta handles the other stages. This routing is mock-tested, but the partner deployments, models, latency and cost have not been verified live. The active settings are `META_AI_*`, `BASETEN_VISION_*`, `MODAL_REASONING_*` and `AI_PROVIDER_PROFILE`; see [integration details](MULTI_AI_INTEGRATION.md). No credential belongs in the repository.
+
+Separate authorized Meta full-pipeline and three-case live evaluations were completed earlier; they do not validate the partner configuration or generalization.
 
 The live stages are requirement interpretation, impact reasoning, completeness review, and brief generation. The static index and evidence validator remain the grounding layer. See [ARCHITECTURE.md](ARCHITECTURE.md) and [EVALUATION.md](EVALUATION.md).
 

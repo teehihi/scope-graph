@@ -237,6 +237,12 @@ class AnalysisOrchestrator:
                     "is_demo_mode": reasoning_resp.is_mock_or_demo,
                     "structured_inference_latency_seconds": round(sum(resp.latency_seconds for resp in inference_responses), 3),
                     "token_usage": token_usage,
+                    "stage_routing": {
+                        **({"vision": {"provider": visual_resp.provider, "model": visual_resp.model}} if visual_resp is not None else {}),
+                        "intent": {"provider": interpretation_resp.provider, "model": interpretation_resp.model},
+                        "reasoning": {"provider": reasoning_resp.provider, "model": reasoning_resp.model},
+                        "review": {"provider": completeness_resp.provider, "model": completeness_resp.model},
+                    },
                     "execution_time_seconds": round(time.time() - start_time, 2),
                     "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 }
@@ -275,6 +281,11 @@ class AnalysisOrchestrator:
                     total_usage[key] = total_usage.get(key, 0) + value
                 metadata["token_usage"] = total_usage
             metadata["stages"] = [entry.as_dict() for entry in router.metadata]
+            if "stage_routing" in metadata:
+                metadata["stage_routing"]["brief"] = {
+                    "provider": brief_stage.provider,
+                    "model": brief_stage.actual_model,
+                }
 
             # Update database record
             total_duration = time.time() - start_time

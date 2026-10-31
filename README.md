@@ -134,6 +134,8 @@ cp .env.example .env
 # For real Meta inference, edit the root .env file:
 # META_AI_PROVIDER=meta_model_api
 # META_AI_API_KEY=<your Meta Model API key>
+# AI_PROVIDER_PROFILE=meta_only
+# Opt-in partner stages require the deployment settings in docs/MULTI_AI_INTEGRATION.md.
 
 # 3. Start containers
 docker compose up --build -d

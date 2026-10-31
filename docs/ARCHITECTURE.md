@@ -47,12 +47,10 @@ flowchart TD
 - **Graph Traversal**: Computes downstream (dependents/callers) and upstream (dependencies) subgraphs.
 
 ### 2.4 Meta AI Semantic Reasoning (`app/ai`)
-- **Provider Adapter**: Targets the official Meta Model API chat-completions endpoint (`https://api.meta.ai/v1/chat/completions`) with `muse-spark-1.3` and JSON-schema responses. Partner OpenAI-compatible endpoints remain configurable; offline mode is deterministic and labeled as a demo. Official API compatibility has been checked against [Meta API reference](https://dev.meta.ai/docs/api-reference), [models](https://dev.meta.ai/docs/models), and [structured output](https://dev.meta.ai/docs/structured-output), then verified with an authorized live full-pipeline smoke and three-case evaluation. See [EVALUATION.md](EVALUATION.md) for measured limits.
-- **Structured Prompts**: Multi-pass orchestration:
-  1. Requirement Interpretation
-  2. Grounded Impact Reasoning
-  3. Completeness Review
-  4. Coding Agent Brief Generation
+- **Stage Routing**: `app/ai/routing.py` keeps the existing Meta or offline provider for all stages by default. The `multi_ai` profile explicitly selects a vision-capable Baseten deployment for screenshot interpretation and a Modal deployment for impact reasoning. Other stages use the configured Meta provider. Partner routes require approved HTTPS endpoints, credentials, capability flags and bounded per-analysis requests; public deployment remains gated.
+- **Provider Adapter**: Targets the Meta Model API chat-completions endpoint (`https://api.meta.ai/v1/chat/completions`) with `muse-spark-1.3` and JSON-schema responses. Partner OpenAI-compatible endpoints are configurable; offline mode is deterministic and labeled as a demo. Actual Baseten and Modal models and latency are unverified until deployed and measured.
+- **Execution Telemetry**: `operational_metadata.stages` records each stage's provider, model, request count, duration, usage when available, and execution mode. `stage_routing` retains a compact provider/model mapping for report consumers.
+- **Test Safety**: The default offline profile does not call remote inference. Mocked partner tests exercise routing without real credentials or paid requests.
 
 ### 2.5 Evidence Validation Layer (`app/evidence`)
 - **Anti-Hallucination Gate**: Compares every file path and symbol suggested by the AI against the PostgreSQL index. Hallucinations are rejected.

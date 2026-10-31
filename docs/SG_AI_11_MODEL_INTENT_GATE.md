@@ -37,6 +37,8 @@ To reproduce the baseline score after this code change, use the saved baseline a
 
 The targeted causal tests passed (3 passed). The full backend suite passed with **211 passed, 1 opt-in live test skipped** on 2026-10-31 using the offline provider. A direct replay comparison matched all 17 cases, micro and macro scores, and per-case scoring details. No paid request was made.
 
+During the merge of `origin/main` at `667618e`, an additional offline run saved ignored `data/sg_ai_11_after_main_merge.json`. Its deterministic replay matched the same 20 TP / 31 FP / 15 FN and 0.600 direct / 0.500 indirect recall. The merged backend suite passed 211 tests with one live test skipped; the frontend build and 12-language parity audit passed. The artifact's `commit_sha` is `f355345`, the committed SG-AI-11 code before the merge commit. The artifact's source-tree digest identifies the evaluated sample repository bytes.
+
 ## Limits and next work
 
 This gate is conservative but lexical. A behavior request can imply a necessary migration without saying “schema” or “field”; in that case the model claim becomes potential until reviewed. It cannot determine whether an existing field already satisfies a future design. The remaining **31** strict false-positive pairs include service, API and downstream call claims; the SG-AI-10 plan's operation-specific direct support, behavior-specific call checks and offline provider improvements remain open. Any next change must preserve direct and indirect recall on the development fixture and use independent synthetic regressions. Keep the RealWorld holdout out of tuning.
