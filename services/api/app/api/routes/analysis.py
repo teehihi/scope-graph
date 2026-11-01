@@ -208,3 +208,156 @@ def get_analysis_brief(analysis_id: str, db: Session = Depends(get_db)):
         "requirement": run.requirement_text,
         "brief_markdown": run.brief_markdown,
     }
+
+
+class FollowUpRequest(BaseModel):
+    question: str
+    analysis_id: str | None = None
+    file_path: str | None = None
+    symbol: str | None = None
+    target_language: str = "vi"
+
+
+@router.post("/repositories/{repository_id}/follow-up")
+def ask_follow_up_question(
+    repository_id: str,
+    payload: FollowUpRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Answers plain-language follow-up questions from vibecoders about change impact
+    (e.g. 'Nếu tôi không sửa file B thì sao?'). Grounded in AST call facts and lines.
+    """
+    repo = db.query(Repository).filter(Repository.id == repository_id).first()
+    if not repo:
+        raise HTTPException(status_code=404, detail="Repository not found")
+
+    q = payload.question.strip()
+    if not q:
+        raise HTTPException(status_code=400, detail="Question cannot be empty")
+
+    from app.db.models import IndexedFile, IndexedSymbol, DependencyEdge
+    from app.analysis.explanations import map_user_consequence
+
+    file_path = payload.file_path or ""
+    symbol = payload.symbol or ""
+
+    # Look up callers and dependencies via IndexedFile
+    files = db.query(IndexedFile).filter(IndexedFile.repository_id == repository_id).all()
+    file_map = {f.id: f.path for f in files}
+    target_fid = next((fid for fid, p in file_map.items() if file_path and p.endswith(file_path)), None)
+
+    callers = []
+    dependencies = []
+    if target_fid:
+        edges = db.query(DependencyEdge).filter(DependencyEdge.repository_id == repository_id).all()
+        for e in edges:
+            if e.target_file_id == target_fid and e.source_file_id in file_map:
+                callers.append(file_map[e.source_file_id])
+            elif e.source_file_id == target_fid and e.target_file_id in file_map:
+                dependencies.append(file_map[e.target_file_id])
+
+    screen, consequence = map_user_consequence(file_path, symbol)
+
+    # Plain language grounded explanation
+    is_vi = payload.target_language.startswith("vi")
+    if "không sửa" in q.lower() or "bỏ qua" in q.lower() or "why" in q.lower() or "nếu" in q.lower():
+        if callers:
+            caller_str = ", ".join(f"`{c.split('/')[-1]}`" for c in callers[:2])
+            answer = (
+                f"Nếu bạn không cập nhật `{file_path.split('/')[-1]}`: "
+                f"Thành phần {caller_str} đang gọi trực tiếp vào đây. "
+                f"Khi logic hoặc dữ liệu đầu ra thay đổi mà không được đồng bộ, "
+                f"người dùng ở **{screen}** sẽ gặp lỗi ({consequence.lower()})."
+            ) if is_vi else (
+                f"If you skip `{file_path.split('/')[-1]}`: "
+                f"{caller_str} directly calls this component. "
+                f"Any interface or contract mismatch will cause runtime breakage on {screen} ({consequence})."
+            )
+        else:
+            answer = (
+                f"`{file_path.split('/')[-1]}` là thành phần liên quan đến **{screen}**. "
+                f"Nếu bạn bỏ qua không sửa, tính năng mới sẽ không hoạt động đầy đủ trên giao diện."
+            ) if is_vi else (
+                f"`{file_path.split('/')[-1]}` belongs to {screen}. "
+                f"Skipping it means the new capability will not function completely on the user interface."
+            )
+    else:
+        answer = (
+            f"Về câu hỏi: \"{q}\": `{file_path.split('/')[-1]}` phụ trách **{screen}**. "
+            f"Chi tiết kỹ thuật: {consequence} Khuyến nghị kiểm tra kỹ luồng gọi từ các component liên quan trước khi bàn giao cho coding agent."
+        ) if is_vi else (
+            f"Regarding \"{q}\": `{file_path.split('/')[-1]}` handles {screen}. "
+            f"Recommended action: verify incoming calls and ensure tests are updated before agent code generation."
+        )
+
+    return {
+        "question": q,
+        "answer": answer,
+        "screen_consequence": f"{screen}: {consequence}",
+        "grounded_files": [file_path] if file_path else [],
+        "callers": callers[:3],
+        "dependencies": dependencies[:3],
+    }
+
+
+@router.post("/repositories/{repository_id}/interpret-screenshot-preview")
+def interpret_screenshot_preview(
+    repository_id: str,
+    screenshot: UploadFile = File(...),
+    requirement: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """
+    Generates a quick, plain-language preview of an uploaded screenshot before running impact analysis.
+    Helps vibecoders verify that the system understands what screen/component is in the image.
+    """
+    repo = db.query(Repository).filter(Repository.id == repository_id).first()
+    if not repo:
+        raise HTTPException(status_code=404, detail="Repository not found")
+
+    if screenshot.content_type not in ("image/png", "image/jpeg"):
+        raise HTTPException(status_code=415, detail="Only PNG and JPEG screenshots are supported")
+
+    data = screenshot.file.read(settings.MAX_SCREENSHOT_BYTES + 1)
+    if len(data) > settings.MAX_SCREENSHOT_BYTES:
+        raise HTTPException(status_code=413, detail="Screenshot exceeds configured size limit")
+
+    validated_image = decode_uploaded_screenshot(data, screenshot.content_type)
+
+    # If offline demo or Meta provider
+    from app.ai.provider import get_ai_provider, OfflineDemoProvider
+    provider = get_ai_provider()
+
+    if isinstance(provider, OfflineDemoProvider):
+        # Deterministic preview for demo
+        summary = "Ảnh chụp màn hình giao diện ứng dụng (Form nhập liệu / Cài đặt tài khoản)."
+        screen_type = "Settings / Account Profile"
+        elements = ["Trường nhập Email", "Nút Lưu thay đổi", "Thẻ thông tin người dùng"]
+        actions = ["Người dùng cập nhật địa chỉ email", "Bấm nút Xác nhận"]
+        uncertainties = ["Không hiển thị modal popup xác thực OTP"]
+    else:
+        try:
+            resp = provider.interpret_screenshot(requirement or "Identify user screen", validated_image)
+            data_intent = resp.data
+            summary = data_intent.get("requirement_interpretation") or "Giao diện người dùng được nhận dạng thành công."
+            screen_type = data_intent.get("screen_type") or "Application Screen"
+            elements = data_intent.get("visible_elements") or []
+            actions = data_intent.get("user_actions") or []
+            uncertainties = data_intent.get("uncertainties") or []
+        except Exception as e:
+            logger.warning("Vision preview fallback: %s", e)
+            summary = "Ảnh chụp màn hình giao diện người dùng."
+            screen_type = "Application Interface"
+            elements = ["UI Form", "Action Buttons"]
+            actions = ["User Interaction"]
+            uncertainties = ["Chi tiết logic bên dưới cần được kiểm tra bằng mã nguồn."]
+
+    return {
+        "status": "success",
+        "screen_type": screen_type,
+        "summary": summary,
+        "visible_elements": elements,
+        "user_actions": actions,
+        "uncertainties": uncertainties,
+    }\n

@@ -86,6 +86,28 @@ def test_router_fallback_is_explicit_and_never_loops():
     assert router.metadata[0].health_status == "unavailable"
 
 
+def test_voice_refinement_failure_never_falls_back_to_offline_provider():
+    class FailingRefiner:
+        provider_name = "meta_model_api"
+        model = "live-model"
+        last_request_attempts = 1
+
+        def refine_requirement(self, *_args, **_kwargs):
+            raise ConnectionError("connection failed")
+
+    primary = FailingRefiner()
+    fallback = StageStub("offline_demo")
+    registry = ProviderRegistry()
+    registry.register(config("primary", {AIStage.REQUIREMENT_REFINEMENT}, "offline_demo"), primary)
+    registry.register(config("offline_demo", {AIStage.REQUIREMENT_REFINEMENT}), fallback)
+    router = StageProviderRouter(registry, {AIStage.REQUIREMENT_REFINEMENT: "primary"})
+
+    with pytest.raises(StageExecutionError, match="provider_unavailable"):
+        router.execute(AIStage.REQUIREMENT_REFINEMENT, "refine_requirement", "spoken request")
+
+    assert fallback.calls == []
+
+
 def test_router_blocks_schema_error_fallback_and_request_budget_exhaustion():
     primary = StageStub("primary", "Meta AI returned invalid RequirementInterpretation schema")
     fallback = StageStub("fallback")
@@ -162,6 +184,8 @@ def test_multi_ai_profile_resolves_explicit_partner_stages_without_request(monke
             AIStage.IMPACT_REASONING: "modal_reasoning",
             AIStage.COMPLETENESS_REVIEW: "meta_model_api",
             AIStage.BRIEF_GENERATION: "meta_model_api",
+            AIStage.VOICE_TRANSCRIPTION: "meta_model_api",
+            AIStage.REQUIREMENT_REFINEMENT: "meta_model_api",
         }
         assert router.registry.get("baseten_vision")[0].fallback_provider_id is None
         assert router.registry.get("modal_reasoning")[0].fallback_provider_id is None

@@ -94,6 +94,8 @@ export interface SimpleExplanation {
   possible_risk?: string;
   recommended_check?: string;
   uncertainty?: string;
+  user_consequence?: string;
+  screen_location?: string;
 }
 
 export interface ImpactItem {
@@ -115,8 +117,89 @@ export interface ImpactItem {
   technical_explanation?: any;
 }
 
+export interface PlainTestItem {
+  title: string;
+  action: string;
+  expected: string;
+}
+
+export interface ImpactStory {
+  story: string;
+  what_to_do_first: string;
+  what_might_break: string;
+  action_for_agent: string;
+}
+
+export interface ColorOption {
+  name: string;
+  hex: string;
+}
+
+export interface SuggestedOption {
+  label: string;
+  value: string;
+  kind: 'size' | 'font' | 'spacing' | 'radius' | 'other';
+}
+
+export interface VoiceRequirementResponse {
+  status: string;
+  raw_transcript: string;
+  refined_requirement: string;
+  ambiguities: string[];
+  suggested_colors?: ColorOption[];
+  suggested_options?: SuggestedOption[];
+  clarifications_made: string[];
+  models_used: {
+    transcription: string;
+    refinement: string;
+  };
+  durations_seconds: {
+    transcription: number;
+    refinement: number;
+    total: number;
+  };
+  keywords_used: string[];
+  refinement_error?: string;
+}
+
+export interface RefineRequirementResponse {
+  status: string;
+  raw_transcript: string;
+  refined_requirement: string;
+  ambiguities: string[];
+  suggested_colors?: ColorOption[];
+  suggested_options?: SuggestedOption[];
+  clarifications_made: string[];
+  models_used: {
+    refinement: string;
+  };
+  duration_seconds: number;
+  keywords_used: string[];
+  refinement_error?: string;
+}
+
+export interface FollowUpResponse {
+  question: string;
+  answer: string;
+  screen_consequence: string;
+  grounded_files: string[];
+  callers: string[];
+  dependencies: string[];
+}
+
+export interface ScreenshotPreviewResponse {
+  status: string;
+  screen_type: string;
+  summary: string;
+  visible_elements: string[];
+  user_actions: string[];
+  uncertainties: string[];
+}
+
 export interface AnalysisReport {
   requirement_summary: string;
+  impact_story?: ImpactStory;
+  plain_test_checklist?: PlainTestItem[];
   interpretation?: {
     business_intent: string;
     actors: string[];

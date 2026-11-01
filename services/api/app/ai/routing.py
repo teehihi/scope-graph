@@ -19,6 +19,8 @@ class AIStage(StrEnum):
     IMPACT_REASONING = "impact_reasoning"
     COMPLETENESS_REVIEW = "completeness_review"
     BRIEF_GENERATION = "brief_generation"
+    VOICE_TRANSCRIPTION = "voice_transcription"
+    REQUIREMENT_REFINEMENT = "requirement_refinement"
 
 
 class StageExecutionError(ValueError):
@@ -130,6 +132,8 @@ class StageProviderRouter:
             AIStage.IMPACT_REASONING: "reason_about_impact",
             AIStage.COMPLETENESS_REVIEW: "review_completeness",
             AIStage.BRIEF_GENERATION: "generate_implementation_brief",
+            AIStage.VOICE_TRANSCRIPTION: "transcribe_audio",
+            AIStage.REQUIREMENT_REFINEMENT: "refine_requirement",
         }
         if expected[stage] != method:
             raise StageExecutionError("invalid_stage_method", stage)
@@ -142,7 +146,9 @@ class StageProviderRouter:
         try:
             return self._call(stage, method, config, provider, False, *args, **kwargs)
         except StageExecutionError as error:
-            if error.code not in {"timeout", "provider_unavailable", "authentication_failed", "provider_error"} or not config.fallback_provider_id:
+            if (stage in {AIStage.VOICE_TRANSCRIPTION, AIStage.REQUIREMENT_REFINEMENT} or
+                    error.code not in {"timeout", "provider_unavailable", "authentication_failed", "provider_error"} or
+                    not config.fallback_provider_id):
                 raise
             fallback_config, fallback_provider = self.registry.get(config.fallback_provider_id)
             if not fallback_config.capabilities.supports(stage):
@@ -323,4 +329,6 @@ def build_stage_router(default_provider: BaseMetaAIProvider) -> StageProviderRou
         AIStage.IMPACT_REASONING: "modal_reasoning",
         AIStage.COMPLETENESS_REVIEW: "meta_model_api",
         AIStage.BRIEF_GENERATION: "meta_model_api",
+        AIStage.VOICE_TRANSCRIPTION: "meta_model_api",
+        AIStage.REQUIREMENT_REFINEMENT: "meta_model_api",
     }, profile)

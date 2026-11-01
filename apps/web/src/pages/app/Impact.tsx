@@ -156,7 +156,7 @@ export const ImpactPage: React.FC = () => {
         </div>
       }
     >
-      <div className="flex-1 flex flex-col min-h-0 min-w-0 w-full max-w-full overflow-hidden bg-[#F7F8F5]">
+      <div className="flex flex-col min-w-0 w-full max-w-full bg-[#F7F8F5]">
         {/* Requirement Input Bar */}
         <RequirementPanel
           onAnalyze={(req, screenshot) => runAnalysisRequirement(req, null, screenshot)}
@@ -164,6 +164,7 @@ export const ImpactPage: React.FC = () => {
           hasReport={analysisReport !== null}
           onClear={clearAnalysis}
           activeRepoName={activeRepo?.name || null}
+          activeRepoId={activeRepo?.id || null}
         />
 
         {analysisError && (
@@ -174,7 +175,7 @@ export const ImpactPage: React.FC = () => {
         )}
 
         {/* Content Area */}
-        <div id="tour-impact-content" className="flex-1 flex min-h-0 min-w-0 w-full max-w-full relative overflow-hidden">
+        <div id="tour-impact-content" className="flex flex-col min-w-0 w-full max-w-full relative">
           {isAnalyzing ? (
             /* Loading State: Scout Exploring */
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4">
@@ -192,13 +193,14 @@ export const ImpactPage: React.FC = () => {
             </div>
           ) : analysisReport ? (
             /* Results: Report Panel + Desktop Evidence Inspector */
-            <div className="flex-1 flex min-h-0 min-w-0 w-full max-w-full overflow-hidden">
-              <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
+            <div className="flex min-w-0 w-full max-w-full">
+              <div className="flex-1 flex flex-col min-w-0">
                 <ReportPanel
                   report={analysisReport}
                   onSelectItem={handleSelectItem}
                   selectedFilePath={selectedImpactItem?.file_path}
                   briefMarkdown={briefMarkdown}
+                  activeRepoId={activeRepo?.id || null}
                 />
               </div>
 

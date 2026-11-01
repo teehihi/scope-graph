@@ -7,7 +7,7 @@ from app.db.models import Repository, IndexedFile, AnalysisRun
 from app.graph.engine import GraphEngine
 from app.analysis.retriever import HybridRetriever
 from app.analysis.causal import CausalImpactVerifier
-from app.analysis.explanations import explain_item
+from app.analysis.explanations import explain_item, build_impact_story, generate_plain_test_checklist
 from app.ai.provider import get_ai_provider
 from app.ai.routing import AIStage, StageExecutionError, StageProviderRouter, build_stage_router
 from app.ai.image_input import ValidatedScreenshot
@@ -203,10 +203,19 @@ class AnalysisOrchestrator:
                 for path in sorted(potential_by_path)
             ]
 
+            direct_items = [i for i in explained_affected if i.get("impact_type") == "direct"]
+            indirect_items = [i for i in explained_affected if i.get("impact_type") == "indirect"]
+            impact_story = build_impact_story(requirement, direct_items, indirect_items, target_language=target_language)
+            plain_test_checklist = generate_plain_test_checklist(
+                requirement, validated["suggested_tests"], explained_affected, target_language=target_language
+            )
+
             # Combine into final structured report
             final_report = {
                 "requirement_summary": requirement,
                 "interpretation": interpretation,
+                "impact_story": impact_story,
+                "plain_test_checklist": plain_test_checklist,
                 "affected_items": explained_affected,
                 "affected_functional_areas": sorted({
                     item["simple_explanation"]["functional_area"] for item in explained_affected

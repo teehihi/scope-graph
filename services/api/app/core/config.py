@@ -59,6 +59,12 @@ class Settings(BaseSettings):
     META_AI_MAX_RETRIES: int = Field(default=2, ge=0, le=5, description="Retries after transient inference failures")
     META_AI_RETRY_BACKOFF_SECONDS: float = Field(default=0.5, ge=0, le=10, description="Initial retry delay")
 
+    # Meta Voice / Speech-to-Text
+    META_AI_ASR_MODEL: str = Field(default="muse-voice-transcribe-1.0", description="Meta ASR model for voice transcription")
+    META_AI_ASR_BASE_URL: str = Field(default="https://api.meta.ai/v1/asr", description="Meta ASR base URL")
+    META_AI_ASR_WS_URL: str = Field(default="wss://api.meta.ai/v1/asr/realtime", description="Meta ASR realtime WebSocket URL")
+
+
     # Explicit stage routing. Empty partner settings never activate remote inference.
     AI_PROVIDER_PROFILE: str = Field(default="meta_only", description="meta_only or multi_ai")
     MULTI_AI_META_REQUEST_BUDGET: int = Field(default=15, ge=1, le=50)

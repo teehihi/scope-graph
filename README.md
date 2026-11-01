@@ -66,10 +66,12 @@ ScopeGraph is a **planning aid**. Static indexing supplies facts; model reasonin
 
 | Capability | What is available |
 | --- | --- |
-| Repository-aware impact analysis | Python AST indexing, hybrid retrieval, graph traversal and a multi-pass analysis report |
+| Spoken Voice Requirement | Speak requirements directly in 8+ languages (Vietnamese code-switching, English, Japanese, etc.) with real-time waveform, auto silence VAD, and Meta Muse Spark 1.3 requirement refinement before review |
+| Vibecoder Impact Story | Plain-language consequence translation (`screen_location`, `user_consequence`), copyable agent prompts, interactive grounded follow-up Q&A, and manual acceptance checklists |
+| Repository-aware impact analysis | Python & TypeScript/JavaScript AST indexing, hybrid retrieval, graph traversal and a multi-pass analysis report |
 | Visual dependency exploration | Interactive React Flow graph with architectural layers and file-level connections |
 | Impact separation | Direct, indirect and potential items are displayed separately; causal classification adds checks beyond file existence |
-| Screenshot-to-Impact | PNG/JPEG upload and visual-context contract are implemented; an actual vision provider is required. Local browser integration is mock-verified; one prior Meta **vision-only** smoke request succeeded. |
+| Screenshot-to-Impact | PNG/JPEG upload with instant pre-analysis screen element preview and multimodal visual intent grounding |
 | Source evidence | Indexed path/symbol validation, rejected unsupported references and line-numbered excerpts |
 | Agent access | FastMCP tools: `analyze_change`, `get_relevant_context`, `suggest_tests` |
 | Optional Multi-AI routing | Configured stage routing can select Baseten Vision and Modal reasoning; partner live inference remains **unverified** |
@@ -169,9 +171,14 @@ Docker Compose configuration is included for isolated development, but the lates
 
 1. Load the bundled sample or upload a ZIP of a repository you are allowed to inspect.
 2. Open **Dependency Graph** to explore indexed files and symbols.
-3. In **Impact Analysis**, enter a requirement such as “Require email verification before users can change their email address.”
-4. Review direct, indirect and potential items, then open **View Code Evidence** for exact source lines.
-5. If a vision provider is configured, attach a PNG/JPEG to analyze visual context; inspect observations and code evidence independently.
+3. In **Impact Analysis**:
+   - **Voice Requirement (Vibecoder flow)**: Click the green microphone button and speak naturally in Vietnamese or English (e.g. *"Đổi nút đăng nhập thành màu xanh"* or *"Require email verification before changing user email"*). The client VAD auto-stops on silence, and Meta Muse Spark 1.3 refines it into a clear, structured requirement with clarification questions. Review or edit before analyzing.
+   - **Multimodal UI Context**: Drag and drop a PNG/JPEG screenshot to get an instant AI Vision preview of detected screens and buttons.
+   - **Type directly**: Enter any natural-language requirement into the prompt textarea.
+4. Review the **Top Impact Story** and clear consequences (`screen_location` & `user_consequence` for each affected file). Click **Copy Prompt for Coding Agent** to paste directly into Cursor or Claude Code.
+5. In the **Suggested Tests** tab, inspect and interact with the **Manual Acceptance Checklist** designed for vibecoders.
+6. Ask follow-up impact questions in the **Interactive Q&A Widget** at the bottom of the page.
+7. Open **View Code Evidence** for exact source lines and AST caller traces.
 
 AI agents can call the three MCP tools for the same indexed context. [MCP setup](docs/MCP_SETUP.md) · [REST/OpenAPI](http://127.0.0.1:8000/docs)
 

@@ -68,3 +68,41 @@ class CompletenessReview(BaseModel):
     is_complete: StrictBool
     potential_gaps: list[NonEmptyStr]
     additional_files_to_check: list[NonEmptyStr]
+
+
+class ColorOption(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: NonEmptyStr
+    hex: NonEmptyStr
+
+
+class SuggestedOption(BaseModel):
+    """Generic chip option for non-color suggestions (size, font, spacing, radius, etc.)"""
+    model_config = ConfigDict(extra="forbid")
+    label: NonEmptyStr   # Display label, e.g. "Nhỏ (sm)", "Inter", "8px"
+    value: NonEmptyStr   # Injected into requirement text, e.g. "sm", "Inter", "8px"
+    kind: NonEmptyStr    # Category tag for icon selection: "size" | "font" | "spacing" | "radius" | "other"
+
+
+class RequirementRefinementResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    refined_requirement: NonEmptyStr
+    ambiguities: list[NonEmptyStr] = Field(default_factory=list)
+    suggested_colors: list[ColorOption] = Field(default_factory=list)
+    suggested_options: list[SuggestedOption] = Field(default_factory=list)
+    clarifications_made: list[NonEmptyStr] = Field(default_factory=list)
+
+
+class ColorSuggestionsResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question: NonEmptyStr
+    suggested_colors: list[ColorOption] = Field(min_length=2, max_length=4)
+
+
+class StyleSuggestionsResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question: NonEmptyStr
+    suggested_options: list[SuggestedOption] = Field(min_length=2, max_length=4)

@@ -1,12 +1,13 @@
 import json
 import logging
+import re
 import time
 from typing import Any
 from urllib.parse import urlparse
 import httpx
 from pydantic import BaseModel, ValidationError
 from app.ai.image_input import ValidatedScreenshot
-from app.ai.schemas import RequirementInterpretation, ImpactAnalysisResult, CompletenessReview, StructuredVisualIntent
+from app.ai.schemas import RequirementInterpretation, ImpactAnalysisResult, CompletenessReview, StructuredVisualIntent, RequirementRefinementResult, ColorOption, SuggestedOption, ColorSuggestionsResult, StyleSuggestionsResult
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,24 @@ class BaseMetaAIProvider:
     ) -> str:
         raise NotImplementedError
 
+    def transcribe_audio(
+        self,
+        audio_bytes: bytes,
+        content_type: str = "audio/wav",
+        language: str = "vi",
+        keywords: list[str] | None = None,
+    ) -> AIProviderResponse:
+        raise NotImplementedError
+
+    def refine_requirement(
+        self,
+        raw_transcript: str,
+        repo_keywords: list[str] | None = None,
+        target_language: str = "vi",
+    ) -> AIProviderResponse:
+        raise NotImplementedError
+
+
 class MetaAIHttpProvider(BaseMetaAIProvider):
     """
     HTTP Provider compatible with Meta Model API and partner inference endpoints
@@ -90,17 +109,18 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
             timeout=timeout_seconds,
         )
 
-    def _call_model(self, system_prompt: str, user_prompt: str | list[dict[str, Any]], expect_json: bool = True, schema: type[BaseModel] | None = None) -> tuple[dict[str, Any] | str, float, str, dict[str, int] | None]:
+    def _call_model(self, system_prompt: str, user_prompt: str | list[dict[str, Any]], expect_json: bool = True, schema: type[BaseModel] | None = None, max_tokens: int | None = None) -> tuple[dict[str, Any] | str, float, str, dict[str, int] | None]:
         start = time.perf_counter()
         self.last_request_attempts = 0
         url = f"{self.base_url}/chat/completions"
+        effective_max_tokens = max_tokens or self.max_tokens
         payload = {
             "model": self.model,
             "messages": [
                 {"role": "developer" if self.provider_name == "meta_model_api" else "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            "max_tokens": self.max_tokens,
+            "max_tokens": effective_max_tokens,
         }
         if self.provider_name != "meta_model_api":
             payload["temperature"] = settings.META_AI_TEMPERATURE
@@ -185,8 +205,8 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
 
         return content, latency, actual_model, token_usage
 
-    def _validated_response(self, schema: type[BaseModel], system_prompt: str, user_prompt: str | list[dict[str, Any]]) -> AIProviderResponse:
-        data, latency, model, token_usage = self._call_model(system_prompt, user_prompt, schema=schema)
+    def _validated_response(self, schema: type[BaseModel], system_prompt: str, user_prompt: str | list[dict[str, Any]], max_tokens: int | None = None) -> AIProviderResponse:
+        data, latency, model, token_usage = self._call_model(system_prompt, user_prompt, schema=schema, max_tokens=max_tokens)
         try:
             validated = schema.model_validate(data)
         except ValidationError:
@@ -341,6 +361,210 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
         self.brief_latency_seconds = latency
         self.brief_token_usage = token_usage
         return content
+
+    def transcribe_audio(
+        self,
+        audio_bytes: bytes,
+        content_type: str = "audio/wav",
+        language: str = "vi",
+        keywords: list[str] | None = None,
+    ) -> AIProviderResponse:
+        start = time.perf_counter()
+        if "wav" not in content_type.lower():
+            raise ValueError("Meta ASR file transcription requires a WAV audio payload")
+        asr_url = f"{settings.META_AI_ASR_BASE_URL.rstrip('/')}/transcribe"
+        language_names = {
+            "vi": "Vietnamese",
+            "en": "English",
+            "ja": "Japanese",
+            "ko": "Korean",
+            "zh": "Mandarin Chinese",
+            "fr": "French",
+            "de": "German",
+            "es": "Spanish",
+            "hi": "Hindi",
+            "th": "Thai",
+            "it": "Italian",
+        }
+        language_code = language.lower().replace("_", "-").split("-", 1)[0]
+        request_data: dict[str, Any] = {
+            "model": settings.META_AI_ASR_MODEL,
+            "audioEncoding": "WAV",
+            "mode": "PUSH_TO_TALK",
+        }
+        if language_names.get(language_code):
+            request_data["languageBias"] = [language_names[language_code]]
+        # Meta rejects the entire ASR request if even one keyword exceeds 30
+        # characters. Repository symbols and file stems are user supplied and
+        # can be arbitrarily long, so filter them before building the request.
+        valid_keywords = [
+            keyword.strip()
+            for keyword in (keywords or [])
+            if isinstance(keyword, str) and keyword.strip() and len(keyword.strip()) <= 30
+        ]
+        if valid_keywords:
+            request_data["keywords"] = valid_keywords[:30]
+        files = {
+            "request": (None, json.dumps(request_data), "application/json"),
+            "audio": (
+                "audio.wav",
+                audio_bytes,
+                content_type,
+            ),
+        }
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Accept": "application/json",
+        }
+        try:
+            res = httpx.post(asr_url, headers=headers, files=files, timeout=30.0)
+            if res.status_code >= 400:
+                raise ValueError(f"ASR transcription error {res.status_code}: {res.text[:200]}")
+            res_data = res.json()
+            transcript = res_data.get("text") or res_data.get("transcript") or ""
+        except Exception as e:
+            logger.warning("Remote ASR call failed: %s", e)
+            raise
+
+        return AIProviderResponse(
+            data={"text": transcript},
+            provider=self.provider_name,
+            model=settings.META_AI_ASR_MODEL,
+            latency_seconds=time.perf_counter() - start,
+            token_usage=None,
+        )
+
+    def refine_requirement(
+        self,
+        raw_transcript: str,
+        repo_keywords: list[str] | None = None,
+        target_language: str = "vi",
+    ) -> AIProviderResponse:
+        system_prompt = (
+            "You are an expert software requirement refiner for vibecoders and developers.\n"
+            "Your job is to polish a raw spoken requirement into a concise, clear, and unambiguous development requirement.\n"
+            "CRITICAL INSTRUCTIONS:\n"
+            "1. Preserve EVERY requested change, constraint, target, example, and qualifier from the full transcript in 'refined_requirement'. Remove filler only; do not summarize away details.\n"
+            "2. Fix punctuation, sentence structure, and obvious transcription errors without changing intent.\n"
+            "3. Use repository keywords only to correct likely misheard technical terms.\n"
+            "4. NEVER invent features or details outside what the user said.\n"
+            "5. If a visual choice is underspecified, ask one focused question in 'ambiguities' and generate useful choices. Empty suggestion lists are not acceptable for an underspecified visual request.\n"
+            "   - For a vague color request, preserve the requested hue and return 2-4 distinct shades in 'suggested_colors'. Generate the shades for this request; never choose from a fixed palette or replace an explicitly specified hex value.\n"
+            "   - If the user mentions SIZE, return 2-4 size choices in 'suggested_options' with kind='size'.\n"
+            "   - If the user mentions FONT, return 2-4 font choices in 'suggested_options' with kind='font'.\n"
+            "   - If the user mentions SPACING/PADDING, return 2-4 spacing choices in 'suggested_options' with kind='spacing'.\n"
+            "   - If the user mentions BORDER RADIUS, return 2-4 radius choices in 'suggested_options' with kind='radius'.\n"
+            "   - Do NOT ask about rate limits, auth, or IP addresses if the user only asked for visual or styling changes!\n"
+            f"6. Output in language: {target_language}.\n"
+            "7. Return JSON matching schema: 'refined_requirement' (str), 'ambiguities' (list[str]), 'suggested_colors' (list of {name: str, hex: str}), 'suggested_options' (list of {label: str, value: str, kind: str}), 'clarifications_made' (list[str])."
+        )
+        user_prompt = (
+            f"Raw Spoken Transcript:\n\"\"\"{raw_transcript}\"\"\"\n\n"
+            f"Repository Keywords & Context:\n{json.dumps(repo_keywords or [])}\n"
+        )
+        lower = raw_transcript.casefold()
+        has_explicit_hex = re.search(r"#[0-9a-fA-F]{6}\b", raw_transcript) is not None
+        color_terms = (
+            "màu", "sắc", "tone", "color", "colour", "shade", "pink", "hồng", "purple", "violet", "tím",
+            "blue", "xanh", "green", "lá", "red", "đỏ", "yellow", "vàng", "orange", "cam", "black", "đen",
+            "white", "trắng", "gray", "grey", "xám", "nâu", "brown",
+        )
+        needs_colors = not has_explicit_hex and any(term in lower for term in color_terms)
+        option_kind = None
+        if any(term in lower for term in ("font", "typeface", "kiểu chữ", "phông chữ", "font chữ")):
+            option_kind = "font"
+        elif any(term in lower for term in ("kích thước", "size", "lớn hơn", "nhỏ hơn", "to hơn", "bigger", "smaller", "larger")):
+            option_kind = "size"
+        elif any(term in lower for term in ("khoảng cách", "spacing", "padding", "margin", "rộng hơn", "chật hơn")):
+            option_kind = "spacing"
+        elif any(term in lower for term in ("bo góc", "bo tròn", "border radius", "rounded", "radius")):
+            option_kind = "radius"
+
+        started = time.perf_counter()
+        refinement_error = None
+        response = None
+        try:
+            response = self._validated_response(RequirementRefinementResult, system_prompt, user_prompt, max_tokens=1800)
+            refined = RequirementRefinementResult.model_validate(response.data)
+        except Exception as error:
+            if not needs_colors and not option_kind:
+                raise
+            logger.warning("Main refinement failed for visual request (%s); generating choices separately", type(error).__name__)
+            refined = RequirementRefinementResult(refined_requirement=raw_transcript.strip())
+            refinement_error = "AI refinement could not complete; the recognized transcript is preserved."
+
+        request_attempts = self.last_request_attempts
+        latency = response.latency_seconds if response else 0.0
+        token_usage = dict(response.token_usage or {}) if response else {}
+
+        if needs_colors and len(refined.suggested_colors) < 2:
+            color_prompt = (
+                f"Spoken requirement: {raw_transcript!r}\n"
+                f"Return 2-4 distinct, usable shades of the same requested hue for the target in that request. "
+                f"Write names and one concise clarifying question in {target_language}; provide valid six-digit CSS hex values. "
+                "Do not choose a final shade, add another hue, or use a preset palette."
+            )
+            try:
+                suggestions = self._validated_response(
+                    ColorSuggestionsResult,
+                    "Generate color choices from the user's actual request. Return only the requested JSON fields.",
+                    color_prompt,
+                    max_tokens=700,
+                )
+                request_attempts += self.last_request_attempts
+                latency += suggestions.latency_seconds
+                for key, value in (suggestions.token_usage or {}).items():
+                    token_usage[key] = token_usage.get(key, 0) + value
+                refined.suggested_colors = [
+                    ColorOption.model_validate(option) for option in suggestions.data["suggested_colors"]
+                ]
+                if not refined.ambiguities:
+                    refined.ambiguities = [suggestions.data["question"]]
+            except Exception as error:
+                request_attempts += self.last_request_attempts
+                logger.warning("AI color suggestion generation failed (%s)", type(error).__name__)
+                refinement_error = "AI could not generate color suggestions. The recognized transcript is preserved."
+
+        existing_kinds = {option.kind.casefold() for option in refined.suggested_options}
+        if option_kind and option_kind not in existing_kinds:
+            options_prompt = (
+                f"Spoken requirement: {raw_transcript!r}\n"
+                f"Generate 2-4 practical choices for the mentioned {option_kind} decision. "
+                f"Set every option kind to '{option_kind}', and write labels, values, and one concise clarifying question in {target_language}. "
+                "Make the choices relevant to the user's wording; do not invent unrelated requirements."
+            )
+            try:
+                suggestions = self._validated_response(
+                    StyleSuggestionsResult,
+                    "Generate relevant visual implementation choices from the user's actual request. Return only the requested JSON fields.",
+                    options_prompt,
+                    max_tokens=700,
+                )
+                request_attempts += self.last_request_attempts
+                latency += suggestions.latency_seconds
+                for key, value in (suggestions.token_usage or {}).items():
+                    token_usage[key] = token_usage.get(key, 0) + value
+                refined.suggested_options = [
+                    SuggestedOption.model_validate(option) for option in suggestions.data["suggested_options"]
+                ]
+                if not refined.ambiguities:
+                    refined.ambiguities = [suggestions.data["question"]]
+            except Exception as error:
+                request_attempts += self.last_request_attempts
+                logger.warning("AI style option generation failed (%s)", type(error).__name__)
+                refinement_error = "AI could not generate visual options. The recognized transcript is preserved."
+
+        self.last_request_attempts = request_attempts
+        data = refined.model_dump()
+        if refinement_error:
+            data["refinement_error"] = refinement_error
+        return AIProviderResponse(
+            data=data, provider=self.provider_name,
+            model=(response.model if response else settings.META_AI_MODEL),
+            latency_seconds=(latency if latency else time.perf_counter() - started), token_usage=token_usage or None,
+        )
+
 
 
 class OfflineDemoProvider(BaseMetaAIProvider):
@@ -626,6 +850,143 @@ class OfflineDemoProvider(BaseMetaAIProvider):
         ])
 
         return "\n".join(lines)
+
+    def transcribe_audio(
+        self,
+        audio_bytes: bytes,
+        content_type: str = "audio/wav",
+        language: str = "vi",
+        keywords: list[str] | None = None,
+    ) -> AIProviderResponse:
+        start = time.perf_counter()
+        keywords_str = " ".join(keywords or []).lower()
+        if "email" in keywords_str or "verify" in keywords_str:
+            transcript = "Yêu cầu xác thực email trước khi người dùng đổi địa chỉ email" if language.startswith("vi") else "Require email verification before changing user email"
+        elif "rate" in keywords_str or "limit" in keywords_str:
+            transcript = "Thêm giới hạn tần suất yêu cầu cho API đăng nhập" if language.startswith("vi") else "Add rate limiting for login endpoints"
+        else:
+            transcript = "Yêu cầu kiểm tra xác thực trước khi cập nhật dữ liệu tài khoản" if language.startswith("vi") else "Require authentication check before updating account data"
+
+        return AIProviderResponse(
+            data={"text": transcript},
+            provider=self.provider_name,
+            model="offline-deterministic-transcribe",
+            latency_seconds=time.perf_counter() - start,
+            is_mock_or_demo=True,
+        )
+
+    def refine_requirement(
+        self,
+        raw_transcript: str,
+        repo_keywords: list[str] | None = None,
+        target_language: str = "vi",
+    ) -> AIProviderResponse:
+        start = time.perf_counter()
+        text = raw_transcript.strip().strip('"').strip("'")
+        if text and not text.endswith(('.', '?', '!')):
+            text += "."
+        if text:
+            text = text[0].upper() + text[1:]
+
+        ambiguities = []
+        suggested_colors = []
+        suggested_options: list[dict[str, str]] = []
+        clarifications = ["Chuẩn hóa cấu trúc câu và dấu câu"]
+        lower = text.lower()
+
+        if "hồng" in lower or "pink" in lower:
+            ambiguities.append("Bạn muốn chuyển sang tone màu hồng nào cho nút đăng nhập?")
+            suggested_colors = [
+                {"name": "Hồng pastel", "hex": "#F472B6"},
+                {"name": "Hồng cánh sen", "hex": "#EC4899"},
+                {"name": "Hồng đậm", "hex": "#DB2777"},
+            ]
+        elif "tím" in lower or "purple" in lower or "violet" in lower:
+            ambiguities.append("Bạn muốn dùng sắc tím nào cho nút đăng nhập?")
+            suggested_colors = [
+                {"name": "Tím lavender", "hex": "#A78BFA"},
+                {"name": "Tím violet", "hex": "#8B5CF6"},
+                {"name": "Tím đậm", "hex": "#6D28D9"},
+            ]
+        elif "xám" in lower or "gray" in lower or "grey" in lower:
+            ambiguities.append("Bạn muốn chuyển sang tone màu xám nào?")
+            suggested_colors = [
+                {"name": "Xám thanh lịch", "hex": "#64748B"},
+                {"name": "Xám than chì", "hex": "#334155"},
+                {"name": "Xám khói nhạt", "hex": "#E2E8F0"},
+            ]
+        elif "xanh lá" in lower or "green" in lower or "lime" in lower:
+            ambiguities.append("Bạn muốn chuyển sang tone màu xanh lá nào?")
+            suggested_colors = [
+                {"name": "Xanh lá Scope", "hex": "#C7F36B"},
+                {"name": "Xanh ngọc lục bảo", "hex": "#10B981"},
+            ]
+        elif "xanh" in lower or "blue" in lower:
+            ambiguities.append("Bạn muốn chuyển sang tone màu xanh dương nào?")
+            suggested_colors = [
+                {"name": "Xanh Graph Blue", "hex": "#526BEE"},
+                {"name": "Xanh da trời", "hex": "#38BDF8"},
+            ]
+        elif "đỏ" in lower or "red" in lower:
+            ambiguities.append("Bạn muốn chuyển sang tone màu đỏ nào?")
+            suggested_colors = [
+                {"name": "Đỏ cảnh báo", "hex": "#E5484D"},
+                {"name": "Đỏ tươi", "hex": "#EF4444"},
+            ]
+        elif any(k in lower for k in ("to hơn", "lớn hơn", "nhỏ hơn", "nhỏ", "lớn", "to", "bigger", "smaller", "large", "small")):
+            ambiguities.append("Bạn muốn điều chỉnh kích thước theo cỡ nào?")
+            suggested_options = [
+                {"label": "Rất nhỏ (xs)", "value": "xs", "kind": "size"},
+                {"label": "Nhỏ (sm)", "value": "sm", "kind": "size"},
+                {"label": "Vừa (md)", "value": "md", "kind": "size"},
+                {"label": "Lớn (lg)", "value": "lg", "kind": "size"},
+                {"label": "Rất lớn (xl)", "value": "xl", "kind": "size"},
+            ]
+        elif any(k in lower for k in ("font", "chữ", "typeface", "kiểu chữ", "font chữ")):
+            ambiguities.append("Bạn muốn dùng font chữ nào?")
+            suggested_options = [
+                {"label": "Inter", "value": "Inter", "kind": "font"},
+                {"label": "Roboto", "value": "Roboto", "kind": "font"},
+                {"label": "JetBrains Mono", "value": "JetBrains Mono", "kind": "font"},
+                {"label": "Geist", "value": "Geist", "kind": "font"},
+            ]
+        elif any(k in lower for k in ("khoảng cách", "padding", "margin", "rộng hơn", "chật hơn", "spacing")):
+            ambiguities.append("Bạn muốn điều chỉnh khoảng cách theo giá trị nào?")
+            suggested_options = [
+                {"label": "Rất chật (4px)", "value": "4px", "kind": "spacing"},
+                {"label": "Chật (8px)", "value": "8px", "kind": "spacing"},
+                {"label": "Vừa (16px)", "value": "16px", "kind": "spacing"},
+                {"label": "Rộng (24px)", "value": "24px", "kind": "spacing"},
+                {"label": "Rất rộng (32px)", "value": "32px", "kind": "spacing"},
+            ]
+        elif any(k in lower for k in ("bo tròn", "rounded", "góc tròn", "border radius", "radius")):
+            ambiguities.append("Bạn muốn bo góc theo mức nào?")
+            suggested_options = [
+                {"label": "Vuông (0px)", "value": "0px", "kind": "radius"},
+                {"label": "Bo nhẹ (4px)", "value": "4px", "kind": "radius"},
+                {"label": "Bo vừa (8px)", "value": "8px", "kind": "radius"},
+                {"label": "Bo nhiều (16px)", "value": "16px", "kind": "radius"},
+                {"label": "Bo tròn hoàn toàn (9999px)", "value": "9999px", "kind": "radius"},
+            ]
+        elif "tần suất" in lower or "rate limit" in lower or "giới hạn" in lower:
+            ambiguities.append("Bạn muốn áp dụng giới hạn tần suất theo địa chỉ IP hay theo user ID?")
+        elif "email" in lower and ("xác thực" in lower or "verify" in lower):
+            ambiguities.append("Bạn muốn áp dụng xác thực cho cả tài khoản cũ hay chỉ khi tạo tài khoản mới?")
+
+        return AIProviderResponse(
+            data={
+                "refined_requirement": text,
+                "ambiguities": ambiguities,
+                "suggested_colors": suggested_colors,
+                "suggested_options": suggested_options,
+                "clarifications_made": clarifications,
+            },
+            provider=self.provider_name,
+            model=self.model,
+            latency_seconds=time.perf_counter() - start,
+            is_mock_or_demo=True,
+        )
+
 
 
 def get_ai_provider() -> BaseMetaAIProvider:

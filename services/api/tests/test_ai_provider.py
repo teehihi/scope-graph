@@ -43,6 +43,14 @@ REVIEW = {
     "additional_files_to_check": [],
 }
 
+REFINEMENT_WITHOUT_CHOICES = {
+    "refined_requirement": "Đổi màu nút đăng nhập sang màu hồng.",
+    "ambiguities": [],
+    "suggested_colors": [],
+    "suggested_options": [],
+    "clarifications_made": [],
+}
+
 
 @pytest.fixture
 def provider_with_transport():
@@ -89,7 +97,6 @@ def test_official_meta_request_uses_documented_endpoint_and_schema():
         result = provider.interpret_requirement("Verify email")
     finally:
         provider.client.close()
-
     assert result.model == "muse-spark-1.3"
     assert requests[0].url.host == "api.meta.ai"
     assert requests[0].url.path == "/v1/chat/completions"
@@ -103,6 +110,96 @@ def test_official_meta_request_uses_documented_endpoint_and_schema():
             "schema": RequirementInterpretation.model_json_schema(),
         },
     }
+
+
+def test_meta_transcription_sends_required_request_and_audio_parts(monkeypatch):
+    captured = {}
+
+    def fake_post(url, *, headers, files, timeout):
+        captured.update(url=url, headers=headers, files=files, timeout=timeout)
+        return httpx.Response(200, json={"text": "Tôi muốn đổi nút sang màu hồng."})
+
+    monkeypatch.setattr("app.ai.provider.httpx.post", fake_post)
+    provider = MetaAIHttpProvider("test-key", "https://api.meta.ai/v1", "muse-spark-1.3")
+    result = provider.transcribe_audio(
+        b"test-audio-bytes",
+        content_type="audio/wav",
+        language="vi",
+        keywords=["login", "button", "a_repository_symbol_name_longer_than_thirty_chars"],
+    )
+
+    request_part = captured["files"]["request"]
+    audio_part = captured["files"]["audio"]
+    assert captured["url"] == "https://api.meta.ai/v1/asr/transcribe"
+    assert json.loads(request_part[1]) == {
+        "model": settings.META_AI_ASR_MODEL,
+        "audioEncoding": "WAV",
+        "mode": "PUSH_TO_TALK",
+        "languageBias": ["Vietnamese"],
+        "keywords": ["login", "button"],
+    }
+    assert audio_part == ("audio.wav", b"test-audio-bytes", "audio/wav")
+    assert result.data["text"] == "Tôi muốn đổi nút sang màu hồng."
+
+
+def test_refinement_requests_ai_generated_colors_when_main_response_omits_them(provider_with_transport):
+    requests = []
+    responses = [
+        REFINEMENT_WITHOUT_CHOICES,
+        {
+            "question": "Bạn muốn sắc hồng nào cho nút đăng nhập?",
+            "suggested_colors": [
+                {"name": "Hồng phấn", "hex": "#E9A8BD"},
+                {"name": "Hồng rực", "hex": "#F04F9B"},
+                {"name": "Hồng mận", "hex": "#9F315D"},
+            ],
+        },
+    ]
+
+    def handler(request):
+        requests.append(json.loads(request.content))
+        return model_response(json.dumps(responses.pop(0)))
+
+    provider = provider_with_transport(handler)
+    provider.provider_name = "meta_model_api"
+    response = provider.refine_requirement(
+        "Tôi muốn đổi nút đăng nhập sang màu hồng.",
+        target_language="vi",
+    )
+
+    assert len(requests) == 2
+    assert len(response.data["suggested_colors"]) == 3
+    assert response.data["ambiguities"] == ["Bạn muốn sắc hồng nào cho nút đăng nhập?"]
+    assert requests[1]["response_format"]["json_schema"]["name"] == "ColorSuggestionsResult"
+    assert "preset palette" in requests[1]["messages"][1]["content"]
+
+
+def test_visual_suggestions_are_generated_even_if_main_refinement_output_is_truncated(provider_with_transport):
+    requests = []
+
+    def handler(request):
+        requests.append(json.loads(request.content))
+        if len(requests) == 1:
+            return httpx.Response(200, json={
+                "model": "served-model",
+                "choices": [{"finish_reason": "length", "message": {"content": ""}}],
+            })
+        return model_response(json.dumps({
+            "question": "Bạn muốn chọn sắc hồng nào?",
+            "suggested_colors": [
+                {"name": "Hồng đào", "hex": "#EAA0A0"},
+                {"name": "Hồng sen", "hex": "#DF3C8A"},
+            ],
+        }))
+
+    provider = provider_with_transport(handler)
+    provider.provider_name = "meta_model_api"
+    response = provider.refine_requirement("Đổi nút sang màu hồng.", target_language="vi")
+
+    assert len(requests) == 2
+    assert response.data["refined_requirement"] == "Đổi nút sang màu hồng."
+    assert len(response.data["suggested_colors"]) == 2
+    assert response.data["refinement_error"]
 
 
 def test_partner_request_keeps_its_compatible_json_mode(provider_with_transport):

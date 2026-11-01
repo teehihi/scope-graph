@@ -1,6 +1,123 @@
-import { Repository, AnalysisReport, GitHubRepoItem, GitHubAuthUrlResponse, SystemInfo, UpdateSystemSettingsRequest } from '../types';
+import {
+  Repository,
+  AnalysisReport,
+  GitHubRepoItem,
+  GitHubAuthUrlResponse,
+  SystemInfo,
+  UpdateSystemSettingsRequest,
+  VoiceRequirementResponse,
+  RefineRequirementResponse,
+  FollowUpResponse,
+  ScreenshotPreviewResponse,
+} from '../types';
 
 const API_BASE = '/api/v1';
+
+export interface RealtimeVoiceStream {
+  sendAudio: (frame: ArrayBuffer) => void;
+  finish: () => Promise<string>;
+  close: () => void;
+}
+
+export function openRealtimeVoiceStream(
+  repositoryId: string,
+  language: string,
+  onTranscript: (transcript: string, isFinal: boolean) => void
+): Promise<RealtimeVoiceStream> {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const socketUrl = `${protocol}//${window.location.host}${API_BASE}/repositories/${encodeURIComponent(repositoryId)}/voice-stream?language=${encodeURIComponent(language)}`;
+  const socket = new WebSocket(socketUrl);
+  socket.binaryType = 'arraybuffer';
+
+  let latestTranscript = '';
+  let finishResolve: ((transcript: string) => void) | null = null;
+  let finishReject: ((error: Error) => void) | null = null;
+  let finishPromise: Promise<string> | null = null;
+  let readyResolve: ((stream: RealtimeVoiceStream) => void) | null = null;
+  let readyReject: ((error: Error) => void) | null = null;
+  let finished = false;
+
+  const stream: RealtimeVoiceStream = {
+    sendAudio(frame) {
+      if (socket.readyState === WebSocket.OPEN) socket.send(frame);
+    },
+    finish() {
+      if (!finishPromise) {
+        finishPromise = new Promise<string>((resolve, reject) => {
+          finishResolve = resolve;
+          finishReject = reject;
+        });
+        if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ action: 'stop' }));
+        else finishReject?.(new Error('Realtime voice connection closed before transcription completed.'));
+      }
+      return finishPromise;
+    },
+    close() {
+      if (socket.readyState < WebSocket.CLOSING) socket.close();
+    },
+  };
+
+  const ready = new Promise<RealtimeVoiceStream>((resolve, reject) => {
+    readyResolve = resolve;
+    readyReject = reject;
+  });
+
+  const timeout = window.setTimeout(() => {
+    readyReject?.(new Error('Realtime voice connection timed out.'));
+    stream.close();
+  }, 15000);
+
+  socket.onmessage = (message) => {
+    if (typeof message.data !== 'string') return;
+    let event: { type?: string; transcript?: string; final?: boolean; message?: string };
+    try {
+      event = JSON.parse(message.data);
+    } catch {
+      return;
+    }
+    if (event.type === 'ready') {
+      window.clearTimeout(timeout);
+      readyResolve?.(stream);
+      readyResolve = null;
+      readyReject = null;
+    } else if (event.type === 'transcript' && typeof event.transcript === 'string') {
+      latestTranscript = event.transcript;
+      onTranscript(latestTranscript, event.final === true);
+    } else if (event.type === 'done') {
+      finished = true;
+      finishResolve?.(latestTranscript);
+      finishResolve = null;
+      finishReject = null;
+    } else if (event.type === 'error') {
+      const error = new Error(event.message || 'Realtime voice transcription failed.');
+      readyReject?.(error);
+      finishReject?.(error);
+      readyReject = null;
+      finishReject = null;
+      socket.close();
+      if (finished) return;
+    }
+  };
+
+  socket.onerror = () => {
+    const error = new Error('Realtime voice connection failed.');
+    readyReject?.(error);
+    finishReject?.(error);
+    readyReject = null;
+    finishReject = null;
+    socket.close();
+  };
+  socket.onclose = () => {
+    window.clearTimeout(timeout);
+    readyReject?.(new Error('Realtime voice connection closed before it was ready.'));
+    readyReject = null;
+    if (!finished && finishPromise) {
+      finishReject?.(new Error('Realtime voice connection closed before transcription completed.'));
+    }
+  };
+
+  return ready;
+}
 
 export class GitHubOAuthConfigurationError extends Error {
   constructor() {
@@ -235,5 +352,94 @@ export async function fetchAnalysisReport(analysisId: string): Promise<AnalysisR
 export async function fetchImplementationBrief(analysisId: string): Promise<{ brief_markdown: string }> {
   const res = await fetch(`${API_BASE}/analyses/${analysisId}/implementation-brief`);
   if (!res.ok) throw new Error('Failed to fetch brief');
+  return res.json();
+}
+
+export async function sendVoiceRequirement(
+  repositoryId: string,
+  audioBlob: Blob,
+  language: string = 'vi',
+  targetLanguage: string = 'vi'
+): Promise<VoiceRequirementResponse> {
+  const formData = new FormData();
+  formData.append('file', audioBlob, 'recording.wav');
+  formData.append('language', language);
+  formData.append('target_language', targetLanguage);
+
+  const res = await fetch(`${API_BASE}/repositories/${encodeURIComponent(repositoryId)}/voice-requirement`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Voice transcription failed' }));
+    const detail = err.detail;
+    const message = typeof detail === 'string' ? detail : detail?.message || 'Voice transcription failed';
+    const error = new Error(message) as Error & { rawTranscript?: string };
+    if (typeof detail === 'object' && typeof detail?.raw_transcript === 'string') {
+      error.rawTranscript = detail.raw_transcript;
+    }
+    throw error;
+  }
+  return res.json();
+}
+
+export async function refineRequirement(
+  repositoryId: string,
+  transcript: string,
+  targetLanguage: string = 'vi'
+): Promise<RefineRequirementResponse> {
+  const res = await fetch(`${API_BASE}/repositories/${encodeURIComponent(repositoryId)}/refine-requirement`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ transcript, target_language: targetLanguage }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Refinement failed' }));
+    throw new Error(err.detail || 'Refinement failed');
+  }
+  return res.json();
+}
+
+export async function askFollowUpQuestion(
+  repositoryId: string,
+  question: string,
+  filePath?: string,
+  symbol?: string,
+  targetLanguage: string = 'vi'
+): Promise<FollowUpResponse> {
+  const res = await fetch(`${API_BASE}/repositories/${encodeURIComponent(repositoryId)}/follow-up`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      question,
+      file_path: filePath,
+      symbol: symbol,
+      target_language: targetLanguage,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Follow-up question failed' }));
+    throw new Error(err.detail || 'Follow-up question failed');
+  }
+  return res.json();
+}
+
+export async function interpretScreenshotPreview(
+  repositoryId: string,
+  file: File,
+  requirement: string = ''
+): Promise<ScreenshotPreviewResponse> {
+  const formData = new FormData();
+  formData.append('screenshot', file);
+  formData.append('requirement', requirement);
+
+  const res = await fetch(`${API_BASE}/repositories/${encodeURIComponent(repositoryId)}/interpret-screenshot-preview`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Screenshot preview failed' }));
+    throw new Error(err.detail || 'Screenshot preview failed');
+  }
   return res.json();
 }

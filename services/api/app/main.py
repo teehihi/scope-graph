@@ -6,7 +6,7 @@ from app.core.config import settings
 from app.core.request_limits import ScreenshotRequestBodyLimit
 from app.core.logging import setup_logging
 from app.db.database import init_db
-from app.api.routes import health, repositories, analysis, auth
+from app.api.routes import health, repositories, analysis, auth, voice
 
 logger = setup_logging(settings.LOG_LEVEL)
 
@@ -58,6 +58,7 @@ app.include_router(health.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(repositories.router, prefix="/api/v1")
 app.include_router(analysis.router, prefix="/api/v1")
+app.include_router(voice.router, prefix="/api/v1")
 
 @app.get("/")
 def root():
