@@ -6,7 +6,6 @@ from pydantic import Field
 def _find_env_file() -> tuple[str, ...]:
     candidates = [
         Path.cwd() / ".env",
-        Path("/app/.env"),
         Path(__file__).resolve().parent / ".env",
         Path(__file__).resolve().parents[1] / ".env" if len(Path(__file__).resolve().parents) > 1 else None,
         Path(__file__).resolve().parents[2] / ".env" if len(Path(__file__).resolve().parents) > 2 else None,

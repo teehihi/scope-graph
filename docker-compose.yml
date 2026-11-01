@@ -72,7 +72,6 @@ services:
       - workspace_data:/app/data/workspaces
       - ./services/api/app:/app/app
       - ./examples:/app/examples
-      - ./.env:/app/.env:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 10s
@@ -128,7 +127,6 @@ services:
       - workspace_data:/app/data/workspaces
       - ./services/api/app:/app/app
       - ./examples:/app/examples
-      - ./.env:/app/.env:ro
     networks:
       - scopegraph_network
 
