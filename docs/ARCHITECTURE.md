@@ -47,15 +47,10 @@ flowchart TD
 - **Graph Traversal**: Computes downstream (dependents/callers) and upstream (dependencies) subgraphs.
 
 ### 2.4 Meta AI Semantic Reasoning (`app/ai`)
-- **Multi-Provider Stage Routing**: Orchestrates specialized Meta open-weights models and endpoints across pipeline stages:
-  - **Fast Intent Parsing (Step 1)**: Modal Serverless Auto Endpoint (`meta-models/Muse-Spark-Open-816B-A42B`) for sub-second structured requirement decomposition.
-  - **UI Vision Analysis (Step 0)**: Baseten Inference (`meta-models/muse-spark-open-1026`) / Modal for multimodal screenshot interpretation without OCR leaks.
-  - **Deep Semantic Reasoning (Step 4)**: Official Meta Model API (`muse-spark-1.3`) for deep dependency graph reasoning and risk analysis.
-  - **Completeness Review (Step 5)**: Baseten Inference (`meta-models/muse-spark-open-1026`) for independent reflection and coverage auditing.
-  - **Implementation Brief Generation (Step 7)**: Official Meta Model API (`muse-spark-1.3`) for synthesis of verified context into actionable coding briefs.
-- **Provider Adapter**: Targets the official Meta Model API chat-completions endpoint (`https://api.meta.ai/v1/chat/completions`) with `muse-spark-1.3` and JSON-schema responses. Partner OpenAI-compatible endpoints (Modal, Baseten, Fireworks, Together, Groq) remain configurable via environment variables; offline mode is deterministic and labeled as a demo.
-- **Execution Telemetry**: `operational_metadata` records granular per-stage execution metrics (`stage_routing` tracking model, provider, token usage, and inference latencies).
-- **Test Safety & Zero-Regression Fallback**: Automatic test harness detection ensures mock transports and deterministic demo fixtures are never bypassed by live environment credentials.
+- **Stage Routing**: `app/ai/routing.py` keeps the existing Meta or offline provider for all stages by default. The `multi_ai` profile explicitly selects a vision-capable Baseten deployment for screenshot interpretation and a Modal deployment for impact reasoning. Other stages use the configured Meta provider. Partner routes require approved HTTPS endpoints, credentials, capability flags and bounded per-analysis requests; public deployment remains gated.
+- **Provider Adapter**: Targets the Meta Model API chat-completions endpoint (`https://api.meta.ai/v1/chat/completions`) with `muse-spark-1.3` and JSON-schema responses. Partner OpenAI-compatible endpoints are configurable; offline mode is deterministic and labeled as a demo. Actual Baseten and Modal models and latency are unverified until deployed and measured.
+- **Execution Telemetry**: `operational_metadata.stages` records each stage's provider, model, request count, duration, usage when available, and execution mode. `stage_routing` retains a compact provider/model mapping for report consumers.
+- **Test Safety**: The default offline profile does not call remote inference. Mocked partner tests exercise routing without real credentials or paid requests.
 
 ### 2.5 Evidence Validation Layer (`app/evidence`)
 - **Anti-Hallucination Gate**: Compares every file path and symbol suggested by the AI against the PostgreSQL index. Hallucinations are rejected.

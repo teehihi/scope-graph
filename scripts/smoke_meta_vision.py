@@ -135,6 +135,7 @@ def run_one_request(
         api_key=settings.META_AI_API_KEY,
         base_url=EXPECTED_BASE_URL,
         model=EXPECTED_MODEL,
+        max_tokens=MAX_OUTPUT_TOKENS,
     )
     provider.client.close()
     gate = OneRequestTransport(transport or httpx.HTTPTransport(retries=0))
@@ -148,13 +149,10 @@ def run_one_request(
         follow_redirects=False,
     )
     provider.max_retries = 0
-    prior_limit = settings.META_AI_MAX_TOKENS
-    settings.META_AI_MAX_TOKENS = MAX_OUTPUT_TOKENS
     try:
         response = provider.interpret_screenshot(prepared.requirement, prepared.screenshot)
         visual = StructuredVisualIntent.model_validate(response.data)
     finally:
-        settings.META_AI_MAX_TOKENS = prior_limit
         provider.client.close()
     if gate.attempts != 1:
         raise RuntimeError("Vision request count did not equal one")

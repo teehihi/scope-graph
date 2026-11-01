@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
+import httpx
 from fastapi.testclient import TestClient
 from PIL import Image, PngImagePlugin
 from sqlalchemy import create_engine
@@ -133,6 +134,45 @@ def test_upload_rejects_oversized_image_before_decode(client, monkeypatch):
     http, provider = client
     monkeypatch.setattr(settings, "MAX_SCREENSHOT_BYTES", 16)
     response = upload(http, b"x" * 17)
+    assert response.status_code == 413
+    assert provider.images == []
+
+
+def test_upload_rejects_oversized_multipart_body_before_form_parsing(client, monkeypatch):
+    http, provider = client
+    monkeypatch.setattr(settings, "MAX_SCREENSHOT_BYTES", 16)
+
+    response = http.post(
+        "/api/v1/repositories/visual-repo/analyze-screenshot",
+        content=b"x" * 1_000_017,
+        headers={"Content-Type": "multipart/form-data; boundary=test"},
+    )
+
+    assert response.status_code == 413
+    assert provider.images == []
+
+
+@pytest.mark.asyncio
+async def test_upload_rejects_streaming_body_without_content_length(client, monkeypatch):
+    _, provider = client
+    monkeypatch.setattr(settings, "MAX_SCREENSHOT_BYTES", 16)
+    prefix = (
+        b'--test\r\nContent-Disposition: form-data; name="screenshot"; filename="screen.png"\r\n'
+        b'Content-Type: image/png\r\n\r\n'
+    )
+
+    async def body_chunks():
+        yield prefix + b"a" * 600_000
+        yield b"a" * 500_000 + b"\r\n--test--\r\n"
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as http:
+        response = await http.post(
+            "/api/v1/repositories/visual-repo/analyze-screenshot",
+            content=body_chunks(),
+            headers={"Content-Type": "multipart/form-data; boundary=test"},
+        )
+
     assert response.status_code == 413
     assert provider.images == []
 

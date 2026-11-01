@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from sqlalchemy import text
 from pydantic import BaseModel
 from app.db.database import engine
@@ -44,7 +44,7 @@ def system_info():
     """
     Returns runtime backend configuration for settings inspection.
     SECURITY STANDARD: The system environment API key in .env is never exposed over the API.
-    Only user-configured custom keys can be viewed/edited by the user.
+    Runtime keys are never returned; callers only receive presence and source.
     """
     has_api_key = bool(settings.META_AI_API_KEY and settings.META_AI_API_KEY.strip())
     source = "custom" if CUSTOM_USER_API_KEY else ("system" if bool(ORIGINAL_ENV_API_KEY and ORIGINAL_ENV_API_KEY.strip()) else "none")
@@ -59,7 +59,7 @@ def system_info():
         "is_live": is_live,
         "has_api_key": has_api_key,
         "api_key_source": source,
-        "custom_api_key": CUSTOM_USER_API_KEY or "",
+        "custom_api_key": "",
         "temperature": settings.META_AI_TEMPERATURE,
         "max_tokens": settings.META_AI_MAX_TOKENS,
         "environment": settings.ENVIRONMENT,
@@ -80,6 +80,9 @@ def update_system_settings(payload: UpdateSettingsPayload):
     Update runtime AI settings dynamically without requiring server restart.
     """
     global CUSTOM_USER_API_KEY
+
+    if settings.ENVIRONMENT.lower() == "production":
+        raise HTTPException(status_code=403, detail="Runtime AI settings are disabled in production")
     if payload.provider is not None and payload.provider.strip():
         settings.META_AI_PROVIDER = payload.provider.strip()
     if payload.model is not None and payload.model.strip():
@@ -106,6 +109,9 @@ def test_ai_connection():
     """
     Test connectivity with active AI provider and API credentials.
     """
+    if settings.ENVIRONMENT.lower() == "production":
+        raise HTTPException(status_code=403, detail="Runtime AI connection tests are disabled in production")
+
     try:
         from app.ai.provider import get_ai_provider
         prov = get_ai_provider()

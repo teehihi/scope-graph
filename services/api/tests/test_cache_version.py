@@ -14,3 +14,14 @@ def test_new_analysis_semantics_cannot_reuse_legacy_cached_report():
     assert make_analysis_cache_key(repo, requirement, model) == make_analysis_cache_key(
         repo, "  change   email  ", model,
     )
+
+
+def test_cache_key_separates_index_and_provider_configuration():
+    base = make_analysis_cache_key("repo", "change email", "model", index_version="v1",
+                                   profile="meta_only", provider_signature="meta@api.meta.ai")
+    assert base != make_analysis_cache_key("repo", "change email", "model", index_version="v2",
+                                          profile="meta_only", provider_signature="meta@api.meta.ai")
+    assert base != make_analysis_cache_key("repo", "change email", "model", index_version="v1",
+                                          profile="multi_ai", provider_signature="meta@api.meta.ai")
+    assert base != make_analysis_cache_key("repo", "change email", "model", index_version="v1",
+                                          profile="meta_only", provider_signature="other@endpoint")

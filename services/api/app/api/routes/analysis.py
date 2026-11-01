@@ -18,6 +18,18 @@ class AnalyzeRequest(BaseModel):
     target_language: str = "en"
 
 
+def _require_safe_production_inference():
+    if (
+        settings.ENVIRONMENT.lower() == "production"
+        and (settings.AI_PROVIDER_PROFILE.lower() != "meta_only"
+             or settings.META_AI_PROVIDER.lower() != "offline_demo")
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Live analysis requires authenticated production access",
+        )
+
+
 @router.post("/repositories/{repository_id}/analyze-screenshot")
 def analyze_screenshot(
     repository_id: str,
@@ -28,6 +40,7 @@ def analyze_screenshot(
 ):
     """Run a synchronous image-assisted analysis without using the text cache."""
     try:
+        _require_safe_production_inference()
         repo = db.query(Repository).filter(Repository.id == repository_id).first()
         if not repo:
             raise HTTPException(status_code=404, detail="Repository not found")
@@ -69,6 +82,7 @@ def trigger_analysis(
     payload: AnalyzeRequest,
     db: Session = Depends(get_db)
 ):
+    _require_safe_production_inference()
     repo = db.query(Repository).filter(Repository.id == repository_id).first()
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
@@ -80,8 +94,16 @@ def trigger_analysis(
         raise HTTPException(status_code=400, detail="Requirement text cannot be empty")
 
     # Check cache for repeatable identical queries
-    cache_key = make_analysis_cache_key(repository_id, req_text, settings.META_AI_MODEL)
-    cached_result = get_cache(cache_key)
+    # Multi-provider configuration can change between enqueue and execution; bypass
+    # the text cache until a per-run immutable routing fingerprint is persisted.
+    cache_key = None if settings.AI_PROVIDER_PROFILE.lower() == "multi_ai" else make_analysis_cache_key(
+        repository_id, req_text, settings.META_AI_MODEL,
+        index_version=repo.indexed_at.isoformat() if repo.indexed_at else "unversioned",
+        profile=settings.AI_PROVIDER_PROFILE,
+        provider_signature=f"{settings.META_AI_PROVIDER}:{settings.META_AI_BASE_URL}",
+        target_language=payload.target_language,
+    )
+    cached_result = get_cache(cache_key) if cache_key else None
     if cached_result:
         # Cache hit: record or return cached run
         run = AnalysisRun(
@@ -124,7 +146,8 @@ def trigger_analysis(
         if completed_run.result_json:
             cache_payload = dict(completed_run.result_json)
             cache_payload["brief_markdown"] = completed_run.brief_markdown
-            set_cache(cache_key, cache_payload)
+            if cache_key:
+                set_cache(cache_key, cache_payload)
         return {
             "analysis_id": completed_run.id,
             "status": completed_run.status,

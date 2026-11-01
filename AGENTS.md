@@ -38,7 +38,7 @@ Agents must distinguish between **Implemented**, **Partially Implemented**, and 
 | **Multi-Language Parsing (TS/JS/Go)** | **Partially Implemented** | File language detection exists (`scanner.py`), but AST symbol/call resolution currently supports Python only. |
 | **Authentication Backend** | **Partially Implemented** | Client-side `AuthContext` (localStorage demo persistence) exists; backend API is currently stateless without JWT/session tables. |
 | **Direct Git Clone Ingestion** | **Planned** | Currently ingests via ZIP archive upload or bundled sample microservice (`/load-sample`). |
-| **Multi-Provider AI Stage Routing** | **Implemented** | `services/api/app/ai/provider.py`, `orchestrator.py` (Modal Auto Endpoint for fast intent, Baseten for vision/review, Official Meta Model API for deep reasoning & briefs). |
+| **Multi-Provider AI Stage Routing** | **Implemented, opt-in; partner live verification pending** | `services/api/app/ai/routing.py`, `orchestrator.py` (Meta-only default; explicit Baseten vision and Modal reasoning settings with capability and request-budget checks). |
 
 ---
 
