@@ -7,6 +7,7 @@
   <img src="docs/scopegraph-brand-final/logo/scopegraph-logo-horizontal.svg" width="310" alt="ScopeGraph" />
 </picture>
 
+
 ### Understand the impact before changing the code.
 
 **ScopeGraph maps a change request to an indexed codebase, then shows the evidence behind its proposed blast radius.**
@@ -15,8 +16,10 @@
 [![React 18](https://img.shields.io/badge/React-18-149ECA?logo=react&logoColor=white)](apps/web/package.json)
 [![MCP tools](https://img.shields.io/badge/MCP-3%20tools-303741)](docs/MCP_SETUP.md)
 [![MIT](https://img.shields.io/badge/License-MIT-1E9F78)](LICENSE)
+[![M8ven Verified](https://m8ven.ai/badge/mcp/teehihi/scope-graph?variant=verified)](https://m8ven.ai/mcp/teehihi/scope-graph?s=readme)
 
 [Demo](#demo--product-preview) &nbsp;·&nbsp; [Features](#key-features) &nbsp;·&nbsp; [Architecture](#system-architecture) &nbsp;·&nbsp; [Quick start](#quick-start)
+
 
 </div>
 
