@@ -1,22 +1,53 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import {
   ReactFlow,
-  Background,
+  Panel,
+  MiniMap,
   Controls,
+  useReactFlow,
+  useViewport,
+  useOnViewportChange,
+  ReactFlowProvider,
   Node,
   Edge,
   OnNodesChange,
   OnEdgesChange,
   NodeTypes,
-  Position,
+  PanOnScrollMode,
+  applyNodeChanges,
+  NodeChange,
+  MarkerType,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { ScopeNode } from './ScopeNode';
-import { Eye, Layers } from 'lucide-react';
+import { ClusterNode } from './ClusterNode';
+import { ClusterContainerNode } from './ClusterContainerNode';
+import { ClusterDependencyEdge } from './ClusterDependencyEdge';
+import {
+  Eye,
+  Sparkles,
+  Columns3,
+  Workflow,
+  LayoutGrid,
+  Grid,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  Box,
+  Filter,
+  X,
+  Target,
+  ArrowLeft,
+  ChevronRight,
+} from 'lucide-react';
 import { LayerType } from '../types';
 import { useLanguage } from '../context/LanguageContext';
+import {
+  computeHierarchicalClusterLayout,
+  computeClusterDrillDownLayout,
+} from '../utils/graphLayout';
 
-interface GraphCanvasProps {
+export interface GraphCanvasProps {
   nodes: Node[];
   edges: Edge[];
   onNodesChange: OnNodesChange;
@@ -31,22 +62,235 @@ interface GraphCanvasProps {
 
 const nodeTypes: NodeTypes = {
   scopeNode: ScopeNode,
+  clusterNode: ClusterNode,
+  clusterContainer: ClusterContainerNode,
 };
 
-// Layer hierarchy order: API (0) -> Service (1) -> Model (2) -> Core (3) -> Tests (4)
-const LAYER_ORDER: Record<string, number> = {
-  api: 0,
-  service: 1,
-  model: 2,
-  core: 3,
-  test: 4,
-  module: 1,
+const edgeTypes = {
+  clusterEdge: ClusterDependencyEdge,
+  default: ClusterDependencyEdge,
 };
 
-export const GraphCanvas: React.FC<GraphCanvasProps> = ({
+type LayoutMode = 'hierarchical' | 'stream' | 'compact';
+type GridMode = 'dots' | 'lines' | 'off';
+type FocusFilterMode = 'none' | 'neighborhood' | 'dependencies' | 'dependents';
+
+/**
+ * Floating Dock Controls inside ReactFlow canvas
+ */
+const CanvasFloatingDock: React.FC<{
+  layoutMode: LayoutMode;
+  onSelectLayout: (mode: LayoutMode) => void;
+  onAutoLayout: () => void;
+  gridMode: GridMode;
+  onToggleGrid: () => void;
+}> = ({
+  layoutMode,
+  onSelectLayout,
+  onAutoLayout,
+  gridMode,
+  onToggleGrid,
+}) => {
+  const { t } = useLanguage();
+  const { zoomIn, zoomOut, fitView } = useReactFlow();
+  const { zoom } = useViewport();
+  const zoomPercent = Math.round((zoom || 1) * 100);
+
+  const handleFitView = useCallback(() => {
+    fitView({ padding: 0.15, minZoom: 0.75, maxZoom: 1.05, duration: 350 });
+  }, [fitView]);
+
+  return (
+    <>
+      {/* Zoom Dock (Bottom-Left) */}
+      <Panel position="bottom-left" className="!m-4 !mb-4 z-20">
+        <div className="flex items-center bg-white/95 backdrop-blur-md border border-[#E4E7E1] rounded-2xl shadow-lg p-1 gap-1 text-[#151923]">
+          <button
+            onClick={() => zoomOut({ duration: 250 })}
+            className="w-8 h-8 rounded-xl flex items-center justify-center text-[#8B929E] hover:text-[#151923] hover:bg-slate-100 transition-colors"
+            title={t('graph.zoom_out')}
+          >
+            <ZoomOut className="w-4 h-4" />
+          </button>
+
+          <span className="text-[11px] font-mono font-bold px-1.5 min-w-[42px] text-center text-[#151923] select-none">
+            {zoomPercent}%
+          </span>
+
+          <button
+            onClick={() => zoomIn({ duration: 250 })}
+            className="w-8 h-8 rounded-xl flex items-center justify-center text-[#8B929E] hover:text-[#151923] hover:bg-slate-100 transition-colors"
+            title={t('graph.zoom_in')}
+          >
+            <ZoomIn className="w-4 h-4" />
+          </button>
+
+          <div className="w-[1px] h-4 bg-[#E4E7E1] mx-0.5" />
+
+          <button
+            onClick={handleFitView}
+            className="flex items-center gap-1.5 px-2.5 h-8 rounded-xl text-xs font-semibold text-[#151923] hover:bg-slate-100 transition-colors"
+            title={`${t('graph.reset_zoom')} (1)`}
+          >
+            <Maximize2 className="w-3.5 h-3.5 text-[#526BEE]" />
+            <span className="text-[11px] hidden sm:inline">{t('graph.reset_zoom')}</span>
+            <kbd className="hidden md:inline-block text-[9px] font-mono text-[#8B929E] bg-slate-100 px-1 py-0.5 rounded border border-slate-200">
+              1
+            </kbd>
+          </button>
+        </div>
+      </Panel>
+
+      {/* Layout Presets & Grid Dock (Bottom-Center) */}
+      <Panel position="bottom-center" className="!m-4 !mb-4 z-20">
+        <div className="flex items-center bg-white/95 backdrop-blur-md border border-[#E4E7E1] rounded-2xl shadow-lg p-1 gap-1 text-[#151923]">
+          {/* Hierarchical / Architecture Layout */}
+          <button
+            onClick={() => onSelectLayout('hierarchical')}
+            className={`flex items-center gap-1.5 px-3 h-8 rounded-xl text-xs font-semibold transition-all ${
+              layoutMode === 'hierarchical'
+                ? 'bg-[#151923] text-white shadow-sm'
+                : 'text-[#8B929E] hover:text-[#151923] hover:bg-slate-100'
+            }`}
+            title={`${t('graph.hierarchical_layout')} (2)`}
+          >
+            <Columns3 className={`w-3.5 h-3.5 ${layoutMode === 'hierarchical' ? 'text-[#C7F36B]' : ''}`} />
+            <span className="hidden sm:inline">{t('graph.hierarchical_layout')}</span>
+            <kbd className={`hidden md:inline-block text-[9px] font-mono px-1 py-0.5 rounded border ${
+              layoutMode === 'hierarchical'
+                ? 'bg-slate-800 text-slate-300 border-slate-700'
+                : 'bg-slate-100 text-[#8B929E] border-slate-200'
+            }`}>
+              2
+            </kbd>
+          </button>
+
+          {/* Flow Stream Layout */}
+          <button
+            onClick={() => onSelectLayout('stream')}
+            className={`flex items-center gap-1.5 px-3 h-8 rounded-xl text-xs font-semibold transition-all ${
+              layoutMode === 'stream'
+                ? 'bg-[#151923] text-white shadow-sm'
+                : 'text-[#8B929E] hover:text-[#151923] hover:bg-slate-100'
+            }`}
+            title={`${t('graph.radial_layout')} (3)`}
+          >
+            <Workflow className={`w-3.5 h-3.5 ${layoutMode === 'stream' ? 'text-[#C7F36B]' : ''}`} />
+            <span className="hidden sm:inline">{t('graph.radial_layout')}</span>
+            <kbd className={`hidden md:inline-block text-[9px] font-mono px-1 py-0.5 rounded border ${
+              layoutMode === 'stream'
+                ? 'bg-slate-800 text-slate-300 border-slate-700'
+                : 'bg-slate-100 text-[#8B929E] border-slate-200'
+            }`}>
+              3
+            </kbd>
+          </button>
+
+          {/* Compact Grid Layout */}
+          <button
+            onClick={() => onSelectLayout('compact')}
+            className={`flex items-center gap-1.5 px-3 h-8 rounded-xl text-xs font-semibold transition-all ${
+              layoutMode === 'compact'
+                ? 'bg-[#151923] text-white shadow-sm'
+                : 'text-[#8B929E] hover:text-[#151923] hover:bg-slate-100'
+            }`}
+            title={`${t('graph.compact_layout')} (4)`}
+          >
+            <LayoutGrid className={`w-3.5 h-3.5 ${layoutMode === 'compact' ? 'text-[#C7F36B]' : ''}`} />
+            <span className="hidden sm:inline">{t('graph.compact_layout')}</span>
+            <kbd className={`hidden md:inline-block text-[9px] font-mono px-1 py-0.5 rounded border ${
+              layoutMode === 'compact'
+                ? 'bg-slate-800 text-slate-300 border-slate-700'
+                : 'bg-slate-100 text-[#8B929E] border-slate-200'
+            }`}>
+              4
+            </kbd>
+          </button>
+
+          <div className="w-[1px] h-4 bg-[#E4E7E1] mx-0.5" />
+
+          {/* Auto Arrange / Rearrange */}
+          <button
+            onClick={onAutoLayout}
+            className="flex items-center gap-1.5 px-2.5 h-8 rounded-xl text-xs font-bold text-[#151923] hover:bg-slate-100 transition-colors"
+            title={t('graph.auto_layout')}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-[#526BEE]" />
+            <span className="hidden md:inline">{t('graph.auto_layout')}</span>
+          </button>
+
+          <div className="w-[1px] h-4 bg-[#E4E7E1] mx-0.5" />
+
+          {/* Grid Mode Toggle (Dots / Lines / Off) */}
+          <button
+            onClick={onToggleGrid}
+            className={`flex items-center gap-1 px-2.5 h-8 rounded-xl text-xs font-semibold transition-colors ${
+              gridMode !== 'off'
+                ? 'text-[#526BEE] bg-[#526BEE]/10'
+                : 'text-[#8B929E] hover:text-[#151923] hover:bg-slate-100'
+            }`}
+            title={`${t('graph.grid_toggle')} (${
+              gridMode === 'dots'
+                ? t('graph.grid_dots')
+                : gridMode === 'lines'
+                ? t('graph.grid_lines')
+                : 'Off'
+            })`}
+          >
+            <Grid className="w-3.5 h-3.5" />
+            <span className="text-[10px] font-mono hidden lg:inline uppercase">
+              {gridMode === 'dots'
+                ? t('graph.grid_dots')
+                : gridMode === 'lines'
+                ? t('graph.grid_lines')
+                : 'Off'}
+            </span>
+          </button>
+        </div>
+      </Panel>
+    </>
+  );
+};
+
+/**
+ * Fixed Non-Zooming Background Grid that smoothly pans along with the canvas.
+ * Uses direct DOM manipulation to update backgroundPosition without triggering React re-renders!
+ */
+const CanvasBackgroundLayer: React.FC<{ gridMode: GridMode }> = ({ gridMode }) => {
+  const bgRef = useRef<HTMLDivElement>(null);
+
+  useOnViewportChange({
+    onChange: useCallback((viewport: { x: number; y: number; zoom: number }) => {
+      if (bgRef.current) {
+        const gap = 24;
+        const x = ((viewport.x % gap) + gap) % gap;
+        const y = ((viewport.y % gap) + gap) % gap;
+        bgRef.current.style.backgroundPosition = `${x}px ${y}px`;
+      }
+    }, []),
+  });
+
+  if (gridMode === 'off') return null;
+
+  return (
+    <div
+      ref={bgRef}
+      className="absolute inset-0 pointer-events-none z-0"
+      style={{
+        backgroundImage:
+          gridMode === 'dots'
+            ? 'radial-gradient(#CBD5E1 1.2px, transparent 1.2px)'
+            : 'linear-gradient(to right, #E4E7E1 1px, transparent 1px), linear-gradient(to bottom, #E4E7E1 1px, transparent 1px)',
+        backgroundSize: '24px 24px',
+      }}
+    />
+  );
+};
+
+const GraphCanvasInner: React.FC<GraphCanvasProps> = ({
   nodes,
   edges,
-  onNodesChange,
+  onNodesChange: _onNodesChange,
   onEdgesChange,
   onNodeClick,
   selectedLayer,
@@ -55,88 +299,358 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   onToggleFocusSubgraph,
   impactedCount,
 }) => {
-  // Layered Layout calculation (Dagre-style left-to-right columns)
-  const layeredNodes = useMemo(() => {
-    // 1. Filter by layer if selected
-    const activeNodes =
-      selectedLayer === 'all'
-        ? nodes
-        : nodes.filter((n) => (n.data as any).layer === selectedLayer);
+  const { t } = useLanguage();
+  const { fitView } = useReactFlow();
 
-    // 2. Bucket nodes into columns
-    const columns: Record<number, Node[]> = { 0: [], 1: [], 2: [], 3: [], 4: [] };
-    activeNodes.forEach((n) => {
-      const layer = (n.data as any).layer || 'module';
-      const col = LAYER_ORDER[layer] ?? 1;
-      columns[col].push(n);
+  // State: Set of cluster IDs currently expanded by the user
+  const [expandedClusterIds, setExpandedClusterIds] = useState<Set<string>>(new Set());
+
+  // Active Cluster Drill-Down: When set, focuses inside that cluster + connected callers/dependents
+  const [activeDrillDownClusterId, setActiveDrillDownClusterId] = useState<string | null>(null);
+
+  // Internal live nodes state to support native 60-120fps real-time dragging without snap or lag
+  const [internalNodes, setInternalNodes] = useState<Node[]>([]);
+  const prevClusterRef = useRef<string | null>(null);
+  const prevRevisionRef = useRef<number>(0);
+  const prevLayerRef = useRef<string>('all');
+
+  // Layout mode state
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>('hierarchical');
+  // Grid mode state (Default to clean Dots grid)
+  const [gridMode, setGridMode] = useState<GridMode>('dots');
+  // Revision counter to force layout recalculation
+  const [layoutRevision, setLayoutRevision] = useState(0);
+
+  // Hover states for interactive call-chain highlighting
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
+
+  // Node Focus & Exploration State (Requirement 6)
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [focusFilterMode, setFocusFilterMode] = useState<FocusFilterMode>('none');
+
+  // Toggle expand / drill-down into a single cluster
+  const handleToggleExpandCluster = useCallback(
+    (clusterId: string) => {
+      setActiveDrillDownClusterId((prev) => (prev === clusterId ? null : clusterId));
+      setSelectedNodeId(null);
+      setFocusFilterMode('none');
+      setLayoutRevision((r) => r + 1);
+      setTimeout(() => fitView({ minZoom: 0.75, maxZoom: 1.05, padding: 0.15, duration: 350 }), 80);
+    },
+    [fitView]
+  );
+
+  // Collapse all clusters back to pure Architecture Overview
+  const handleCollapseAll = useCallback(() => {
+    setActiveDrillDownClusterId(null);
+    setExpandedClusterIds(new Set());
+    setSelectedNodeId(null);
+    setFocusFilterMode('none');
+    setLayoutRevision((r) => r + 1);
+    setTimeout(() => fitView({ minZoom: 0.65, maxZoom: 1.05, padding: 0.15, duration: 350 }), 80);
+  }, [fitView]);
+
+  // Keyboard shortcut: Esc to return to architecture overview or clear selection
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (activeDrillDownClusterId) {
+          setActiveDrillDownClusterId(null);
+          setLayoutRevision((r) => r + 1);
+          setTimeout(() => fitView({ minZoom: 0.65, maxZoom: 1.05, padding: 0.15, duration: 350 }), 80);
+        } else if (selectedNodeId) {
+          setSelectedNodeId(null);
+          setFocusFilterMode('none');
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeDrillDownClusterId, selectedNodeId, fitView]);
+
+  // Filter raw files by selected layer before layout
+  const filteredRawNodes = useMemo(() => {
+    if (selectedLayer === 'all') return nodes;
+    return nodes.filter((n) => (n.data as any).layer === selectedLayer);
+  }, [nodes, selectedLayer]);
+
+  // Execute Real Layout Engine (Overview or Drill-Down)
+  const layoutResult = useMemo(() => {
+    if (activeDrillDownClusterId) {
+      return computeClusterDrillDownLayout(
+        filteredRawNodes,
+        edges,
+        activeDrillDownClusterId,
+        t
+      );
+    }
+    return computeHierarchicalClusterLayout(
+      filteredRawNodes,
+      edges,
+      expandedClusterIds,
+      t
+    );
+  }, [filteredRawNodes, edges, expandedClusterIds, activeDrillDownClusterId, layoutRevision, t]);
+
+  // Compute connected nodes and edges for hover interactions
+  const { connectedEdgeIds, connectedNodeIds } = useMemo(() => {
+    const cEdges = new Set<string>();
+    const cNodes = new Set<string>();
+
+    if (hoveredNodeId) {
+      cNodes.add(hoveredNodeId);
+      (layoutResult?.edges || []).forEach((e) => {
+        if (e && (e.source === hoveredNodeId || e.target === hoveredNodeId)) {
+          cEdges.add(e.id);
+          if (e.source) cNodes.add(e.source);
+          if (e.target) cNodes.add(e.target);
+        }
+      });
+    } else if (hoveredEdgeId) {
+      cEdges.add(hoveredEdgeId);
+      const matched = (layoutResult?.edges || []).find((e) => e && e.id === hoveredEdgeId);
+      if (matched) {
+        if (matched.source) cNodes.add(matched.source);
+        if (matched.target) cNodes.add(matched.target);
+      }
+    }
+
+    return { connectedEdgeIds: cEdges, connectedNodeIds: cNodes };
+  }, [hoveredNodeId, hoveredEdgeId, layoutResult?.edges]);
+
+  // Base layout nodes with cluster expansion & drill-down callbacks attached
+  const basePreparedNodes = useMemo(() => {
+    return (layoutResult?.nodes || []).map((n) => {
+      if (!n) return n;
+      if (n.type === 'clusterNode') {
+        return {
+          ...n,
+          data: {
+            ...(n.data || {}),
+            onToggleExpand: handleToggleExpandCluster,
+            onExplore: handleToggleExpandCluster,
+          },
+        };
+      }
+      if (n.type === 'clusterContainer') {
+        return {
+          ...n,
+          data: {
+            ...(n.data || {}),
+            onToggleCollapse: handleToggleExpandCluster,
+          },
+        };
+      }
+      return n;
+    });
+  }, [layoutResult?.nodes, handleToggleExpandCluster]);
+
+  // Synchronize internalNodes when layout, active cluster, or layer changes
+  useEffect(() => {
+    const isReset =
+      prevClusterRef.current !== activeDrillDownClusterId ||
+      prevRevisionRef.current !== layoutRevision ||
+      prevLayerRef.current !== selectedLayer;
+
+    prevClusterRef.current = activeDrillDownClusterId;
+    prevRevisionRef.current = layoutRevision;
+    prevLayerRef.current = selectedLayer;
+
+    setInternalNodes((prev) => {
+      if (isReset || prev.length === 0) {
+        return basePreparedNodes;
+      }
+      // Retain custom dragged positions for any node that was already moved
+      const posMap = new Map(prev.map((n) => [n.id, n.position]));
+      return basePreparedNodes.map((n) => ({
+        ...n,
+        position: posMap.get(n.id) || n.position,
+      }));
+    });
+  }, [basePreparedNodes, activeDrillDownClusterId, layoutRevision, selectedLayer]);
+
+  // Live node dragging handler: updates node position synchronously on every mousemove tick
+  const handleInternalNodesChange: OnNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      setInternalNodes((nds) => applyNodeChanges(changes, nds));
+    },
+    []
+  );
+
+  // Compute selected node dependencies & dependents
+  const selectedNodeNeighborhood = useMemo(() => {
+    if (!selectedNodeId) {
+      return { dependencies: new Set<string>(), dependents: new Set<string>(), all: new Set<string>() };
+    }
+    const dependencies = new Set<string>();
+    const dependents = new Set<string>();
+
+    edges.forEach((e) => {
+      if (e.source === selectedNodeId) dependencies.add(e.target);
+      if (e.target === selectedNodeId) dependents.add(e.source);
     });
 
-    const COL_WIDTH = 360;
-    const START_X = 60;
-    const START_Y = 80;
-    const ROW_GAP = 180;
+    const all = new Set([selectedNodeId, ...dependencies, ...dependents]);
+    return { dependencies, dependents, all };
+  }, [selectedNodeId, edges]);
 
-    return activeNodes.map((n) => {
-      const layer = (n.data as any).layer || 'module';
-      const colIndex = LAYER_ORDER[layer] ?? 1;
-      const rowIndex = columns[colIndex].findIndex((item) => item.id === n.id);
+  // Filter nodes if Focus Filter Mode is active
+  const filteredDisplayNodes = useMemo(() => {
+    if (!selectedNodeId || focusFilterMode === 'none') {
+      return internalNodes;
+    }
 
-      // Preserve dragged / custom node position so user can freely arrange cards
-      const position =
-        n.position && typeof n.position.x === 'number' && typeof n.position.y === 'number'
-          ? n.position
-          : {
-              x: START_X + colIndex * COL_WIDTH,
-              y: START_Y + (rowIndex >= 0 ? rowIndex : 0) * ROW_GAP,
-            };
+    return internalNodes.filter((n) => {
+      if (n.type === 'clusterNode' || n.type === 'clusterContainer') return true;
+      if (focusFilterMode === 'neighborhood') {
+        return selectedNodeNeighborhood.all.has(n.id);
+      }
+      if (focusFilterMode === 'dependencies') {
+        return n.id === selectedNodeId || selectedNodeNeighborhood.dependencies.has(n.id);
+      }
+      if (focusFilterMode === 'dependents') {
+        return n.id === selectedNodeId || selectedNodeNeighborhood.dependents.has(n.id);
+      }
+      return true;
+    });
+  }, [internalNodes, selectedNodeId, focusFilterMode, selectedNodeNeighborhood]);
+
+  // Inject hover and connection states onto display nodes with reference caching to preserve 60fps drag
+  const finalDisplayNodes = useMemo(() => {
+    const isAnyHovered = hoveredNodeId !== null || hoveredEdgeId !== null;
+
+    return filteredDisplayNodes.map((n) => {
+      const isHovered = n.id === hoveredNodeId;
+      const isConnected = connectedNodeIds.has(n.id);
+
+      const currentData = n.data as any;
+      if (
+        currentData?.isHovered === isHovered &&
+        currentData?.isConnected === isConnected &&
+        currentData?.isAnyHovered === isAnyHovered
+      ) {
+        return n;
+      }
 
       return {
         ...n,
-        sourcePosition: Position.Right,
-        targetPosition: Position.Left,
-        position,
+        data: {
+          ...(n.data || {}),
+          isHovered,
+          isConnected,
+          isAnyHovered,
+        },
       };
     });
-  }, [nodes, selectedLayer]);
+  }, [filteredDisplayNodes, hoveredNodeId, hoveredEdgeId, connectedNodeIds]);
 
-  const visibleNodeIds = useMemo(
-    () => new Set(layeredNodes.map((n) => n.id)),
-    [layeredNodes]
+  // Stable marker definitions to prevent SVG defs thrashing and jitter
+  const DEFAULT_MARKER = useMemo(
+    () => ({
+      type: MarkerType.ArrowClosed,
+      width: 12,
+      height: 12,
+      color: '#526BEE',
+    }),
+    []
   );
 
-  // Clean smoothstep edges with label pills and high z-index handles
+  // Styled edges with clean routing and hover highlight:
+  // When hovering on a node, hide all other non-connected dependencies!
   const styledEdges = useMemo(() => {
-    return edges
-      .filter((e) => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target))
-      .map((e) => {
-        const isTrigger = (e as any).is_impact || e.animated;
-        return {
-          ...e,
-          type: 'smoothstep',
-          animated: isTrigger,
-          style: {
-            stroke: isTrigger ? '#526BEE' : '#CBD5E1',
-            strokeWidth: isTrigger ? 2.5 : 1.5,
-          },
-          labelStyle: {
-            fill: '#151923',
-            fontWeight: 600,
-            fontSize: 10,
-            fontFamily: 'monospace',
-          },
-          labelBgStyle: {
-            fill: '#FFFFFF',
-            rx: 4,
-            ry: 4,
-            stroke: '#E4E7E1',
-            strokeWidth: 1,
-          },
-          labelBgPadding: [4, 6] as [number, number],
-        };
-      });
-  }, [edges, visibleNodeIds]);
+    const isAnyHovered = hoveredNodeId !== null || hoveredEdgeId !== null;
 
-  const { t } = useLanguage();
+    return (layoutResult?.edges || []).map((e) => {
+      if (!e) return e;
+      const isConnected = connectedEdgeIds.has(e.id);
+      const isFocusPath =
+        selectedNodeId !== null &&
+        (e.source === selectedNodeId || e.target === selectedNodeId);
+
+      let opacity = 0.75;
+      let strokeColor = '#94A3B8';
+      let strokeWidth = 1.5;
+      let marker: any = DEFAULT_MARKER;
+      let isHidden = false;
+
+      if (isAnyHovered) {
+        if (isConnected) {
+          strokeColor = '#526BEE';
+          strokeWidth = 2.4;
+          opacity = 1;
+          marker = DEFAULT_MARKER;
+          isHidden = false;
+        } else {
+          // Hide all other dependencies completely!
+          opacity = 0;
+          strokeColor = 'transparent';
+          strokeWidth = 0;
+          marker = undefined;
+          isHidden = true;
+        }
+      } else if (isFocusPath) {
+        strokeColor = '#526BEE';
+        strokeWidth = 2.4;
+        opacity = 1;
+        marker = DEFAULT_MARKER;
+      }
+
+      return {
+        ...e,
+        hidden: isHidden,
+        type: e.type || 'clusterEdge',
+        animated: isConnected || (!isAnyHovered && Boolean(e.animated)),
+        markerEnd: marker,
+        style: {
+          ...(e.style || {}),
+          stroke: strokeColor,
+          strokeWidth,
+          opacity,
+          display: isHidden ? 'none' : 'block',
+          transition: 'stroke 0.15s, stroke-width 0.15s, opacity 0.15s',
+        },
+      };
+    });
+  }, [layoutResult?.edges, hoveredNodeId, hoveredEdgeId, connectedEdgeIds, selectedNodeId, DEFAULT_MARKER]);
+
+  // Handle clicking on a node
+  const handleInternalNodeClick = useCallback(
+    (event: React.MouseEvent, node: Node) => {
+      if (node.type === 'clusterNode' || node.type === 'clusterContainer') {
+        // Expansion / collapse is handled cleanly inside ClusterNode / ClusterContainerNode
+        return;
+      }
+      setSelectedNodeId(node.id);
+      onNodeClick(event, node);
+    },
+    [onNodeClick]
+  );
+
+  // Layout mode switcher
+  const handleSelectLayout = useCallback(
+    (mode: LayoutMode) => {
+      setLayoutMode(mode);
+      setLayoutRevision((r) => r + 1);
+      setTimeout(() => fitView({ padding: 0.2, duration: 400 }), 50);
+    },
+    [fitView]
+  );
+
+  // Auto layout trigger
+  const handleAutoLayout = useCallback(() => {
+    setLayoutRevision((r) => r + 1);
+    setTimeout(() => fitView({ padding: 0.2, duration: 400 }), 50);
+  }, [fitView]);
+
+  // Grid toggle handler
+  const handleToggleGrid = useCallback(() => {
+    setGridMode((prev) => {
+      if (prev === 'dots') return 'lines';
+      if (prev === 'lines') return 'off';
+      return 'dots';
+    });
+  }, []);
 
   const layers: Array<{ id: LayerType | 'all'; label: string }> = [
     { id: 'all', label: t('graph.all_layers') },
@@ -147,49 +661,114 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     { id: 'core', label: t('graph.core') },
   ];
 
+  const selectedNode = nodes.find((n) => n.id === selectedNodeId);
+  const currentDrillDownCluster =
+    layoutResult.drillDownInfo?.activeCluster ||
+    layoutResult.clusters.find((c) => c.id === activeDrillDownClusterId);
+
   return (
-    <div className="relative w-full h-full bg-[#F7F8F5] flex flex-col min-h-0">
-      {/* Top Toolbar (Filters + Legend combined, zero overlap) */}
-      <div className="p-3 bg-white border-b border-[#E4E7E1] flex flex-wrap items-center justify-between gap-3 shrink-0 z-10 shadow-sm">
-        {/* Layer Filters */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <div className="flex items-center gap-1 pr-1 text-[#8B929E] text-xs font-semibold">
-            <Layers className="w-3.5 h-3.5 text-[#526BEE]" />
-            <span>{t('graph.filter')}</span>
-          </div>
-          {layers.map((l) => (
+    <div className="relative w-full h-full bg-[#F7F8F5] flex flex-col min-h-0 select-none">
+      {/* Top Header: Architecture Cluster Controls & Filter */}
+      <div className="p-3 bg-white border-b border-[#E4E7E1] flex flex-wrap items-center justify-between gap-3 shrink-0 z-10 shadow-xs">
+        {activeDrillDownClusterId && currentDrillDownCluster ? (
+          <div className="flex items-center gap-2.5 flex-wrap">
             <button
-              key={l.id}
-              onClick={() => onSelectLayer(l.id)}
-              className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-colors ${
-                selectedLayer === l.id
-                  ? 'bg-[#151923] text-white shadow-sm'
-                  : 'text-[#8B929E] hover:text-[#151923] hover:bg-slate-100'
-              }`}
+              onClick={handleCollapseAll}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#151923] text-white hover:bg-slate-800 transition-all font-semibold text-xs shadow-sm hover:scale-[1.02] active:scale-95"
             >
-              {l.label}
+              <ArrowLeft className="w-3.5 h-3.5 text-[#C7F36B]" />
+              <span>{t('graph.back_to_clusters')}</span>
+              <kbd className="text-[10px] font-mono text-slate-400 bg-slate-800 px-1 py-0.5 rounded border border-slate-700">
+                Esc
+              </kbd>
             </button>
-          ))}
 
-          {/* Focus Subgraph Toggle */}
-          {impactedCount > 0 && (
-            <div className="border-l border-[#E4E7E1] pl-2 ml-1">
-              <button
-                onClick={onToggleFocusSubgraph}
-                className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg font-bold border transition-colors ${
-                  focusSubgraph
-                    ? 'bg-[#C7F36B] text-[#151923] border-[#151923]'
-                    : 'bg-white text-[#151923] border-[#E4E7E1] hover:bg-slate-50'
-                }`}
-              >
-                <Eye className="w-3.5 h-3.5 text-[#526BEE]" />
-                <span>{t('graph.focus_impact')} ({impactedCount})</span>
-              </button>
+            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-[#151923]">
+                {currentDrillDownCluster.name}
+              </span>
+              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[#EDF0F7] text-[#526BEE] border border-blue-200">
+                {layoutResult.drillDownInfo?.internalCount ?? currentDrillDownCluster.files.length}{' '}
+                {t('graph.internal_files')}
+              </span>
+              {layoutResult.drillDownInfo &&
+                layoutResult.drillDownInfo.upstreamCount + layoutResult.drillDownInfo.downstreamCount > 0 && (
+                  <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                    {layoutResult.drillDownInfo.upstreamCount + layoutResult.drillDownInfo.downstreamCount}{' '}
+                    {t('graph.related_files')}
+                  </span>
+                )}
             </div>
-          )}
-        </div>
 
-        {/* Legend in Toolbar */}
+            {/* Quick Switcher dropdown */}
+            <select
+              value={activeDrillDownClusterId}
+              onChange={(e) => {
+                setActiveDrillDownClusterId(e.target.value);
+                setLayoutRevision((r) => r + 1);
+                setTimeout(() => fitView({ padding: 0.15, duration: 400 }), 100);
+              }}
+              className="text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-[#526BEE] cursor-pointer hover:bg-slate-100 ml-1"
+            >
+              {layoutResult.clusters.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({c.files.length})
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Architecture Cluster Overview Indicator */}
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 border border-slate-200 text-xs font-bold text-[#151923]">
+              <Box className="w-3.5 h-3.5 text-[#526BEE]" />
+              <span>{t('graph.view_clusters')} ({layoutResult.clusters.length})</span>
+            </div>
+
+            {/* Layer Filter */}
+            <div className="flex items-center gap-1 border-l border-[#E4E7E1] pl-2 ml-1">
+              <div className="flex items-center gap-1 pr-1 text-[#8B929E] text-xs font-semibold">
+                <Filter className="w-3 h-3 text-[#526BEE]" />
+              </div>
+              {layers.map((l) => (
+                <button
+                  key={l.id}
+                  onClick={() => onSelectLayer(l.id)}
+                  className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-colors ${
+                    selectedLayer === l.id
+                      ? 'bg-[#151923] text-white shadow-xs'
+                      : 'text-[#8B929E] hover:text-[#151923] hover:bg-slate-100'
+                  }`}
+                >
+                  {l.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Focus Subgraph Toggle */}
+            {impactedCount > 0 && (
+              <div className="border-l border-[#E4E7E1] pl-2 ml-1">
+                <button
+                  onClick={onToggleFocusSubgraph}
+                  className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg font-bold border transition-colors ${
+                    focusSubgraph
+                      ? 'bg-[#C7F36B] text-[#151923] border-[#151923]'
+                      : 'bg-white text-[#151923] border-[#E4E7E1] hover:bg-slate-50'
+                  }`}
+                >
+                  <Eye className="w-3.5 h-3.5 text-[#526BEE]" />
+                  <span>
+                    {t('graph.focus_impact')} ({impactedCount})
+                  </span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Legend */}
         <div className="flex items-center gap-3.5 text-xs text-[#8B929E] border-l border-[#E4E7E1] pl-3">
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-[#C7F36B] ring-2 ring-[#C7F36B]/40" />
@@ -206,37 +785,149 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         </div>
       </div>
 
-      {/* Main ReactFlow Canvas */}
-      <div className="w-full h-full flex-1 min-h-[400px]">
+      {/* Floating Node Exploration Toolbar (Requirement 6) */}
+      {selectedNode && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 bg-white/95 backdrop-blur-md border border-[#E4E7E1] rounded-2xl shadow-xl px-4 py-2 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-2">
+            <Target className="w-4 h-4 text-[#526BEE]" />
+            <span className="text-xs font-bold text-[#151923] max-w-[200px] truncate" title={(selectedNode.data as any)?.path}>
+              {(selectedNode.data as any)?.label}
+            </span>
+          </div>
+
+          <div className="w-[1px] h-4 bg-[#E4E7E1]" />
+
+          {/* Focus Neighborhood */}
+          <button
+            onClick={() => setFocusFilterMode(focusFilterMode === 'neighborhood' ? 'none' : 'neighborhood')}
+            className={`text-xs px-2.5 py-1 rounded-lg font-semibold flex items-center gap-1.5 transition-colors ${
+              focusFilterMode === 'neighborhood'
+                ? 'bg-[#151923] text-white'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            <Eye className="w-3.5 h-3.5 text-[#C7F36B]" />
+            <span>{t('graph.focus_node')}</span>
+          </button>
+
+          {/* Dependencies Button */}
+          <button
+            onClick={() => setFocusFilterMode(focusFilterMode === 'dependencies' ? 'none' : 'dependencies')}
+            className={`text-xs px-2.5 py-1 rounded-lg font-semibold flex items-center gap-1.5 transition-colors ${
+              focusFilterMode === 'dependencies'
+                ? 'bg-[#526BEE] text-white'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            <span>{t('graph.show_dependencies')} ({selectedNodeNeighborhood.dependencies.size})</span>
+          </button>
+
+          {/* Dependents Button */}
+          <button
+            onClick={() => setFocusFilterMode(focusFilterMode === 'dependents' ? 'none' : 'dependents')}
+            className={`text-xs px-2.5 py-1 rounded-lg font-semibold flex items-center gap-1.5 transition-colors ${
+              focusFilterMode === 'dependents'
+                ? 'bg-[#526BEE] text-white'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            <span>{t('graph.show_dependents')} ({selectedNodeNeighborhood.dependents.size})</span>
+          </button>
+
+          {/* Clear Selection */}
+          <button
+            onClick={() => {
+              setSelectedNodeId(null);
+              setFocusFilterMode('none');
+            }}
+            className="p-1 hover:bg-slate-100 rounded-lg text-[#8B929E] hover:text-[#151923] transition-colors"
+            title={t('graph.clear_focus')}
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Main ReactFlow Canvas with fixed non-scaling background */}
+      <div className="w-full h-full flex-1 min-h-[400px] relative bg-[#F7F8F5]">
         <ReactFlow
-          key={`rf-${layeredNodes.length}-${impactedCount}`}
-          nodes={layeredNodes}
+          key={`rf-${selectedLayer}-${focusSubgraph}`}
+          nodes={finalDisplayNodes}
           edges={styledEdges}
-          onNodesChange={onNodesChange}
+          onNodesChange={handleInternalNodesChange}
           onEdgesChange={onEdgesChange}
-          onNodeClick={onNodeClick}
+          onNodeClick={handleInternalNodeClick}
+          onNodeMouseEnter={(_e, node) => {
+            if (node?.id) setHoveredNodeId(node.id);
+          }}
+          onNodeMouseLeave={() => setHoveredNodeId(null)}
+          onEdgeMouseEnter={(_e, edge) => {
+            if (edge?.id) setHoveredEdgeId(edge.id);
+          }}
+          onEdgeMouseLeave={() => setHoveredEdgeId(null)}
           nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
           fitView
-          fitViewOptions={{ padding: 0.2 }}
-          minZoom={0.2}
-          maxZoom={1.5}
+          fitViewOptions={{ minZoom: 0.75, maxZoom: 1.05, padding: 0.15 }}
+          minZoom={0.5}
+          maxZoom={2.0}
+          defaultEdgeOptions={{
+            type: 'default',
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              width: 18,
+              height: 18,
+              color: '#526BEE',
+            },
+          }}
           nodesDraggable={true}
           nodesConnectable={false}
           elementsSelectable={true}
-          panOnScroll={true}
           panOnDrag={[0, 1, 2]}
-          zoomOnPinch={true}
+          panOnScroll={true}
+          panOnScrollSpeed={1.8}
+          panOnScrollMode={PanOnScrollMode.Free}
           zoomOnScroll={false}
-          preventScrolling={false}
-          panOnScrollMode={undefined}
+          zoomActivationKeyCode={['Meta', 'Control']}
+          zoomOnPinch={true}
+          preventScrolling={true}
         >
-          <Background color="#E4E7E1" gap={24} size={1} />
+          {/* Fixed Non-Zooming Background Grid that pans smoothly with the canvas */}
+          <CanvasBackgroundLayer gridMode={gridMode} />
+
+          {/* Controls (+, -, FitView) */}
           <Controls
             showInteractive={false}
-            className="!bg-white !border-[#E4E7E1] !rounded-xl !shadow-sm overflow-hidden"
+            className="!rounded-2xl !border !border-[#E4E7E1] !shadow-md !bg-white/95 !m-4 !mb-4 !overflow-hidden"
+          />
+
+          {/* Minimap (Requirement 7) */}
+          <MiniMap
+            nodeStrokeColor="#526BEE"
+            nodeColor="#CBD5E1"
+            nodeBorderRadius={6}
+            maskColor="rgba(247, 248, 245, 0.7)"
+            className="!rounded-2xl !border !border-[#E4E7E1] !shadow-md !bg-white/95 !m-4 !mb-4 hidden md:block"
+          />
+
+          {/* Floating Bottom Toolbar Dock */}
+          <CanvasFloatingDock
+            layoutMode={layoutMode}
+            onSelectLayout={handleSelectLayout}
+            onAutoLayout={handleAutoLayout}
+            gridMode={gridMode}
+            onToggleGrid={handleToggleGrid}
           />
         </ReactFlow>
       </div>
     </div>
+  );
+};
+
+export const GraphCanvas: React.FC<GraphCanvasProps> = (props) => {
+  return (
+    <ReactFlowProvider>
+      <GraphCanvasInner {...props} />
+    </ReactFlowProvider>
   );
 };

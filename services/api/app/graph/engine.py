@@ -108,10 +108,11 @@ class GraphEngine:
             if subgraph_nodes:
                 nodes_to_include = subgraph_nodes
 
-        # Layout positioning calculation by architectural layers
+        # Layout positioning calculation by architectural layers (avoid vertical skyscraper stacking)
         layer_order = ["api", "service", "model", "core", "test", "module"]
         layer_columns = {layer: i for i, layer in enumerate(layer_order)}
         layer_counts: dict[str, int] = {}
+        MAX_ROWS_PER_COLUMN = 4
 
         rf_nodes = []
         for node_id in nodes_to_include:
@@ -122,9 +123,11 @@ class GraphEngine:
             row_index = layer_counts.get(layer, 0)
             layer_counts[layer] = row_index + 1
 
-            # Grid spacing for layout
-            x_pos = col_index * 280 + 40
-            y_pos = row_index * 140 + 60
+            # Grid spacing with sub-column wrapping to prevent single vertical skyscraper columns
+            sub_col = row_index // MAX_ROWS_PER_COLUMN
+            sub_row = row_index % MAX_ROWS_PER_COLUMN
+            x_pos = col_index * 380 + sub_col * 310 + 60
+            y_pos = sub_row * 180 + 80
 
             is_direct = path in direct
             is_affected = path in highlighted

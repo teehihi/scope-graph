@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/scopegraph-banner.png" width="100%" alt="Abstract directed dependency graph in graphite, emerald and cyan" />
+<img src="docs/assets/scopegraph-readme-banner.png" width="100%" alt="Abstract directed dependency graph in graphite, emerald and cyan" />
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/scopegraph-brand-final/logo/scopegraph-logo-horizontal-dark.svg" />
