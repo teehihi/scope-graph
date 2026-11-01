@@ -1,5 +1,6 @@
 export type LayerType = 'api' | 'service' | 'model' | 'core' | 'test' | 'module';
 export type ImpactType = 'direct' | 'indirect' | 'none';
+export type LayoutMode = 'hierarchical' | 'stream' | 'compact';
 
 export interface RepositoryStats {
   file_count: number;

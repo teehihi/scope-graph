@@ -1,5 +1,5 @@
 import { Node, Edge, Position, MarkerType } from '@xyflow/react';
-import { LayerType, NodeData } from '../types';
+import { LayerType, NodeData, LayoutMode } from '../types';
 
 export interface ArchitectureCluster {
   id: string;
@@ -165,7 +165,8 @@ export function computeHierarchicalClusterLayout(
   rawNodes: Node[],
   rawEdges: Edge[],
   expandedClusterIds: Set<string>,
-  t: (key: string) => string
+  t: (key: string) => string,
+  layoutMode: LayoutMode = 'hierarchical'
 ): ComputedGraphLayout {
   // 1. Build clusters
   const clusters = buildArchitectureClusters(rawNodes, expandedClusterIds);
@@ -176,7 +177,7 @@ export function computeHierarchicalClusterLayout(
     c.files.forEach((f) => fileToClusterId.set(f.id, c.id));
   });
 
-  // 2. Assign clusters to tier rows (Top-to-Bottom Architecture Grid)
+  // 2. Assign clusters to tier rows (Architecture Grid)
   const tierRows: Record<number, ArchitectureCluster[]> = {
     0: [],
     1: [],
@@ -197,42 +198,91 @@ export function computeHierarchicalClusterLayout(
     row.sort((a, b) => b.files.length - a.files.length || a.name.localeCompare(b.name));
   });
 
-  // 3. Layout Cluster Containers in a Balanced 4-Tier Centered Grid
-  const GAP_X = 60;
-  const GAP_Y = 100;
+  // 3. Layout Cluster Containers according to LayoutMode
   const START_X = 60;
   const START_Y = 60;
 
-  // Calculate max row width to center all tiers horizontally
-  let maxRowWidth = 0;
-  [0, 1, 2, 3].forEach((tier) => {
-    const row = tierRows[tier] || [];
-    if (row.length === 0) return;
-    const totalW = row.reduce((sum, c) => sum + c.width, 0) + (row.length - 1) * GAP_X;
-    if (totalW > maxRowWidth) maxRowWidth = totalW;
-  });
+  if (layoutMode === 'stream') {
+    // Flow Stream Layout: Left-to-Right Architecture Pipeline (API -> Services -> Core/Storage -> Tests)
+    const GAP_X = 140;
+    const GAP_Y = 60;
 
-  // Position each cluster in the global coordinate space
-  let currentY = START_Y;
-  [0, 1, 2, 3].forEach((tier) => {
-    const row = tierRows[tier] || [];
-    if (row.length === 0) return;
-
-    const rowTotalWidth = row.reduce((sum, c) => sum + c.width, 0) + (row.length - 1) * GAP_X;
-    const rowStartX = START_X + Math.max(0, (maxRowWidth - rowTotalWidth) / 2);
-
-    let curX = rowStartX;
-    let maxRowH = 0;
-
-    row.forEach((c) => {
-      c.x = curX;
-      c.y = currentY;
-      curX += c.width + GAP_X;
-      if (c.height > maxRowH) maxRowH = c.height;
+    let maxColHeight = 0;
+    [0, 1, 2, 3].forEach((tier) => {
+      const col = tierRows[tier] || [];
+      const colH = col.reduce((sum, c) => sum + c.height, 0) + Math.max(0, col.length - 1) * GAP_Y;
+      if (colH > maxColHeight) maxColHeight = colH;
     });
 
-    currentY += maxRowH + GAP_Y;
-  });
+    let currentX = START_X;
+    [0, 1, 2, 3].forEach((tier) => {
+      const col = tierRows[tier] || [];
+      if (col.length === 0) return;
+
+      const colH = col.reduce((sum, c) => sum + c.height, 0) + Math.max(0, col.length - 1) * GAP_Y;
+      const startY = START_Y + Math.max(0, (maxColHeight - colH) / 2);
+      let curY = startY;
+      let maxColW = 0;
+
+      col.forEach((c) => {
+        c.x = currentX;
+        c.y = curY;
+        curY += c.height + GAP_Y;
+        if (c.width > maxColW) maxColW = c.width;
+      });
+
+      currentX += maxColW + GAP_X;
+    });
+  } else if (layoutMode === 'compact') {
+    // Compact Grid Layout: 4-Column Balanced Grid minimizing canvas traversal
+    const COLS = 4;
+    const GAP_X = 40;
+    const GAP_Y = 40;
+    const allClustersSorted: ArchitectureCluster[] = [];
+    [0, 1, 2, 3].forEach((tier) => {
+      allClustersSorted.push(...(tierRows[tier] || []));
+    });
+
+    allClustersSorted.forEach((c, idx) => {
+      const col = idx % COLS;
+      const row = Math.floor(idx / COLS);
+      c.x = START_X + col * (320 + GAP_X);
+      c.y = START_Y + row * (210 + GAP_Y);
+    });
+  } else {
+    // Default Hierarchical Layout: Top-to-Bottom Centered Tiers
+    const GAP_X = 60;
+    const GAP_Y = 100;
+
+    let maxRowWidth = 0;
+    [0, 1, 2, 3].forEach((tier) => {
+      const row = tierRows[tier] || [];
+      if (row.length === 0) return;
+      const totalW = row.reduce((sum, c) => sum + c.width, 0) + (row.length - 1) * GAP_X;
+      if (totalW > maxRowWidth) maxRowWidth = totalW;
+    });
+
+    let currentY = START_Y;
+    [0, 1, 2, 3].forEach((tier) => {
+      const row = tierRows[tier] || [];
+      if (row.length === 0) return;
+
+      const rowTotalWidth = row.reduce((sum, c) => sum + c.width, 0) + (row.length - 1) * GAP_X;
+      const rowStartX = START_X + Math.max(0, (maxRowWidth - rowTotalWidth) / 2);
+
+      let curX = rowStartX;
+      let maxRowH = 0;
+
+      row.forEach((c) => {
+        c.x = curX;
+        c.y = currentY;
+        curX += c.width + GAP_X;
+        if (c.height > maxRowH) maxRowH = c.height;
+      });
+
+      currentY += maxRowH + GAP_Y;
+    });
+  }
 
   // 4. Generate Renderable Nodes
   const renderNodes: Node[] = [];
@@ -501,14 +551,15 @@ export function computeClusterDrillDownLayout(
   rawNodes: Node[],
   rawEdges: Edge[],
   activeClusterId: string,
-  t: (key: string) => string
+  t: (key: string) => string,
+  layoutMode: LayoutMode = 'hierarchical'
 ): ComputedGraphLayout {
   // 1. Build all clusters
   const clusters = buildArchitectureClusters(rawNodes, new Set());
   const activeCluster = clusters.find((c) => c.id === activeClusterId);
 
   if (!activeCluster) {
-    return computeHierarchicalClusterLayout(rawNodes, rawEdges, new Set(), t);
+    return computeHierarchicalClusterLayout(rawNodes, rawEdges, new Set(), t, layoutMode);
   }
 
   const internalFiles = activeCluster.files;
@@ -542,33 +593,45 @@ export function computeClusterDrillDownLayout(
     if (n) downstreamNodes.push(n);
   });
 
-  // 3. Spacious, non-overlapping multi-column layout
-  const CARD_WIDTH = 288; // Matches w-72 (18rem) of ScopeNode
-  const INNER_GAP_X = 120; // 120px channel for smooth step routing + 75px edge pills with 22.5px clear margin
-  const CARD_GAP_Y = 52; // Guaranteed 52px vertical clearance between cards in each column
-  const SECTION_GAP_X = 180; // 180px gap between architectural stages
+  // 3. Multi-column spacing according to LayoutMode
+  const CARD_WIDTH = 288;
+  const INNER_GAP_X = layoutMode === 'compact' ? 60 : layoutMode === 'stream' ? 140 : 120;
+  const CARD_GAP_Y = layoutMode === 'compact' ? 24 : layoutMode === 'stream' ? 44 : 52;
+  const SECTION_GAP_X = layoutMode === 'compact' ? 80 : layoutMode === 'stream' ? 220 : 180;
   const START_Y = 80;
 
   const hasUpstream = upstreamNodes.length > 0;
   const hasDownstream = downstreamNodes.length > 0;
 
-  // Upstream callers columns (1 or 2 cols if > 6)
-  const upCols = upstreamNodes.length > 6 ? 2 : 1;
+  // Upstream callers columns
+  const upCols =
+    layoutMode === 'compact'
+      ? (upstreamNodes.length > 12 ? 3 : 2)
+      : (upstreamNodes.length > 24 ? 3 : upstreamNodes.length > 6 ? 2 : 1);
   const upWidth = hasUpstream ? upCols * CARD_WIDTH + (upCols - 1) * INNER_GAP_X : 0;
 
   // Target cluster internal files columns
   const clusterCols =
-    internalFiles.length <= 3
-      ? 1
-      : internalFiles.length <= 8
-      ? 2
-      : internalFiles.length <= 24
-      ? 3
-      : 4;
+    layoutMode === 'compact'
+      ? (internalFiles.length <= 4 ? 2 : internalFiles.length <= 16 ? 4 : 6)
+      : (internalFiles.length <= 3
+          ? 1
+          : internalFiles.length <= 8
+          ? 2
+          : internalFiles.length <= 24
+          ? 3
+          : internalFiles.length <= 60
+          ? 4
+          : internalFiles.length <= 100
+          ? 5
+          : 6);
   const clusterWidth = clusterCols * CARD_WIDTH + (clusterCols - 1) * INNER_GAP_X;
 
-  // Downstream dependencies columns (1 or 2 cols if > 6)
-  const downCols = downstreamNodes.length > 6 ? 2 : 1;
+  // Downstream dependencies columns
+  const downCols =
+    layoutMode === 'compact'
+      ? (downstreamNodes.length > 12 ? 3 : 2)
+      : (downstreamNodes.length > 24 ? 3 : downstreamNodes.length > 6 ? 2 : 1);
 
   let currentX = 60;
   const renderNodes: Node[] = [];
@@ -760,7 +823,7 @@ export function computeClusterDrillDownLayout(
       sourceHandle,
       targetHandle,
       type: 'clusterEdge',
-      animated: true,
+      animated: info.hasImpact,
       label: edgeLabel,
       markerEnd: {
         type: MarkerType.ArrowClosed,
@@ -770,6 +833,7 @@ export function computeClusterDrillDownLayout(
       },
       data: {
         evidence_edges: info.evidenceEdges,
+        hasImpact: info.hasImpact,
       },
       style: {
         stroke: '#526BEE',

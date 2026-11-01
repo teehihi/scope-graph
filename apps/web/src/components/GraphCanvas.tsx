@@ -3,7 +3,6 @@ import {
   ReactFlow,
   Panel,
   MiniMap,
-  Controls,
   useReactFlow,
   useViewport,
   useOnViewportChange,
@@ -23,6 +22,7 @@ import { ScopeNode } from './ScopeNode';
 import { ClusterNode } from './ClusterNode';
 import { ClusterContainerNode } from './ClusterContainerNode';
 import { ClusterDependencyEdge } from './ClusterDependencyEdge';
+import { ClusterSelectorDropdown } from './ClusterSelectorDropdown';
 import {
   Eye,
   Sparkles,
@@ -39,8 +39,9 @@ import {
   Target,
   ArrowLeft,
   ChevronRight,
+  Search,
 } from 'lucide-react';
-import { LayerType } from '../types';
+import { LayerType, LayoutMode } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import {
   computeHierarchicalClusterLayout,
@@ -71,7 +72,6 @@ const edgeTypes = {
   default: ClusterDependencyEdge,
 };
 
-type LayoutMode = 'hierarchical' | 'stream' | 'compact';
 type GridMode = 'dots' | 'lines' | 'off';
 type FocusFilterMode = 'none' | 'neighborhood' | 'dependencies' | 'dependents';
 
@@ -104,7 +104,7 @@ const CanvasFloatingDock: React.FC<{
     <>
       {/* Zoom Dock (Bottom-Left) */}
       <Panel position="bottom-left" className="!m-4 !mb-4 z-20">
-        <div className="flex items-center bg-white/95 backdrop-blur-md border border-[#E4E7E1] rounded-2xl shadow-lg p-1 gap-1 text-[#151923]">
+        <div id="tour-graph-zoom-dock" className="flex items-center bg-white/95 backdrop-blur-md border border-[#E4E7E1] rounded-2xl shadow-lg p-1 gap-1 text-[#151923]">
           <button
             onClick={() => zoomOut({ duration: 250 })}
             className="w-8 h-8 rounded-xl flex items-center justify-center text-[#8B929E] hover:text-[#151923] hover:bg-slate-100 transition-colors"
@@ -141,90 +141,84 @@ const CanvasFloatingDock: React.FC<{
         </div>
       </Panel>
 
-      {/* Layout Presets & Grid Dock (Bottom-Center) */}
-      <Panel position="bottom-center" className="!m-4 !mb-4 z-20">
-        <div className="flex items-center bg-white/95 backdrop-blur-md border border-[#E4E7E1] rounded-2xl shadow-lg p-1 gap-1 text-[#151923]">
+      {/* Layout Presets & Grid Dock (Right-Side Vertical Toolbar) */}
+      <Panel position="top-right" className="!mr-4 !mt-4 z-20">
+        <div id="tour-graph-layout-dock" className="flex flex-col items-center bg-white/95 backdrop-blur-md border border-[#E4E7E1] rounded-2xl shadow-xl p-1.5 gap-1.5 text-[#151923]">
           {/* Hierarchical / Architecture Layout */}
           <button
             onClick={() => onSelectLayout('hierarchical')}
-            className={`flex items-center gap-1.5 px-3 h-8 rounded-xl text-xs font-semibold transition-all ${
+            className={`relative group w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
               layoutMode === 'hierarchical'
                 ? 'bg-[#151923] text-white shadow-sm'
                 : 'text-[#8B929E] hover:text-[#151923] hover:bg-slate-100'
             }`}
             title={`${t('graph.hierarchical_layout')} (2)`}
           >
-            <Columns3 className={`w-3.5 h-3.5 ${layoutMode === 'hierarchical' ? 'text-[#C7F36B]' : ''}`} />
-            <span className="hidden sm:inline">{t('graph.hierarchical_layout')}</span>
-            <kbd className={`hidden md:inline-block text-[9px] font-mono px-1 py-0.5 rounded border ${
-              layoutMode === 'hierarchical'
-                ? 'bg-slate-800 text-slate-300 border-slate-700'
-                : 'bg-slate-100 text-[#8B929E] border-slate-200'
-            }`}>
-              2
-            </kbd>
+            <Columns3 className={`w-4 h-4 ${layoutMode === 'hierarchical' ? 'text-[#C7F36B]' : ''}`} />
+            {/* Tooltip to the left */}
+            <div className="absolute right-full mr-2.5 top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-xl bg-[#151923] text-white text-xs font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 shadow-xl flex items-center gap-2 z-50">
+              <span>{t('graph.hierarchical_layout')}</span>
+              <kbd className="text-[9px] font-mono px-1 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">2</kbd>
+            </div>
           </button>
 
           {/* Flow Stream Layout */}
           <button
             onClick={() => onSelectLayout('stream')}
-            className={`flex items-center gap-1.5 px-3 h-8 rounded-xl text-xs font-semibold transition-all ${
+            className={`relative group w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
               layoutMode === 'stream'
                 ? 'bg-[#151923] text-white shadow-sm'
                 : 'text-[#8B929E] hover:text-[#151923] hover:bg-slate-100'
             }`}
             title={`${t('graph.radial_layout')} (3)`}
           >
-            <Workflow className={`w-3.5 h-3.5 ${layoutMode === 'stream' ? 'text-[#C7F36B]' : ''}`} />
-            <span className="hidden sm:inline">{t('graph.radial_layout')}</span>
-            <kbd className={`hidden md:inline-block text-[9px] font-mono px-1 py-0.5 rounded border ${
-              layoutMode === 'stream'
-                ? 'bg-slate-800 text-slate-300 border-slate-700'
-                : 'bg-slate-100 text-[#8B929E] border-slate-200'
-            }`}>
-              3
-            </kbd>
+            <Workflow className={`w-4 h-4 ${layoutMode === 'stream' ? 'text-[#C7F36B]' : ''}`} />
+            {/* Tooltip to the left */}
+            <div className="absolute right-full mr-2.5 top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-xl bg-[#151923] text-white text-xs font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 shadow-xl flex items-center gap-2 z-50">
+              <span>{t('graph.radial_layout')}</span>
+              <kbd className="text-[9px] font-mono px-1 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">3</kbd>
+            </div>
           </button>
 
           {/* Compact Grid Layout */}
           <button
             onClick={() => onSelectLayout('compact')}
-            className={`flex items-center gap-1.5 px-3 h-8 rounded-xl text-xs font-semibold transition-all ${
+            className={`relative group w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
               layoutMode === 'compact'
                 ? 'bg-[#151923] text-white shadow-sm'
                 : 'text-[#8B929E] hover:text-[#151923] hover:bg-slate-100'
             }`}
             title={`${t('graph.compact_layout')} (4)`}
           >
-            <LayoutGrid className={`w-3.5 h-3.5 ${layoutMode === 'compact' ? 'text-[#C7F36B]' : ''}`} />
-            <span className="hidden sm:inline">{t('graph.compact_layout')}</span>
-            <kbd className={`hidden md:inline-block text-[9px] font-mono px-1 py-0.5 rounded border ${
-              layoutMode === 'compact'
-                ? 'bg-slate-800 text-slate-300 border-slate-700'
-                : 'bg-slate-100 text-[#8B929E] border-slate-200'
-            }`}>
-              4
-            </kbd>
+            <LayoutGrid className={`w-4 h-4 ${layoutMode === 'compact' ? 'text-[#C7F36B]' : ''}`} />
+            {/* Tooltip to the left */}
+            <div className="absolute right-full mr-2.5 top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-xl bg-[#151923] text-white text-xs font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 shadow-xl flex items-center gap-2 z-50">
+              <span>{t('graph.compact_layout')}</span>
+              <kbd className="text-[9px] font-mono px-1 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">4</kbd>
+            </div>
           </button>
 
-          <div className="w-[1px] h-4 bg-[#E4E7E1] mx-0.5" />
+          <div className="w-5 h-[1px] bg-[#E4E7E1] my-0.5" />
 
           {/* Auto Arrange / Rearrange */}
           <button
             onClick={onAutoLayout}
-            className="flex items-center gap-1.5 px-2.5 h-8 rounded-xl text-xs font-bold text-[#151923] hover:bg-slate-100 transition-colors"
+            className="relative group w-9 h-9 rounded-xl flex items-center justify-center text-[#151923] hover:bg-slate-100 transition-colors"
             title={t('graph.auto_layout')}
           >
-            <Sparkles className="w-3.5 h-3.5 text-[#526BEE]" />
-            <span className="hidden md:inline">{t('graph.auto_layout')}</span>
+            <Sparkles className="w-4 h-4 text-[#526BEE]" />
+            {/* Tooltip to the left */}
+            <div className="absolute right-full mr-2.5 top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-xl bg-[#151923] text-white text-xs font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 shadow-xl flex items-center gap-1.5 z-50">
+              <span>{t('graph.auto_layout')}</span>
+            </div>
           </button>
 
-          <div className="w-[1px] h-4 bg-[#E4E7E1] mx-0.5" />
+          <div className="w-5 h-[1px] bg-[#E4E7E1] my-0.5" />
 
           {/* Grid Mode Toggle (Dots / Lines / Off) */}
           <button
             onClick={onToggleGrid}
-            className={`flex items-center gap-1 px-2.5 h-8 rounded-xl text-xs font-semibold transition-colors ${
+            className={`relative group w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${
               gridMode !== 'off'
                 ? 'text-[#526BEE] bg-[#526BEE]/10'
                 : 'text-[#8B929E] hover:text-[#151923] hover:bg-slate-100'
@@ -237,14 +231,17 @@ const CanvasFloatingDock: React.FC<{
                 : 'Off'
             })`}
           >
-            <Grid className="w-3.5 h-3.5" />
-            <span className="text-[10px] font-mono hidden lg:inline uppercase">
-              {gridMode === 'dots'
-                ? t('graph.grid_dots')
-                : gridMode === 'lines'
-                ? t('graph.grid_lines')
-                : 'Off'}
-            </span>
+            <Grid className="w-4 h-4" />
+            {/* Tooltip to the left */}
+            <div className="absolute right-full mr-2.5 top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-xl bg-[#151923] text-white text-xs font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 shadow-xl flex items-center gap-1.5 z-50">
+              <span>{t('graph.grid_toggle')}: {
+                gridMode === 'dots'
+                  ? t('graph.grid_dots')
+                  : gridMode === 'lines'
+                  ? t('graph.grid_lines')
+                  : 'Off'
+              }</span>
+            </div>
           </button>
         </div>
       </Panel>
@@ -313,6 +310,7 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({
   const prevClusterRef = useRef<string | null>(null);
   const prevRevisionRef = useRef<number>(0);
   const prevLayerRef = useRef<string>('all');
+  const prevLayoutModeRef = useRef<LayoutMode>('hierarchical');
 
   // Layout mode state
   const [layoutMode, setLayoutMode] = useState<LayoutMode>('hierarchical');
@@ -328,6 +326,7 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({
   // Node Focus & Exploration State (Requirement 6)
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [focusFilterMode, setFocusFilterMode] = useState<FocusFilterMode>('none');
+  const [drillDownSearch, setDrillDownSearch] = useState('');
 
   // Toggle expand / drill-down into a single cluster
   const handleToggleExpandCluster = useCallback(
@@ -335,6 +334,7 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({
       setActiveDrillDownClusterId((prev) => (prev === clusterId ? null : clusterId));
       setSelectedNodeId(null);
       setFocusFilterMode('none');
+      setDrillDownSearch('');
       setLayoutRevision((r) => r + 1);
       setTimeout(() => fitView({ minZoom: 0.75, maxZoom: 1.05, padding: 0.15, duration: 350 }), 80);
     },
@@ -347,27 +347,10 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({
     setExpandedClusterIds(new Set());
     setSelectedNodeId(null);
     setFocusFilterMode('none');
+    setDrillDownSearch('');
     setLayoutRevision((r) => r + 1);
     setTimeout(() => fitView({ minZoom: 0.65, maxZoom: 1.05, padding: 0.15, duration: 350 }), 80);
   }, [fitView]);
-
-  // Keyboard shortcut: Esc to return to architecture overview or clear selection
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (activeDrillDownClusterId) {
-          setActiveDrillDownClusterId(null);
-          setLayoutRevision((r) => r + 1);
-          setTimeout(() => fitView({ minZoom: 0.65, maxZoom: 1.05, padding: 0.15, duration: 350 }), 80);
-        } else if (selectedNodeId) {
-          setSelectedNodeId(null);
-          setFocusFilterMode('none');
-        }
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeDrillDownClusterId, selectedNodeId, fitView]);
 
   // Filter raw files by selected layer before layout
   const filteredRawNodes = useMemo(() => {
@@ -375,23 +358,39 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({
     return nodes.filter((n) => (n.data as any).layer === selectedLayer);
   }, [nodes, selectedLayer]);
 
+  // Fast search filter inside active cluster drill-down
+  const drillDownFilteredNodes = useMemo(() => {
+    if (!activeDrillDownClusterId || !drillDownSearch.trim()) {
+      return filteredRawNodes;
+    }
+    const q = drillDownSearch.toLowerCase().trim();
+    return filteredRawNodes.filter((n) => {
+      const data = n.data as any;
+      const label = (data?.label || '').toLowerCase();
+      const path = (data?.path || '').toLowerCase();
+      return label.includes(q) || path.includes(q);
+    });
+  }, [filteredRawNodes, activeDrillDownClusterId, drillDownSearch]);
+
   // Execute Real Layout Engine (Overview or Drill-Down)
   const layoutResult = useMemo(() => {
     if (activeDrillDownClusterId) {
       return computeClusterDrillDownLayout(
-        filteredRawNodes,
+        drillDownFilteredNodes,
         edges,
         activeDrillDownClusterId,
-        t
+        t,
+        layoutMode
       );
     }
     return computeHierarchicalClusterLayout(
       filteredRawNodes,
       edges,
       expandedClusterIds,
-      t
+      t,
+      layoutMode
     );
-  }, [filteredRawNodes, edges, expandedClusterIds, activeDrillDownClusterId, layoutRevision, t]);
+  }, [filteredRawNodes, drillDownFilteredNodes, edges, expandedClusterIds, activeDrillDownClusterId, layoutRevision, layoutMode, t]);
 
   // Compute connected nodes and edges for hover interactions
   const { connectedEdgeIds, connectedNodeIds } = useMemo(() => {
@@ -446,16 +445,18 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({
     });
   }, [layoutResult?.nodes, handleToggleExpandCluster]);
 
-  // Synchronize internalNodes when layout, active cluster, or layer changes
+  // Synchronize internalNodes when layout, active cluster, layer, or layoutMode changes
   useEffect(() => {
     const isReset =
       prevClusterRef.current !== activeDrillDownClusterId ||
       prevRevisionRef.current !== layoutRevision ||
-      prevLayerRef.current !== selectedLayer;
+      prevLayerRef.current !== selectedLayer ||
+      prevLayoutModeRef.current !== layoutMode;
 
     prevClusterRef.current = activeDrillDownClusterId;
     prevRevisionRef.current = layoutRevision;
     prevLayerRef.current = selectedLayer;
+    prevLayoutModeRef.current = layoutMode;
 
     setInternalNodes((prev) => {
       if (isReset || prev.length === 0) {
@@ -468,7 +469,7 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({
         position: posMap.get(n.id) || n.position,
       }));
     });
-  }, [basePreparedNodes, activeDrillDownClusterId, layoutRevision, selectedLayer]);
+  }, [basePreparedNodes, activeDrillDownClusterId, layoutRevision, selectedLayer, layoutMode]);
 
   // Live node dragging handler: updates node position synchronously on every mousemove tick
   const handleInternalNodesChange: OnNodesChange = useCallback(
@@ -632,16 +633,48 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({
     (mode: LayoutMode) => {
       setLayoutMode(mode);
       setLayoutRevision((r) => r + 1);
-      setTimeout(() => fitView({ padding: 0.2, duration: 400 }), 50);
+      setTimeout(() => fitView({ padding: 0.15, minZoom: 0.65, maxZoom: 1.05, duration: 400 }), 80);
     },
     [fitView]
   );
 
   // Auto layout trigger
   const handleAutoLayout = useCallback(() => {
+    setInternalNodes(basePreparedNodes);
     setLayoutRevision((r) => r + 1);
-    setTimeout(() => fitView({ padding: 0.2, duration: 400 }), 50);
-  }, [fitView]);
+    setTimeout(() => fitView({ padding: 0.15, minZoom: 0.65, maxZoom: 1.05, duration: 400 }), 50);
+  }, [basePreparedNodes, fitView]);
+
+  // Keyboard shortcut: Esc to return to architecture overview or clear selection; 1..4 for layout presets
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore shortcut if user is typing in a text field
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) {
+        return;
+      }
+      if (e.key === 'Escape') {
+        if (activeDrillDownClusterId) {
+          setActiveDrillDownClusterId(null);
+          setDrillDownSearch('');
+          setLayoutRevision((r) => r + 1);
+          setTimeout(() => fitView({ minZoom: 0.65, maxZoom: 1.05, padding: 0.15, duration: 350 }), 80);
+        } else if (selectedNodeId) {
+          setSelectedNodeId(null);
+          setFocusFilterMode('none');
+        }
+      } else if (e.key === '1') {
+        fitView({ padding: 0.15, minZoom: 0.65, maxZoom: 1.05, duration: 350 });
+      } else if (e.key === '2') {
+        handleSelectLayout('hierarchical');
+      } else if (e.key === '3') {
+        handleSelectLayout('stream');
+      } else if (e.key === '4') {
+        handleSelectLayout('compact');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeDrillDownClusterId, selectedNodeId, fitView, handleSelectLayout]);
 
   // Grid toggle handler
   const handleToggleGrid = useCallback(() => {
@@ -702,25 +735,46 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({
                 )}
             </div>
 
-            {/* Quick Switcher dropdown */}
-            <select
-              value={activeDrillDownClusterId}
-              onChange={(e) => {
-                setActiveDrillDownClusterId(e.target.value);
+            {/* Quick Switcher dropdown (Custom Brand Kit v2 Dropdown) */}
+            <ClusterSelectorDropdown
+              clusters={layoutResult.clusters}
+              activeClusterId={activeDrillDownClusterId}
+              onSelectCluster={(clusterId) => {
+                setActiveDrillDownClusterId(clusterId);
+                setDrillDownSearch('');
                 setLayoutRevision((r) => r + 1);
                 setTimeout(() => fitView({ padding: 0.15, duration: 400 }), 100);
               }}
-              className="text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-[#526BEE] cursor-pointer hover:bg-slate-100 ml-1"
-            >
-              {layoutResult.clusters.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} ({c.files.length})
-                </option>
-              ))}
-            </select>
+            />
+
+            {/* In-Cluster Fast File Search (Handles 100+ files gracefully) */}
+            <div className="relative flex items-center ml-1">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 pointer-events-none" />
+              <input
+                type="text"
+                value={drillDownSearch}
+                onChange={(e) => {
+                  setDrillDownSearch(e.target.value);
+                  setLayoutRevision((r) => r + 1);
+                }}
+                placeholder={t('graph.search_files')}
+                className="text-xs bg-slate-50 border border-slate-300 rounded-lg pl-8 pr-7 py-1 w-44 sm:w-56 focus:outline-none focus:ring-1 focus:ring-[#526BEE] focus:bg-white text-[#151923] placeholder-slate-400 transition-all"
+              />
+              {drillDownSearch && (
+                <button
+                  onClick={() => {
+                    setDrillDownSearch('');
+                    setLayoutRevision((r) => r + 1);
+                  }}
+                  className="absolute right-2 p-0.5 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
           </div>
         ) : (
-          <div className="flex items-center gap-2 flex-wrap">
+          <div id="tour-graph-layer-filter" className="flex items-center gap-2 flex-wrap">
             {/* Architecture Cluster Overview Indicator */}
             <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 border border-slate-200 text-xs font-bold text-[#151923]">
               <Box className="w-3.5 h-3.5 text-[#526BEE]" />
@@ -849,7 +903,7 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({
       )}
 
       {/* Main ReactFlow Canvas with fixed non-scaling background */}
-      <div className="w-full h-full flex-1 min-h-[400px] relative bg-[#F7F8F5]">
+      <div id="tour-graph-canvas" className="w-full h-full flex-1 min-h-[400px] relative bg-[#F7F8F5]">
         <ReactFlow
           key={`rf-${selectedLayer}-${focusSubgraph}`}
           nodes={finalDisplayNodes}
@@ -869,14 +923,16 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({
           edgeTypes={edgeTypes}
           fitView
           fitViewOptions={{ minZoom: 0.75, maxZoom: 1.05, padding: 0.15 }}
-          minZoom={0.5}
+          minZoom={0.2}
           maxZoom={2.0}
+          onlyRenderVisibleElements={true}
+          elevateNodesOnSelect={false}
           defaultEdgeOptions={{
             type: 'default',
             markerEnd: {
               type: MarkerType.ArrowClosed,
-              width: 18,
-              height: 18,
+              width: 12,
+              height: 12,
               color: '#526BEE',
             },
           }}
@@ -894,12 +950,6 @@ const GraphCanvasInner: React.FC<GraphCanvasProps> = ({
         >
           {/* Fixed Non-Zooming Background Grid that pans smoothly with the canvas */}
           <CanvasBackgroundLayer gridMode={gridMode} />
-
-          {/* Controls (+, -, FitView) */}
-          <Controls
-            showInteractive={false}
-            className="!rounded-2xl !border !border-[#E4E7E1] !shadow-md !bg-white/95 !m-4 !mb-4 !overflow-hidden"
-          />
 
           {/* Minimap (Requirement 7) */}
           <MiniMap

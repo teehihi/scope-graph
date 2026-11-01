@@ -39,9 +39,18 @@ code, pre, .font-mono {
   transform: scale(1.3) !important;
 }
 
+.react-flow__node {
+  contain: layout style;
+  will-change: transform;
+}
+
+.react-flow__edge {
+  will-change: stroke, opacity;
+}
+
 /* Edge & connection hover effects */
 .react-flow__edge-path {
-  transition: stroke 0.2s ease, stroke-width 0.2s ease;
+  transition: stroke 0.15s ease, stroke-width 0.15s ease, opacity 0.15s ease;
 }
 
 /* Edge & connection animated flow effect */
