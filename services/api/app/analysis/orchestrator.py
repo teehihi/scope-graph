@@ -197,9 +197,11 @@ class AnalysisOrchestrator:
                 if "completeness_review" not in candidate["sources"]:
                     candidate["sources"].append("completeness_review")
 
-            explained_affected = [{**item, **explain_item(item)} for item in validated["affected_items"]]
+            explained_affected = [
+                {**item, **explain_item(item, target_language)} for item in validated["affected_items"]
+            ]
             explained_potential = [
-                {**potential_by_path[path], **explain_item(potential_by_path[path])}
+                {**potential_by_path[path], **explain_item(potential_by_path[path], target_language)}
                 for path in sorted(potential_by_path)
             ]
 

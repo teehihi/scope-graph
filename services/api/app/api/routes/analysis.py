@@ -360,4 +360,4 @@ def interpret_screenshot_preview(
         "visible_elements": elements,
         "user_actions": actions,
         "uncertainties": uncertainties,
-    }\n
+    }
