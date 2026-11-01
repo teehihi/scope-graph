@@ -195,7 +195,11 @@ export async function runAnalysis(
     const err = await res.json().catch(() => ({ detail: 'Analysis failed' }));
     throw new Error(err.detail || 'Analysis failed');
   }
-  return res.json();
+  const data = await res.json();
+  if (data.status === 'failed') {
+    throw new Error(data.error || (data.result && data.result.error) || 'Analysis failed');
+  }
+  return data;
 }
 
 export async function analyzeScreenshot(

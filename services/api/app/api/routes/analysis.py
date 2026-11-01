@@ -142,6 +142,11 @@ def trigger_analysis(
         completed_run = orchestrator.run_analysis(
             repository_id, req_text, analysis_id=analysis_id, target_language=payload.target_language
         )
+        if completed_run.status == "failed":
+            raise HTTPException(
+                status_code=500,
+                detail=completed_run.error_message or "Analysis execution failed"
+            )
         # Store in cache
         if completed_run.result_json:
             cache_payload = dict(completed_run.result_json)

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from '../../router';
 import { useRepo } from '../../context/RepoContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -6,7 +6,8 @@ import { AppLayout } from '../../components/layouts/AppLayout';
 import { RequirementPanel } from '../../components/RequirementPanel';
 import { ReportPanel } from '../../components/ReportPanel';
 import { EvidenceDrawer } from '../../components/EvidenceDrawer';
-import { Network, CheckCircle, AlertCircle } from 'lucide-react';
+import { OnboardingTour, TourStep } from '../../components/OnboardingTour';
+import { Network, CheckCircle, AlertCircle, HelpCircle } from 'lucide-react';
 import { ImpactItem } from '../../types';
 
 export const ImpactPage: React.FC = () => {
@@ -27,6 +28,75 @@ export const ImpactPage: React.FC = () => {
     nodes,
   } = useRepo();
 
+  // Guided Walkthrough Tour State
+  const [showTour, setShowTour] = useState(false);
+
+  useEffect(() => {
+    const seenTour = localStorage.getItem('scopegraph_impact_tour_seen');
+    if (!seenTour) {
+      const timer = setTimeout(() => setShowTour(true), 800);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  const handleCloseTour = () => {
+    setShowTour(false);
+    localStorage.setItem('scopegraph_impact_tour_seen', 'true');
+  };
+
+  const impactTourSteps: TourStep[] = [
+    {
+      id: 'input',
+      targetSelector: '#tour-impact-input',
+      title: t('impact.tour_step_input_title'),
+      placement: 'bottom',
+      spotlightPadding: 6,
+      spotlightRadius: 18,
+      description: t('impact.tour_step_input_desc'),
+      interactiveTip: t('impact.tour_step_input_tip'),
+    },
+    {
+      id: 'presets',
+      targetSelector: '#tour-impact-presets',
+      title: t('impact.tour_step_presets_title'),
+      placement: 'bottom',
+      spotlightPadding: 6,
+      spotlightRadius: 12,
+      description: t('impact.tour_step_presets_desc'),
+      interactiveTip: t('impact.tour_step_presets_tip'),
+    },
+    {
+      id: 'attach',
+      targetSelector: '#tour-impact-attach',
+      title: t('impact.tour_step_attach_title'),
+      placement: 'bottom',
+      spotlightPadding: 8,
+      spotlightRadius: 14,
+      description: t('impact.tour_step_attach_desc'),
+      interactiveTip: t('impact.tour_step_attach_tip'),
+    },
+    {
+      id: 'run',
+      targetSelector: '#tour-impact-run-btn',
+      title: t('impact.tour_step_run_title'),
+      placement: 'bottom',
+      spotlightPadding: 8,
+      spotlightRadius: 16,
+      description: t('impact.tour_step_run_desc'),
+      interactiveTip: t('impact.tour_step_run_tip'),
+    },
+    {
+      id: 'results',
+      targetSelector: '#tour-impact-content',
+      title: t('impact.tour_step_results_title'),
+      placement: 'top',
+      spotlightPadding: 6,
+      spotlightRadius: 18,
+      description: t('impact.tour_step_results_desc'),
+      interactiveTip: t('impact.tour_step_results_tip'),
+    },
+  ];
+
   const handleSelectItem = (item: ImpactItem) => {
     setSelectedImpactItem(item);
     const matched = nodes.find((n) => (n.data as any).path === item.file_path);
@@ -36,7 +106,7 @@ export const ImpactPage: React.FC = () => {
   };
 
   // Cleanup selected node when navigating away or on unmount
-  React.useEffect(() => {
+  useEffect(() => {
     return () => {
       setSelectedNodeData(null);
       setSelectedImpactItem(null);
@@ -46,9 +116,21 @@ export const ImpactPage: React.FC = () => {
   return (
     <AppLayout
       title={t('impact.title')}
-      subtitle={activeRepo?.name ? `${t('impact.subtitle')} • ${activeRepo.name}` : t('impact.subtitle')}
+      subtitle={t('impact.subtitle')}
       actions={
-        <div className="flex items-center gap-2">
+        <div id="tour-impact-header-actions" className="flex items-center gap-1.5 sm:gap-2">
+          {/* Guide / Walkthrough Button */}
+          <button
+            type="button"
+            id="tour-impact-guide-btn"
+            onClick={() => setShowTour(true)}
+            className="flex items-center gap-1.5 text-xs font-bold px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-white text-[#151923] border border-[#E4E7E1] hover:bg-slate-50 transition-colors shadow-2xs shrink-0 cursor-pointer"
+            title={t('impact.tour_btn')}
+          >
+            <HelpCircle className="w-3.5 h-3.5 text-[#526BEE]" />
+            <span className="hidden sm:inline">{t('impact.tour_btn')}</span>
+          </button>
+
           {analysisReport && (
             <div className="hidden lg:flex items-center gap-2 text-xs font-mono text-[#151923] px-2.5 py-1.5 rounded-xl bg-[#F7F8F5] border border-[#E4E7E1] shadow-2xs">
               <div className="flex items-center gap-1.5">
@@ -92,14 +174,14 @@ export const ImpactPage: React.FC = () => {
         )}
 
         {/* Content Area */}
-        <div className="flex-1 flex min-h-0 min-w-0 w-full max-w-full relative overflow-hidden">
+        <div id="tour-impact-content" className="flex-1 flex min-h-0 min-w-0 w-full max-w-full relative overflow-hidden">
           {isAnalyzing ? (
             /* Loading State: Scout Exploring */
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4">
               <img
                 src="/brand/scout-exploring.gif"
                 alt="Scout Exploring"
-                className="w-24 h-24 object-contain mx-auto drop-shadow-md"
+                className="w-24 h-24 object-contain mx-auto select-none"
               />
               <div className="space-y-1">
                 <h3 className="text-base font-bold text-[#151923]">{t('impact.scout_tracing')}</h3>
@@ -178,6 +260,15 @@ export const ImpactPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Interactive Guided Walkthrough Tour */}
+      <OnboardingTour
+        isOpen={showTour}
+        steps={impactTourSteps}
+        onClose={handleCloseTour}
+        onComplete={handleCloseTour}
+        onSkip={handleCloseTour}
+      />
     </AppLayout>
   );
 };

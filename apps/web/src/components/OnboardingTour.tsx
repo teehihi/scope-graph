@@ -95,19 +95,34 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
   useEffect(() => {
     if (!isOpen || !currentStep) return;
 
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
     function computeTargetRect() {
       const el = document.querySelector(currentStep.targetSelector) as HTMLElement | null;
       if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        setTimeout(() => {
+        const update = () => {
           const rect = el.getBoundingClientRect();
-          setTargetRect({
-            top: rect.top,
-            left: rect.left,
-            width: rect.width,
-            height: rect.height,
-          });
-        }, 120);
+          if (rect.width > 0 && rect.height > 0) {
+            setTargetRect({
+              top: rect.top,
+              left: rect.left,
+              width: rect.width,
+              height: rect.height,
+            });
+          }
+        };
+
+        // Measure immediately so no delay or flicker
+        update();
+
+        // Smoothly center target element in viewport so both above and below have ample space
+        el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+
+        // Re-measure across smooth scroll settling animation
+        timers.push(setTimeout(update, 50));
+        timers.push(setTimeout(update, 120));
+        timers.push(setTimeout(update, 220));
+        timers.push(setTimeout(update, 350));
       } else {
         setTargetRect(null);
       }
@@ -118,6 +133,7 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
     window.addEventListener('scroll', computeTargetRect, { passive: true, capture: true });
 
     return () => {
+      timers.forEach((t) => clearTimeout(t));
       window.removeEventListener('resize', computeTargetRect);
       window.removeEventListener('scroll', computeTargetRect, true);
     };
@@ -351,15 +367,57 @@ const TooltipCard: React.FC<TooltipCardProps> = ({
       const spaceLeft = boxLeft;
       const spaceRight = viewportWidth - boxRight;
 
-      let placement = step.placement ?? 'auto';
-      if (placement === 'auto') {
-        if (spaceBelow >= tooltipHeight + gap + 16) {
-          placement = 'bottom';
-        } else if (spaceAbove >= tooltipHeight + gap + 16) {
-          placement = 'top';
-        } else if (spaceRight >= tooltipWidth + gap + 16) {
+      const neededVertical = tooltipHeight + gap + 16;
+      const neededHorizontal = tooltipWidth + gap + 16;
+
+      const fitsBelow = spaceBelow >= neededVertical;
+      const fitsAbove = spaceAbove >= neededVertical;
+      const fitsRight = spaceRight >= neededHorizontal;
+      const fitsLeft = spaceLeft >= neededHorizontal;
+
+      let preferred = step.placement ?? 'auto';
+      let placement: 'top' | 'bottom' | 'left' | 'right' = 'bottom';
+
+      if (preferred === 'left') {
+        if (fitsLeft) {
+          placement = 'left';
+        } else {
+          preferred = 'auto';
+        }
+      } else if (preferred === 'right') {
+        if (fitsRight) {
           placement = 'right';
-        } else if (spaceLeft >= tooltipWidth + gap + 16) {
+        } else {
+          preferred = 'auto';
+        }
+      }
+
+      if (preferred === 'top') {
+        if (fitsAbove) {
+          placement = 'top';
+        } else if (fitsBelow) {
+          // Auto flip to bottom to avoid covering the spotlight target
+          placement = 'bottom';
+        } else {
+          placement = spaceAbove >= spaceBelow ? 'top' : 'bottom';
+        }
+      } else if (preferred === 'bottom') {
+        if (fitsBelow) {
+          placement = 'bottom';
+        } else if (fitsAbove) {
+          // Auto flip to top to avoid covering the spotlight target
+          placement = 'top';
+        } else {
+          placement = spaceBelow >= spaceAbove ? 'bottom' : 'top';
+        }
+      } else if (preferred === 'auto') {
+        if (fitsBelow) {
+          placement = 'bottom';
+        } else if (fitsAbove) {
+          placement = 'top';
+        } else if (fitsRight) {
+          placement = 'right';
+        } else if (fitsLeft) {
           placement = 'left';
         } else {
           placement = spaceBelow >= spaceAbove ? 'bottom' : 'top';
@@ -372,43 +430,40 @@ const TooltipCard: React.FC<TooltipCardProps> = ({
       let arrowLeft = tooltipWidth / 2;
       let arrowTop = tooltipHeight / 2;
 
-      if (placement === 'right') {
-        if (spaceRight >= tooltipWidth + gap + 16) {
-          left = boxRight + gap;
-          top = Math.max(16, Math.min(targetCenterY - tooltipHeight / 2, viewportHeight - tooltipHeight - 16));
-          arrowPlacement = 'left';
-          arrowTop = Math.max(24, Math.min(targetCenterY - top, tooltipHeight - 24));
-        } else {
-          placement = spaceBelow >= spaceAbove ? 'bottom' : 'top';
-        }
-      } else if (placement === 'left') {
-        if (spaceLeft >= tooltipWidth + gap + 16) {
-          left = boxLeft - tooltipWidth - gap;
-          top = Math.max(16, Math.min(targetCenterY - tooltipHeight / 2, viewportHeight - tooltipHeight - 16));
-          arrowPlacement = 'right';
-          arrowTop = Math.max(24, Math.min(targetCenterY - top, tooltipHeight - 24));
-        } else {
-          placement = spaceBelow >= spaceAbove ? 'bottom' : 'top';
-        }
+      // Compute horizontal position with responsive margins
+      if (viewportWidth < 640) {
+        // Mobile screens: fixed 16px margins
+        left = 16;
+      } else {
+        left = Math.max(
+          16,
+          Math.min(targetCenterX - tooltipWidth / 2, viewportWidth - tooltipWidth - 16)
+        );
       }
 
-      if (placement === 'top') {
-        top = Math.max(16, boxTop - tooltipHeight - gap);
-        left = Math.max(
-          16,
-          Math.min(targetCenterX - tooltipWidth / 2, viewportWidth - tooltipWidth - 16)
-        );
-        arrowPlacement = 'bottom';
-        arrowLeft = Math.max(24, Math.min(targetCenterX - left, tooltipWidth - 24));
-      } else if (placement === 'bottom') {
-        top = Math.min(viewportHeight - tooltipHeight - 16, boxBottom + gap);
-        left = Math.max(
-          16,
-          Math.min(targetCenterX - tooltipWidth / 2, viewportWidth - tooltipWidth - 16)
-        );
+      if (placement === 'bottom') {
         arrowPlacement = 'top';
+        top = boxBottom + gap;
         arrowLeft = Math.max(24, Math.min(targetCenterX - left, tooltipWidth - 24));
+      } else if (placement === 'top') {
+        arrowPlacement = 'bottom';
+        top = boxTop - tooltipHeight - gap;
+        arrowLeft = Math.max(24, Math.min(targetCenterX - left, tooltipWidth - 24));
+      } else if (placement === 'right') {
+        arrowPlacement = 'left';
+        left = boxRight + gap;
+        top = Math.max(16, Math.min(targetCenterY - tooltipHeight / 2, viewportHeight - tooltipHeight - 16));
+        arrowTop = Math.max(24, Math.min(targetCenterY - top, tooltipHeight - 24));
+      } else if (placement === 'left') {
+        arrowPlacement = 'right';
+        left = boxLeft - tooltipWidth - gap;
+        top = Math.max(16, Math.min(targetCenterY - tooltipHeight / 2, viewportHeight - tooltipHeight - 16));
+        arrowTop = Math.max(24, Math.min(targetCenterY - top, tooltipHeight - 24));
       }
+
+      // STRICT VIEWPORT BOUNDS: The tooltip card MUST ALWAYS remain 100% inside the viewport visible area!
+      top = Math.max(16, Math.min(top, Math.max(16, viewportHeight - tooltipHeight - 16)));
+      left = Math.max(16, Math.min(left, Math.max(16, viewportWidth - tooltipWidth - 16)));
 
       setPosition({
         top,
@@ -420,10 +475,21 @@ const TooltipCard: React.FC<TooltipCardProps> = ({
     }
 
     computePosition();
+
+    // Use ResizeObserver so true dynamic height is used when content/text changes
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined' && tooltipRef.current) {
+      observer = new ResizeObserver(() => {
+        computePosition();
+      });
+      observer.observe(tooltipRef.current);
+    }
+
     window.addEventListener('resize', computePosition, { passive: true });
     window.addEventListener('scroll', computePosition, { passive: true, capture: true });
 
     return () => {
+      if (observer) observer.disconnect();
       window.removeEventListener('resize', computePosition);
       window.removeEventListener('scroll', computePosition, true);
     };
@@ -441,7 +507,7 @@ const TooltipCard: React.FC<TooltipCardProps> = ({
         top: `${position.top}px`,
         left: `${position.left}px`,
       }}
-      className="pointer-events-auto z-[9995] w-[calc(100vw-32px)] sm:w-[390px] max-w-[430px] rounded-3xl border border-[#E4E7E1] bg-white p-5 sm:p-6 shadow-2xl shadow-slate-950/25 transition-[top,left] duration-200 ease-out animate-in fade-in zoom-in-95 space-y-4"
+      className="pointer-events-auto z-[9995] w-[calc(100vw-32px)] sm:w-[390px] max-w-[440px] max-h-[calc(100vh-32px)] overflow-y-auto rounded-3xl border border-[#E4E7E1] bg-white p-4.5 sm:p-5 shadow-2xl shadow-slate-950/25 transition-[top,left] duration-200 ease-out animate-in fade-in zoom-in-95 space-y-3 sm:space-y-3.5"
     >
       {/* Tooltip Arrow Indicator */}
       {targetRect && (

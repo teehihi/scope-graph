@@ -73,14 +73,26 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const resp = screenshot
         ? await analyzeScreenshot(repo.id, req, screenshot, language)
         : await runAnalysis(repo.id, req, language);
-      if (resp.result) {
-        setAnalysisReport(resp.result);
+      if (resp && resp.result) {
+        const report = resp.result;
+        if (!Array.isArray(report.affected_items)) {
+          report.affected_items = [];
+        }
+        if (!Array.isArray(report.risks)) {
+          report.risks = [];
+        }
+        if (!Array.isArray(report.suggested_tests)) {
+          report.suggested_tests = [];
+        }
+        setAnalysisReport(report);
         setBriefMarkdown(resp.brief || '');
 
-        const firstDirect = resp.result.affected_items.find((i) => i.impact_type === 'direct');
+        const firstDirect = report.affected_items.find((i) => i.impact_type === 'direct');
         if (firstDirect) {
           setSelectedImpactItem(firstDirect);
         }
+      } else if (resp && resp.status === 'failed') {
+        throw new Error((resp as any).error || 'Analysis execution failed');
       }
     } catch (err) {
       console.warn('Analysis API unavailable:', err);
@@ -127,13 +139,14 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const reloadGraph = useCallback(
     async (repoId: string, report?: AnalysisReport | null, focusSub: boolean = false) => {
       try {
-        const highlighted = report ? report.affected_items.map((i) => i.file_path) : [];
+        const items = report?.affected_items && Array.isArray(report.affected_items) ? report.affected_items : [];
+        const highlighted = items.map((i) => i.file_path);
         const graphData = await fetchGraph(repoId, highlighted, focusSub);
 
         const rfNodes: Node[] = graphData.nodes.map((n: any) => {
           let impact_status = 'none';
-          if (report) {
-            const matched = report.affected_items.find((item) => item.file_path === n.data.path);
+          if (items.length > 0) {
+            const matched = items.find((item) => item.file_path === n.data.path);
             if (matched) {
               impact_status = matched.impact_type;
             }

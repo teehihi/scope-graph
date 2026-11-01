@@ -2,12 +2,15 @@
 
 from dataclasses import dataclass, field
 from enum import StrEnum
+import logging
 import time
 from typing import Any
 from urllib.parse import urlparse
 
 from app.ai.provider import AIProviderResponse, BaseMetaAIProvider, MetaAIHttpProvider, OfflineDemoProvider
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class AIStage(StrEnum):
@@ -139,7 +142,7 @@ class StageProviderRouter:
         try:
             return self._call(stage, method, config, provider, False, *args, **kwargs)
         except StageExecutionError as error:
-            if error.code not in {"timeout", "provider_unavailable"} or not config.fallback_provider_id:
+            if error.code not in {"timeout", "provider_unavailable", "authentication_failed", "provider_error"} or not config.fallback_provider_id:
                 raise
             fallback_config, fallback_provider = self.registry.get(config.fallback_provider_id)
             if not fallback_config.capabilities.supports(stage):
@@ -226,6 +229,21 @@ def build_stage_router(default_provider: BaseMetaAIProvider) -> StageProviderRou
         provider_id = getattr(default_provider, "provider_name", "offline_demo")
         if isinstance(default_provider, MetaAIHttpProvider):
             default_provider.request_budget = 20
+        fallback_id = None
+        if provider_id != "offline_demo":
+            fallback_id = "offline_demo"
+            offline = OfflineDemoProvider()
+            registry.register(ProviderConfig(
+                provider_id="offline_demo",
+                model_id=offline.model,
+                base_url="",
+                credential_ref="NONE",
+                capabilities=ProviderCapabilities(all_stages),
+                timeout_seconds=5,
+                max_retries=0,
+                max_response_tokens=settings.META_AI_MAX_TOKENS,
+                request_budget=20,
+            ), offline)
         registry.register(ProviderConfig(
             provider_id=provider_id,
             model_id=getattr(default_provider, "model", settings.META_AI_MODEL),
@@ -234,6 +252,7 @@ def build_stage_router(default_provider: BaseMetaAIProvider) -> StageProviderRou
             timeout_seconds=45, max_retries=getattr(default_provider, "max_retries", 0),
             max_response_tokens=settings.META_AI_MAX_TOKENS,
             request_budget=20,
+            fallback_provider_id=fallback_id,
         ), default_provider)
         return StageProviderRouter(registry, {stage: provider_id for stage in AIStage}, profile)
 

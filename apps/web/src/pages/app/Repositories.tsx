@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRepo } from '../../context/RepoContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { AppLayout } from '../../components/layouts/AppLayout';
@@ -34,9 +34,11 @@ export const RepositoriesPage: React.FC = () => {
   // Countdown timers (in seconds) for repositories that are currently indexing
   const [countdowns, setCountdowns] = useState<Record<string, number>>({});
 
-  // Auto-seed sample repository if user lands on empty repositories list
+  // Auto-seed sample repository if user lands on empty repositories list (at most once)
+  const hasAttemptedAutoSeed = useRef(false);
   useEffect(() => {
-    if (repositories.length === 0 && !isLoadingSample) {
+    if (repositories.length === 0 && !isLoadingSample && !hasAttemptedAutoSeed.current) {
+      hasAttemptedAutoSeed.current = true;
       loadSample();
     }
   }, [repositories.length, isLoadingSample, loadSample]);

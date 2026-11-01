@@ -140,7 +140,7 @@ export const RequirementPanel: React.FC<RequirementPanelProps> = ({
           </div>
 
           {/* Quick preset suggestions bar */}
-          <div className="flex items-center gap-2 overflow-x-auto scrollbar-none py-0.5 text-xs">
+          <div id="tour-impact-presets" className="flex items-center gap-2 overflow-x-auto scrollbar-none py-0.5 text-xs">
             <span className="text-[11px] text-[#8B929E] font-medium shrink-0">
               {t('impact.examples')}
             </span>
@@ -161,6 +161,7 @@ export const RequirementPanel: React.FC<RequirementPanelProps> = ({
 
           {/* Dedicated Prompt Textarea Card with Drag & Drop & Paste Support */}
           <div
+            id="tour-impact-input"
             onDragOver={(e) => {
               e.preventDefault();
               setIsDragging(true);
@@ -265,6 +266,7 @@ export const RequirementPanel: React.FC<RequirementPanelProps> = ({
                 />
 
                 <button
+                  id="tour-impact-attach"
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
@@ -296,6 +298,7 @@ export const RequirementPanel: React.FC<RequirementPanelProps> = ({
                 )}
 
                 <button
+                  id="tour-impact-run-btn"
                   type="submit"
                   disabled={!requirement.trim() || isAnalyzing}
                   className="flex-1 sm:flex-initial h-9 px-4 sm:px-5 rounded-xl bg-[#151923] text-white hover:bg-slate-800 active:bg-black text-xs font-bold transition-all shadow-sm disabled:opacity-75 flex items-center justify-center gap-2 cursor-pointer select-none"
