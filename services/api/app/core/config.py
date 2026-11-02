@@ -26,6 +26,10 @@ class Settings(BaseSettings):
         default="sqlite:///./data/scopegraph.db",
         description="Database connection URL. Defaults to local SQLite for zero-friction standalone dev, supports PostgreSQL"
     )
+    DATABASE_URL_UNPOOLED: str | None = Field(
+        default=None,
+        description="Unpooled database connection URL (recommended by Neon for schema migrations/DDL)"
+    )
 
     # Redis
     REDIS_URL: str = Field(

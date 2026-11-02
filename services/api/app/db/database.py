@@ -8,11 +8,18 @@ logger = logging.getLogger(__name__)
 
 Base = declarative_base()
 
-def get_engine():
-    db_url = settings.DATABASE_URL
-    # Ensure correct driver for postgres
+def normalize_database_url(db_url: str | None) -> str:
+    """Normalize database connection URLs to ensure the correct psycopg driver dialect is used."""
+    if not db_url:
+        return "sqlite:///./data/scopegraph.db"
     if db_url.startswith("postgres://"):
-        db_url = db_url.replace("postgres://", "postgresql+psycopg://", 1)
+        return db_url.replace("postgres://", "postgresql+psycopg://", 1)
+    if db_url.startswith("postgresql://") and not db_url.startswith("postgresql+"):
+        return db_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    return db_url
+
+def get_engine():
+    db_url = normalize_database_url(settings.DATABASE_URL)
 
     connect_args = {}
     if "sqlite" in db_url:

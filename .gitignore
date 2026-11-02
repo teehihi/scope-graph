@@ -60,3 +60,4 @@ review-output/
 .vscode/
 *.swp
 *.swo
+.neon
