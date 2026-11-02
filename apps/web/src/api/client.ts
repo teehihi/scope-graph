@@ -11,7 +11,8 @@ import {
   ScreenshotPreviewResponse,
 } from '../types';
 
-const API_BASE = '/api/v1';
+const RAW_API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.trim() || '';
+const API_BASE = RAW_API_URL ? `${RAW_API_URL.replace(/\/$/, '')}/api/v1` : '/api/v1';
 
 export interface RealtimeVoiceStream {
   sendAudio: (frame: ArrayBuffer) => void;
@@ -24,8 +25,14 @@ export function openRealtimeVoiceStream(
   language: string,
   onTranscript: (transcript: string, isFinal: boolean) => void
 ): Promise<RealtimeVoiceStream> {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const socketUrl = `${protocol}//${window.location.host}${API_BASE}/repositories/${encodeURIComponent(repositoryId)}/voice-stream?language=${encodeURIComponent(language)}`;
+  let socketUrl = '';
+  if (RAW_API_URL) {
+    const wsBase = RAW_API_URL.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:').replace(/\/$/, '');
+    socketUrl = `${wsBase}/api/v1/repositories/${encodeURIComponent(repositoryId)}/voice-stream?language=${encodeURIComponent(language)}`;
+  } else {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    socketUrl = `${protocol}//${window.location.host}${API_BASE}/repositories/${encodeURIComponent(repositoryId)}/voice-stream?language=${encodeURIComponent(language)}`;
+  }
   const socket = new WebSocket(socketUrl);
   socket.binaryType = 'arraybuffer';
 
