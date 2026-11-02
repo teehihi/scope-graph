@@ -2,10 +2,17 @@ import React from 'react';
 import { Link } from '../../router';
 import { ScopeGraphLogoMark } from '../BrandIcons';
 import { useAuth } from '../../context/AuthContext';
-import { Github, ArrowRight } from 'lucide-react';
+import { useLanguage, AVAILABLE_LANGUAGES, Language } from '../../context/LanguageContext';
+import { Github, ArrowRight, Sparkles, Globe } from 'lucide-react';
 
-export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+interface MarketingLayoutProps {
+  children: React.ReactNode;
+  onOpenUpgradeModal?: () => void;
+}
+
+export const MarketingLayout: React.FC<MarketingLayoutProps> = ({ children, onOpenUpgradeModal }) => {
   const { isAuthenticated } = useAuth();
+  const { language, setLanguage, t } = useLanguage();
 
   return (
     <div className="min-h-screen bg-[#F7F8F5] text-[#151923] flex flex-col font-sans selection:bg-[#C7F36B] selection:text-[#151923]">
@@ -19,7 +26,7 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({ child
         </Link>
 
         {/* Center / Right Links */}
-        <nav className="hidden md:flex items-center gap-8 text-xs font-semibold text-[#8B929E]">
+        <nav className="hidden md:flex items-center gap-7 text-xs font-semibold text-[#8B929E]">
           <a href="#how-it-works" className="hover:text-[#151923] transition-colors">
             How it works
           </a>
@@ -32,10 +39,37 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({ child
           <a href="#demo" className="hover:text-[#151923] transition-colors">
             Demo
           </a>
+          {onOpenUpgradeModal && (
+            <button
+              type="button"
+              onClick={onOpenUpgradeModal}
+              className="text-[#151923] font-bold hover:text-[#526BEE] flex items-center gap-1.5 transition-colors cursor-pointer px-2.5 py-1 rounded-lg hover:bg-slate-100"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-[#526BEE]" />
+              <span>{t('pricing.nav_title')}</span>
+            </button>
+          )}
         </nav>
 
-        {/* Auth CTA buttons */}
+        {/* Auth CTA & Language buttons */}
         <div className="flex items-center gap-3">
+          {/* Language Selector */}
+          <div className="relative flex items-center gap-1 bg-white border border-[#E4E7E1] rounded-xl px-2 py-1 shadow-2xs">
+            <Globe className="w-3.5 h-3.5 text-[#8B929E]" />
+            <select
+              value={language}
+              onChange={(e) => setLanguage(e.target.value as Language)}
+              aria-label="Language"
+              className="bg-transparent text-xs font-bold text-[#151923] outline-none cursor-pointer pr-1"
+            >
+              {AVAILABLE_LANGUAGES.map((l) => (
+                <option key={l.code} value={l.code}>
+                  {l.flag} {l.code.toUpperCase()}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {isAuthenticated ? (
             <Link
               to="/app/dashboard"
@@ -48,7 +82,7 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({ child
             <>
               <Link
                 to="/login"
-                className="text-xs font-semibold px-3 py-2 text-[#151923] hover:text-[#526BEE] transition-colors"
+                className="hidden sm:inline-block text-xs font-semibold px-3 py-2 text-[#151923] hover:text-[#526BEE] transition-colors"
               >
                 Log in
               </Link>
@@ -83,6 +117,15 @@ export const MarketingLayout: React.FC<{ children: React.ReactNode }> = ({ child
           </div>
 
           <div className="flex items-center gap-6 text-xs text-[#8B929E]">
+            {onOpenUpgradeModal && (
+              <button
+                type="button"
+                onClick={onOpenUpgradeModal}
+                className="font-semibold hover:text-[#151923] transition-colors cursor-pointer"
+              >
+                {t('pricing.nav_title')}
+              </button>
+            )}
             <a
               href="https://github.com"
               target="_blank"
