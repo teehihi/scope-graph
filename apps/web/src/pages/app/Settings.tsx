@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useLanguage, AVAILABLE_LANGUAGES, Language } from '../../context/LanguageContext';
 import { AppLayout } from '../../components/layouts/AppLayout';
 import { UpgradeModal } from '../../components/UpgradeModal';
+import { OnboardingTour, TourStep } from '../../components/OnboardingTour';
 import { fetchSystemInfo, updateSystemSettings, testAiConnection } from '../../api/client';
 import { SystemInfo } from '../../types';
 import {
@@ -22,7 +23,8 @@ import {
   EyeOff,
   RotateCcw,
   Activity,
-  LockKeyhole,
+  HelpCircle,
+  Sparkles,
 } from 'lucide-react';
 
 interface ProviderPreset {
@@ -126,7 +128,6 @@ export const SettingsPage: React.FC = () => {
   const [isAdvancedModalOpen, setIsAdvancedModalOpen] = useState(false);
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
-  const [multiAiError, setMultiAiError] = useState(false);
 
   // Advanced modal custom dropdown states
   const [isProviderDropdownOpen, setIsProviderDropdownOpen] = useState(false);
@@ -235,12 +236,14 @@ export const SettingsPage: React.FC = () => {
   };
 
   const [mcpTab, setMcpTab] = useState<'remote' | 'local'>('remote');
+  const [selectedClient, setSelectedClient] = useState<'cursor' | 'claude' | 'cli'>('cursor');
+  const [showTour, setShowTour] = useState(false);
+  const handleCloseTour = () => setShowTour(false);
 
-  const rawApiUrl = import.meta.env.VITE_API_URL || '';
-  const effectiveApiUrl = rawApiUrl
-    ? rawApiUrl.replace(/\/$/, '')
-    : (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8000');
-  const mcpSseUrl = `${effectiveApiUrl}/mcp/sse`;
+  // Uses frontend reverse proxy to completely mask backend URL
+  const mcpSseUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}/mcp/sse`
+    : 'https://scopegraph.vercel.app/mcp/sse';
 
   const mcpRemoteConfig = `{
   "mcpServers": {
@@ -277,42 +280,74 @@ export const SettingsPage: React.FC = () => {
     setTimeout(() => setSaveToast(false), 2500);
   };
 
-  const handleToggleMultiAi = async () => {
-    if (user?.plan !== 'plus' && user?.plan !== 'pro') {
-      setIsUpgradeModalOpen(true);
-      return;
-    }
-    setMultiAiError(false);
-    setIsSaving(true);
-    try {
-      const providerProfile = systemInfo?.provider_profile === 'multi_ai' ? 'meta_only' : 'multi_ai';
-      const updated = await updateSystemSettings({ provider_profile: providerProfile, email: user?.email });
-      setSystemInfo(updated);
-    } catch {
-      setMultiAiError(true);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   const currentLangObj = AVAILABLE_LANGUAGES.find((l) => l.code === language) || AVAILABLE_LANGUAGES[0];
+
+  const settingsTourSteps: TourStep[] = [
+    {
+      id: 'lang',
+      targetSelector: '#tour-settings-lang',
+      title: t('settings.tour_step_lang_title'),
+      placement: 'bottom',
+      spotlightPadding: 6,
+      spotlightRadius: 16,
+      description: t('settings.tour_step_lang_desc'),
+    },
+    {
+      id: 'account',
+      targetSelector: '#tour-settings-account',
+      title: t('settings.tour_step_account_title'),
+      placement: 'bottom',
+      spotlightPadding: 6,
+      spotlightRadius: 16,
+      description: t('settings.tour_step_account_desc'),
+    },
+    {
+      id: 'ai',
+      targetSelector: '#tour-settings-ai',
+      title: t('settings.tour_step_ai_title'),
+      placement: 'bottom',
+      spotlightPadding: 6,
+      spotlightRadius: 16,
+      description: t('settings.tour_step_ai_desc'),
+    },
+    {
+      id: 'mcp',
+      targetSelector: '#tour-settings-mcp',
+      title: t('settings.tour_step_mcp_title'),
+      placement: 'top',
+      spotlightPadding: 6,
+      spotlightRadius: 16,
+      description: t('settings.tour_step_mcp_desc'),
+    },
+  ];
 
   return (
     <AppLayout
       title={t('settings.title')}
       subtitle={t('settings.subtitle')}
       actions={
-        saveToast ? (
-          <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200 animate-fade-in shadow-xs">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-            <span>{t('common.saved')}</span>
-          </span>
-        ) : undefined
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowTour(true)}
+            className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-white text-[#151923] border border-[#E4E7E1] hover:bg-slate-50 transition-colors shadow-xs shrink-0 cursor-pointer"
+            title={t('dash.tour_btn')}
+          >
+            <HelpCircle className="w-3.5 h-3.5 text-[#526BEE]" />
+            <span className="hidden sm:inline">{t('dash.tour_btn')}</span>
+          </button>
+          {saveToast && (
+            <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200 animate-fade-in shadow-xs">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              <span>{t('common.saved')}</span>
+            </span>
+          )}
+        </div>
       }
     >
       <div className="p-6 sm:p-8 max-w-5xl w-full mx-auto space-y-6">
         {/* 1. Global Language & Regional Localization */}
-        <div className="p-6 rounded-2xl bg-white border border-[#E4E7E1] shadow-xs space-y-5">
+        <div id="tour-settings-lang" className="p-6 rounded-2xl bg-white border border-[#E4E7E1] shadow-xs space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-blue-50 text-[#526BEE] border border-blue-100">
@@ -455,7 +490,7 @@ export const SettingsPage: React.FC = () => {
         </div>
 
         {/* 2. Account Profile */}
-        <div className="p-6 rounded-2xl bg-white border border-[#E4E7E1] shadow-xs space-y-4">
+        <div id="tour-settings-account" className="p-6 rounded-2xl bg-white border border-[#E4E7E1] shadow-xs space-y-4">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-slate-100 text-[#151923]">
               <UserCheck className="w-5 h-5" />
@@ -495,7 +530,7 @@ export const SettingsPage: React.FC = () => {
         </div>
 
         {/* 3. Meta AI Intelligence Provider */}
-        <div className="p-6 rounded-2xl bg-white border border-[#E4E7E1] shadow-xs space-y-4">
+        <div id="tour-settings-ai" className="p-6 rounded-2xl bg-white border border-[#E4E7E1] shadow-xs space-y-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-slate-100 text-[#151923]">
@@ -539,32 +574,21 @@ export const SettingsPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="pt-1 flex items-center justify-between gap-4 p-3.5 rounded-xl bg-[#F7F8F5] border border-[#E4E7E1]">
-            <div className="min-w-0">
+          <div className="flex min-h-[112px] items-center justify-between gap-4 rounded-xl border border-[#E4E7E1] bg-[#F7F8F5] p-3.5">
+            <div className="min-w-0 self-center">
               <h4 className="text-xs font-bold text-[#151923]">{t('settings.ai.multi_ai_title')}</h4>
               <p className="mt-1 text-[11px] leading-relaxed text-[#8B929E]">{t('settings.ai.multi_ai_desc')}</p>
-              {multiAiError && <p role="alert" className="mt-1 text-[11px] font-semibold text-rose-700">{t('settings.ai.profile_error')}</p>}
             </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={systemInfo?.provider_profile === 'multi_ai'}
-              aria-label={t('settings.ai.multi_ai_title')}
-              onClick={() => void handleToggleMultiAi()}
-              disabled={isSaving}
-              title={user?.plan === 'plus' || user?.plan === 'pro' ? undefined : t('pricing.plus_title')}
-              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-60 ${systemInfo?.provider_profile === 'multi_ai' ? 'bg-[#526BEE]' : 'bg-slate-300'}`}
-            >
-              {user?.plan !== 'plus' && user?.plan !== 'pro' ? (
-                <LockKeyhole className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-white p-0.5 text-[#526BEE] shadow" />
-              ) : null}
-              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${systemInfo?.provider_profile === 'multi_ai' ? 'translate-x-6' : 'translate-x-1'}`} />
-            </button>
+            {systemInfo?.provider_profile === 'multi_ai' && (
+              <span className="shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold uppercase text-emerald-800">
+                {t('common.active')}
+              </span>
+            )}
           </div>
         </div>
 
         {/* 4. Model Context Protocol (MCP) */}
-        <div className="p-6 rounded-2xl bg-white border border-[#E4E7E1] shadow-xs space-y-4">
+        <div id="tour-settings-mcp" className="p-6 rounded-2xl bg-white border border-[#E4E7E1] shadow-xs space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-slate-100 text-[#151923]">
@@ -616,6 +640,185 @@ export const SettingsPage: React.FC = () => {
           <pre className="p-4 rounded-xl bg-[#151923] text-slate-100 font-mono text-xs overflow-x-auto border border-slate-800 shadow-inner">
             {activeMcpConfig}
           </pre>
+
+          {/* Client Setup Guide */}
+          <div className="pt-2 border-t border-[#E4E7E1] space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <span className="text-xs font-bold text-[#151923] flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-[#526BEE]" />
+                {t('settings.mcp.guide_title')}
+              </span>
+              <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 border border-[#E4E7E1]">
+                <button
+                  type="button"
+                  onClick={() => setSelectedClient('cursor')}
+                  className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    selectedClient === 'cursor' ? 'bg-white text-[#151923] shadow-xs' : 'text-[#8B929E] hover:text-[#151923]'
+                  }`}
+                >
+                  {t('settings.mcp.client_cursor')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedClient('claude')}
+                  className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    selectedClient === 'claude' ? 'bg-white text-[#151923] shadow-xs' : 'text-[#8B929E] hover:text-[#151923]'
+                  }`}
+                >
+                  {t('settings.mcp.client_claude')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedClient('cli')}
+                  className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    selectedClient === 'cli' ? 'bg-white text-[#151923] shadow-xs' : 'text-[#8B929E] hover:text-[#151923]'
+                  }`}
+                >
+                  {t('settings.mcp.client_cli')}
+                </button>
+              </div>
+            </div>
+
+            {/* Steps Container */}
+            <div className="rounded-xl border border-[#E4E7E1] bg-[#F7F8F5] p-4 space-y-3 text-xs text-[#151923]">
+              {selectedClient === 'cursor' && (
+                <div className="space-y-2.5">
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-[#151923] text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">1</span>
+                    <span className="leading-relaxed">{t('settings.mcp.cursor_step_1')}</span>
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-[#151923] text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">2</span>
+                    <span className="leading-relaxed">{t('settings.mcp.cursor_step_2')}</span>
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-[#151923] text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">3</span>
+                    <div className="space-y-1.5 flex-1">
+                      <span className="leading-relaxed block">{t('settings.mcp.cursor_step_3')}</span>
+                      <div className="flex items-center gap-2 bg-white px-2.5 py-1.5 rounded-lg border border-[#E4E7E1] font-mono text-[11px] text-[#526BEE]">
+                        <span className="truncate flex-1">{mcpSseUrl}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(mcpSseUrl);
+                            setCopiedMcp(true);
+                            setTimeout(() => setCopiedMcp(false), 2000);
+                          }}
+                          className="text-[#8B929E] hover:text-[#151923] shrink-0 p-1"
+                          title={t('settings.mcp.copy_btn')}
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedClient === 'claude' && (
+                <div className="space-y-2.5">
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-[#151923] text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">1</span>
+                    <div className="space-y-1 flex-1">
+                      <span className="leading-relaxed block">{t('settings.mcp.claude_step_1')}</span>
+                      <span className="text-[11px] font-mono text-[#8B929E] block">
+                        macOS: ~/Library/Application Support/Claude/claude_desktop_config.json
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-[#151923] text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">2</span>
+                    <span className="leading-relaxed">{t('settings.mcp.claude_step_2')}</span>
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-[#151923] text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">3</span>
+                    <span className="leading-relaxed">{t('settings.mcp.claude_step_3')}</span>
+                  </div>
+                </div>
+              )}
+
+              {selectedClient === 'cli' && (
+                <div className="space-y-2.5">
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-[#151923] text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">1</span>
+                    <div className="space-y-1.5 flex-1">
+                      <span className="leading-relaxed block">{t('settings.mcp.cli_step_1')}</span>
+                      <div className="flex items-center gap-2 bg-[#151923] text-slate-100 px-3 py-2 rounded-lg font-mono text-[11px] border border-slate-800">
+                        <span className="truncate flex-1 select-all">{`claude mcp add scopegraph -- ${mcpSseUrl}`}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(`claude mcp add scopegraph -- ${mcpSseUrl}`);
+                            setCopiedMcp(true);
+                            setTimeout(() => setCopiedMcp(false), 2000);
+                          }}
+                          className="text-slate-400 hover:text-white shrink-0 p-1"
+                          title={t('settings.mcp.copy_btn')}
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-[#151923] text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">2</span>
+                    <span className="leading-relaxed">{t('settings.mcp.cli_step_2')}</span>
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-[#151923] text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">3</span>
+                    <span className="leading-relaxed">{t('settings.mcp.cli_step_3')}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Tools Grid Showcase */}
+          <div className="pt-2 border-t border-[#E4E7E1] space-y-3">
+            <span className="text-xs font-bold text-[#151923] block">
+              {t('settings.mcp.tools_title')}
+            </span>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="p-3.5 rounded-xl border border-[#E4E7E1] bg-[#F7F8F5] space-y-2 hover:border-[#526BEE]/40 transition-colors">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-md bg-blue-100 text-[#526BEE]">
+                    {t('settings.mcp.tool_analyze_badge')}
+                  </span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                </div>
+                <h5 className="font-mono text-xs font-bold text-[#151923]">analyze_change</h5>
+                <p className="text-[11px] text-[#8B929E] leading-relaxed">
+                  {t('settings.mcp.tool_analyze')}
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl border border-[#E4E7E1] bg-[#F7F8F5] space-y-2 hover:border-[#526BEE]/40 transition-colors">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-md bg-purple-100 text-purple-700">
+                    {t('settings.mcp.tool_context_badge')}
+                  </span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                </div>
+                <h5 className="font-mono text-xs font-bold text-[#151923]">get_relevant_context</h5>
+                <p className="text-[11px] text-[#8B929E] leading-relaxed">
+                  {t('settings.mcp.tool_context')}
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl border border-[#E4E7E1] bg-[#F7F8F5] space-y-2 hover:border-[#526BEE]/40 transition-colors">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800">
+                    {t('settings.mcp.tool_tests_badge')}
+                  </span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                </div>
+                <h5 className="font-mono text-xs font-bold text-[#151923]">suggest_tests</h5>
+                <p className="text-[11px] text-[#8B929E] leading-relaxed">
+                  {t('settings.mcp.tool_tests')}
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -959,6 +1162,13 @@ export const SettingsPage: React.FC = () => {
           document.body
         )}
       <UpgradeModal isOpen={isUpgradeModalOpen} onClose={() => setIsUpgradeModalOpen(false)} />
+      <OnboardingTour
+        isOpen={showTour}
+        steps={settingsTourSteps}
+        onClose={handleCloseTour}
+        onComplete={handleCloseTour}
+        onSkip={handleCloseTour}
+      />
     </AppLayout>
   );
 };

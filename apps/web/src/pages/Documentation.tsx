@@ -167,7 +167,7 @@ export const Documentation: React.FC = () => {
 {`{
   "mcpServers": {
     "scopegraph": {
-      "url": "https://scope-graph.onrender.com/mcp/sse"
+      "url": "https://scopegraph.vercel.app/mcp/sse"
     }
   }
 }`}

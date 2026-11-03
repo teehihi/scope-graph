@@ -2,6 +2,14 @@
   "framework": "vite",
   "rewrites": [
     {
+      "source": "/api/:match*",
+      "destination": "https://scopegraph-api.onrender.com/api/:match*"
+    },
+    {
+      "source": "/mcp/:match*",
+      "destination": "https://scope-graph.onrender.com/mcp/:match*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
