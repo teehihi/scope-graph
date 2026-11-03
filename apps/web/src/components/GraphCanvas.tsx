@@ -220,7 +220,7 @@ const CanvasFloatingDock: React.FC<{
             onClick={onToggleGrid}
             className={`relative group w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${
               gridMode !== 'off'
-                ? 'text-[#526BEE] bg-[#526BEE]/10'
+                ? 'bg-[#151923] text-white shadow-sm'
                 : 'text-[#8B929E] hover:text-[#151923] hover:bg-slate-100'
             }`}
             title={`${t('graph.grid_toggle')} (${
@@ -231,7 +231,7 @@ const CanvasFloatingDock: React.FC<{
                 : 'Off'
             })`}
           >
-            <Grid className="w-4 h-4" />
+            <Grid className={`w-4 h-4 ${gridMode !== 'off' ? 'text-[#C7F36B]' : ''}`} />
             {/* Tooltip to the left */}
             <div className="absolute right-full mr-2.5 top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-xl bg-[#151923] text-white text-xs font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 shadow-xl flex items-center gap-1.5 z-50">
               <span>{t('graph.grid_toggle')}: {
