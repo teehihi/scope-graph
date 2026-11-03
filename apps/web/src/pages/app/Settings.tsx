@@ -236,7 +236,7 @@ export const SettingsPage: React.FC = () => {
   };
 
   const [mcpTab, setMcpTab] = useState<'remote' | 'local'>('remote');
-  const [selectedClient, setSelectedClient] = useState<'cursor' | 'claude' | 'antigravity'>('cursor');
+  const [selectedClient, setSelectedClient] = useState<'cursor' | 'claude' | 'antigravity' | 'codex'>('cursor');
   const [localPlatform, setLocalPlatform] = useState<'windows' | 'macos'>(
     typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform) ? 'macos' : 'windows',
   );
@@ -251,7 +251,9 @@ export const SettingsPage: React.FC = () => {
 
   const mcpRemoteConfig = selectedClient === 'claude'
     ? mcpRemoteUrl
-    : JSON.stringify({
+    : selectedClient === 'codex'
+      ? `[mcp_servers.scopegraph]\nurl = ${JSON.stringify(mcpRemoteUrl)}`
+      : JSON.stringify({
       mcpServers: {
         scopegraph: selectedClient === 'antigravity'
           ? { serverUrl: mcpRemoteUrl }
@@ -264,7 +266,17 @@ export const SettingsPage: React.FC = () => {
     ? `${normalizedRepoPath}\\${part.replace(/\//g, '\\')}`
     : `${normalizedRepoPath}/${part}`;
   const mcpLocalConfig = normalizedRepoPath
-    ? JSON.stringify({
+    ? selectedClient === 'codex'
+      ? [
+        '[mcp_servers.scopegraph]',
+        `command = ${JSON.stringify(localJoin(localPlatform === 'windows' ? '.venv/Scripts/python.exe' : '.venv/bin/python'))}`,
+        'args = ["-m", "app.mcp.server"]',
+        `cwd = ${JSON.stringify(localJoin('services/api'))}`,
+        '',
+        '[mcp_servers.scopegraph.env]',
+        `PYTHONPATH = ${JSON.stringify(localJoin('services/api'))}`,
+      ].join('\n')
+      : JSON.stringify({
       mcpServers: {
         scopegraph: {
           command: localJoin(localPlatform === 'windows' ? '.venv/Scripts/python.exe' : '.venv/bin/python'),
@@ -697,7 +709,7 @@ export const SettingsPage: React.FC = () => {
                 <Sparkles className="w-3.5 h-3.5 text-[#526BEE]" />
                 {t('settings.mcp.guide_title')}
               </span>
-              <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 border border-[#E4E7E1]">
+              <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-xl bg-slate-100 border border-[#E4E7E1]">
                 <button
                   type="button"
                   onClick={() => setSelectedClient('cursor')}
@@ -724,6 +736,15 @@ export const SettingsPage: React.FC = () => {
                   }`}
                 >
                   {t('settings.mcp.client_antigravity')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedClient('codex')}
+                  className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    selectedClient === 'codex' ? 'bg-white text-[#151923] shadow-xs' : 'text-[#8B929E] hover:text-[#151923]'
+                  }`}
+                >
+                  {t('settings.mcp.client_codex')}
                 </button>
               </div>
             </div>
@@ -784,16 +805,33 @@ export const SettingsPage: React.FC = () => {
               {selectedClient === 'antigravity' && (
                 <div className="space-y-2.5">
                   <div className="flex items-start gap-2.5">
-                    <span className="w-5 h-5 rounded-full bg-[#C7F36B] text-[#151923] flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">1</span>
+                    <span className="w-5 h-5 rounded-full bg-[#151923] text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">1</span>
                     <span className="leading-relaxed">{t('settings.mcp.antigravity_step_1')}</span>
                   </div>
                   <div className="flex items-start gap-2.5">
-                    <span className="w-5 h-5 rounded-full bg-[#C7F36B] text-[#151923] flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">2</span>
+                    <span className="w-5 h-5 rounded-full bg-[#151923] text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">2</span>
                     <span className="leading-relaxed">{t('settings.mcp.antigravity_step_2')}</span>
                   </div>
                   <div className="flex items-start gap-2.5">
-                    <span className="w-5 h-5 rounded-full bg-[#C7F36B] text-[#151923] flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">3</span>
+                    <span className="w-5 h-5 rounded-full bg-[#151923] text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">3</span>
                     <span className="leading-relaxed">{t('settings.mcp.antigravity_step_3')}</span>
+                  </div>
+                </div>
+              )}
+
+              {selectedClient === 'codex' && (
+                <div className="space-y-2.5">
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-[#151923] text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">1</span>
+                    <span className="leading-relaxed">{t('settings.mcp.codex_step_1')}</span>
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-[#151923] text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">2</span>
+                    <span className="leading-relaxed">{t('settings.mcp.codex_step_2')}</span>
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-[#151923] text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">3</span>
+                    <span className="leading-relaxed">{t('settings.mcp.codex_step_3')}</span>
                   </div>
                 </div>
               )}
