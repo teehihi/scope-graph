@@ -4,11 +4,47 @@ from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, Foreig
 from sqlalchemy.orm import relationship
 from app.db.database import Base
 
+
 def generate_uuid() -> str:
     return str(uuid.uuid4())
 
+
 def utc_now():
     return datetime.datetime.now(datetime.timezone.utc)
+
+
+class User(Base):
+    """Real user accounts with email/password or OAuth provider identity."""
+
+    __tablename__ = "users"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    email = Column(String(255), nullable=False, unique=True, index=True)
+    name = Column(String(255), nullable=False, default="Developer")
+    # password_hash is null for OAuth-only accounts
+    password_hash = Column(String(255), nullable=True)
+    is_verified = Column(Boolean, nullable=False, default=False)
+    onboarding_completed = Column(Boolean, nullable=False, default=False)
+    provider = Column(String(20), nullable=False, default="email")  # email | github | google
+    avatar_url = Column(String(1024), nullable=True)
+    username = Column(String(255), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+    updated_at = Column(DateTime, nullable=False, default=utc_now, onupdate=utc_now)
+
+
+class OtpCode(Base):
+    """One-time password codes for email verification during registration."""
+
+    __tablename__ = "otp_codes"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    email = Column(String(255), nullable=False, index=True)
+    code = Column(String(6), nullable=False)
+    purpose = Column(String(30), nullable=False, default="registration")  # registration | password_reset
+    used = Column(Boolean, nullable=False, default=False)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+
 
 class Repository(Base):
     __tablename__ = "repositories"

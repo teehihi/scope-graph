@@ -97,6 +97,19 @@ class Settings(BaseSettings):
     MODAL_REASONING_REQUEST_BUDGET: int = Field(default=2, ge=1, le=10)
     MODAL_REASONING_META_FALLBACK: bool = False
 
+    # Email / SMTP (for OTP verification)
+    SMTP_HOST: str = Field(default="", description="SMTP host for sending emails")
+    SMTP_PORT: int = Field(default=587, description="SMTP port")
+    SMTP_USER: str = Field(default="", description="SMTP username")
+    SMTP_PASSWORD: str = Field(default="", description="SMTP password")
+    SMTP_FROM: str = Field(default="noreply@scopegraph.dev", description="Sender email address")
+    SMTP_USE_TLS: bool = Field(default=True, description="Use STARTTLS")
+
+    # Auth JWT
+    SECRET_KEY: str = Field(default="scopegraph-dev-secret-change-in-production", description="JWT signing secret")
+    JWT_ALGORITHM: str = Field(default="HS256")
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=60 * 24 * 7)  # 7 days
+
     # GitHub OAuth
     GITHUB_CLIENT_ID: str = Field(default="", description="GitHub OAuth Client ID")
     GITHUB_CLIENT_SECRET: str = Field(default="", description="GitHub OAuth Client Secret")

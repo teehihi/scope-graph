@@ -1,15 +1,91 @@
 import logging
 import asyncio
 import hashlib
+import random
+import secrets
+import smtplib
+import string
+from datetime import datetime, timezone, timedelta
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
 import httpx
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field, EmailStr
+from sqlalchemy.orm import Session
+
 from app.core.config import settings
+from app.db.database import get_db
+from app.db.models import User, OtpCode
 from app.jobs.queue import get_cache, set_cache
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _hash_password(password: str) -> str:
+    import hashlib
+    salt = secrets.token_hex(16)
+    pw_hash = hashlib.sha256((salt + password).encode()).hexdigest()
+    return f"{salt}:{pw_hash}"
+
+def _verify_password(password: str, password_hash: str) -> bool:
+    import hashlib
+    try:
+        salt, pw_hash = password_hash.split(":", 1)
+        return hashlib.sha256((salt + password).encode()).hexdigest() == pw_hash
+    except Exception:
+        return False
+
+def _generate_otp() -> str:
+    return "".join(random.choices(string.digits, k=6))
+
+def _send_otp_email(to_email: str, otp: str, name: str = "") -> bool:
+    """Send OTP email. Returns True on success, False if SMTP is not configured (dev mode: logs OTP)."""
+    if not settings.SMTP_HOST or not settings.SMTP_USER:
+        # Dev fallback — print OTP to server logs
+        logger.info("=== DEV OTP for %s: %s ===", to_email, otp)
+        return True
+
+    subject = "ScopeGraph – Your verification code"
+    body_html = f"""
+<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#F7F8F5;border-radius:16px">
+  <h2 style="font-size:20px;font-weight:700;color:#151923;margin-bottom:8px">Verify your email</h2>
+  <p style="color:#8B929E;font-size:14px;margin-bottom:24px">
+    Hi{f' {name}' if name else ''}! Enter this code to complete your ScopeGraph registration.
+  </p>
+  <div style="background:#fff;border-radius:12px;border:1px solid #E4E7E1;padding:24px;text-align:center;letter-spacing:8px;font-size:32px;font-weight:700;color:#151923">
+    {otp}
+  </div>
+  <p style="color:#8B929E;font-size:12px;margin-top:16px">
+    This code expires in 10 minutes. If you didn't request this, you can safely ignore this email.
+  </p>
+</div>
+"""
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = settings.SMTP_FROM
+        msg["To"] = to_email
+        msg.attach(MIMEText(body_html, "html"))
+
+        with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as smtp:
+            if settings.SMTP_USE_TLS:
+                smtp.starttls()
+            smtp.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+            smtp.sendmail(settings.SMTP_FROM, [to_email], msg.as_string())
+        return True
+    except Exception as exc:
+        logger.warning("Failed to send OTP email to %s: %r", to_email, exc)
+        return False
+
+def _normalize_email(email: str) -> str:
+    return email.strip().lower()
+
 
 class GitHubAuthRequest(BaseModel):
     code: str = Field(description="GitHub authorization code")
