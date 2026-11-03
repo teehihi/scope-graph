@@ -15,6 +15,7 @@ from sqlalchemy.orm import sessionmaker
 from app.ai.provider import AIProviderResponse, OfflineDemoProvider
 from app.analysis import orchestrator as orchestrator_module
 from app.api.routes import analysis as analysis_routes
+from app.jobs import tasks as job_tasks
 from app.core.config import settings
 from app.db.database import Base, get_db
 from app.db.models import IndexedFile, IndexedSymbol, Repository, UserSubscription
@@ -47,6 +48,8 @@ def client(tmp_path, monkeypatch):
     )
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine)
+    monkeypatch.setattr(job_tasks, "SessionLocal", factory)
+    monkeypatch.setattr(analysis_routes, "enqueue_job", lambda func, *args, **kwargs: func(*args, **kwargs))
     source = tmp_path / "app/article_listing.py"
     source.parent.mkdir()
     source.write_text("def list_articles():\n    return []\n", encoding="utf-8")
@@ -83,7 +86,7 @@ def upload(client, image, mime="image/png", requirement="Add author filtering to
     )
 
 
-def test_upload_runs_sync_without_text_cache_or_persisted_image(client, monkeypatch):
+def test_upload_runs_in_background_without_text_cache_or_persisted_image(client, monkeypatch):
     http, provider = client
     image = "services/api/tests/evaluation/screenshots_v1/account_email.png"
     image_bytes = Path(image).read_bytes()

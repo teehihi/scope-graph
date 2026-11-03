@@ -18,6 +18,7 @@ from app.core.config import settings
 from app.db.database import get_db
 from app.db.models import User, OtpCode
 from app.jobs.queue import get_cache, set_cache
+from app.core.sessions import issue_session_token, revoke_session, require_session_user
 
 logger = logging.getLogger(__name__)
 
@@ -624,8 +625,8 @@ def register_verify_otp(req: VerifyOtpRequest, db: Session = Depends(get_db)):
     # Check if user was already created (partial retry)
     user = db.query(User).filter(User.email == normalized_email).first()
     if user and user.is_verified:
+        token = issue_session_token(user)
         db.commit()
-        token = secrets.token_urlsafe(32)
         return EmailAuthResponse(
             user=UserResponse(id=user.id, email=user.email, name=user.name, provider=user.provider),
             access_token=token,
@@ -656,7 +657,8 @@ def register_verify_otp(req: VerifyOtpRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
 
-    token = secrets.token_urlsafe(32)
+    token = issue_session_token(user)
+    db.commit()
     logger.info("User registered successfully: %s", normalized_email)
     return EmailAuthResponse(
         user=UserResponse(id=user.id, email=user.email, name=user.name, provider=user.provider),
@@ -687,7 +689,8 @@ def email_login(req: LoginRequest, db: Session = Depends(get_db)):
     if not user.password_hash or not _verify_password(req.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Incorrect password. Please try again.")
 
-    token = secrets.token_urlsafe(32)
+    token = issue_session_token(user)
+    db.commit()
     logger.info("User logged in: %s", normalized_email)
     return EmailAuthResponse(
         user=UserResponse(id=user.id, email=user.email, name=user.name, provider=user.provider),
@@ -750,9 +753,41 @@ def oauth_complete_onboarding(
     name = payload.get("name") or ""
     avatar_url = payload.get("avatar_url")
     username = payload.get("username")
+    provider_token = payload.get("access_token")
 
     if not email or not provider:
         raise HTTPException(status_code=422, detail="email and provider are required")
+    if provider not in {"github", "google"} or not provider_token:
+        raise HTTPException(status_code=401, detail="OAuth verification is required")
+    try:
+        if provider == "github":
+            headers = {"Authorization": f"Bearer {provider_token}", "Accept": "application/vnd.github+json"}
+            profile_response = httpx.get("https://api.github.com/user", headers=headers, timeout=8.0)
+            emails_response = httpx.get("https://api.github.com/user/emails", headers=headers, timeout=8.0)
+            profile_response.raise_for_status()
+            emails_response.raise_for_status()
+            profile = profile_response.json()
+            verified_emails = {
+                item.get("email", "").strip().lower()
+                for item in emails_response.json()
+                if isinstance(item, dict) and item.get("verified") is True
+            }
+            if email not in verified_emails:
+                raise HTTPException(status_code=401, detail="OAuth account does not match the submitted email")
+        else:
+            profile_response = httpx.get(
+                "https://www.googleapis.com/oauth2/v3/userinfo",
+                headers={"Authorization": f"Bearer {provider_token}"}, timeout=8.0,
+            )
+            profile_response.raise_for_status()
+            profile = profile_response.json()
+            if profile.get("email_verified") is not True or str(profile.get("email", "")).strip().lower() != email:
+                raise HTTPException(status_code=401, detail="OAuth account does not match the submitted email")
+    except HTTPException:
+        raise
+    except httpx.HTTPError as error:
+        logger.warning("OAuth session validation failed (%s)", type(error).__name__)
+        raise HTTPException(status_code=401, detail="Could not verify OAuth account") from None
 
     user = db.query(User).filter(User.email == email).first()
 
@@ -778,11 +813,14 @@ def oauth_complete_onboarding(
 
     db.commit()
     db.refresh(user)
+    session_token = issue_session_token(user)
+    db.commit()
 
     return {
         "is_new_user": is_new,
         "onboarding_completed": user.onboarding_completed,
         "user_id": user.id,
+        "session_token": session_token,
     }
 
 
@@ -794,4 +832,11 @@ def mark_onboarded(email: str, db: Session = Depends(get_db)):
     if user:
         user.onboarding_completed = True
         db.commit()
+    return {"ok": True}
+
+
+@router.post("/logout")
+def logout_session(user: User = Depends(require_session_user), db: Session = Depends(get_db)):
+    revoke_session(user)
+    db.commit()
     return {"ok": True}

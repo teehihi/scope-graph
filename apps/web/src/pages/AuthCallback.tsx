@@ -94,6 +94,7 @@ export const AuthCallback: React.FC = () => {
         // Regular login/register via OAuth — check backend for new vs returning user
         let serverIsNew = false;
         let serverOnboarded = false;
+        let sessionToken: string | undefined;
         try {
           const profile = await oauthCompleteProfile(
             user.email,
@@ -101,9 +102,11 @@ export const AuthCallback: React.FC = () => {
             user.name || user.username || 'Developer',
             user.avatar_url,
             user.username,
+            data.access_token,
           );
           serverIsNew = profile.is_new_user;
           serverOnboarded = profile.onboarding_completed;
+          sessionToken = profile.session_token;
         } catch {
           // Backend unreachable — fall back to localStorage heuristic
           serverIsNew = localStorage.getItem(`scopegraph_onboarded_${user.email}`) !== 'true';
@@ -121,6 +124,7 @@ export const AuthCallback: React.FC = () => {
           user.username,
           serverOnboarded,  // onboarded flag drives where we land
           data.access_token,
+          sessionToken,
         );
 
         setStatus('success');

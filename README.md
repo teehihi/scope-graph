@@ -167,6 +167,12 @@ Open **http://127.0.0.1:5173/**. The Vite dev server proxies `/api` to the local
 
 Docker Compose configuration is included for isolated development, but the latest local audit could validate its configuration only; Docker Engine was unavailable. The Compose stack exposes development service ports and must **not** be published as-is. [Environment and release gates](docs/HACKATHON_FINAL_READINESS.md)
 
+### Background analysis, email, and history
+
+Signed-in users can start an analysis and leave the page; the server continues the job and the result appears in **History**. When it finishes, ScopeGraph emails a link to the report. History is scoped to the signed-in account, can be deleted by the user, and completed/failed entries are automatically removed after seven days by default (`ANALYSIS_RETENTION_DAYS`).
+
+For production, configure `RESEND_API_KEY`, `SMTP_FROM`, and `WEB_APP_URL` on both the API and background worker services. Resend is sent over HTTPS, so SMTP credentials are not needed when `RESEND_API_KEY` is set. The sender domain/address must be verified in Resend. The worker must use the same database and Redis configuration as the API; Redis/RQ keeps queued work available across API restarts. Without Redis, the local in-process fallback runs work in a background thread and cannot recover an interrupted job after a process restart. The worker also runs daily cleanup for expired analysis history. The API container applies Alembic migrations at startup; confirm migration `ae20261103` is applied before using the new history endpoints. See [background analysis operations](docs/BACKGROUND_ANALYSIS.md) for deployment and verification details.
+
 ## Usage
 
 1. Load the bundled sample or upload a ZIP of a repository you are allowed to inspect.

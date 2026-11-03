@@ -41,6 +41,8 @@ export const Login: React.FC = () => {
         'email',
         result.user.username,
         result.onboarding_completed,
+        undefined,
+        result.access_token,
       );
       navigate(result.onboarding_completed ? redirectTarget : '/onboarding');
     } catch (err: any) {

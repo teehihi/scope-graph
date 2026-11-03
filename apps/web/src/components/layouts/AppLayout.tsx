@@ -11,6 +11,7 @@ import {
   Network,
   Zap,
   FolderGit2,
+  History,
   Settings,
   LogOut,
   ChevronRight,
@@ -61,6 +62,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
     { to: '/app/graph', label: t('nav.graph'), icon: Network },
     { to: '/app/impact', label: t('nav.impact'), icon: Zap },
     { to: '/app/repositories', label: t('nav.repositories'), icon: FolderGit2 },
+    { to: '/app/history', label: t('nav.history'), icon: History },
     { to: '/app/settings', label: t('nav.settings'), icon: Settings },
   ];
 

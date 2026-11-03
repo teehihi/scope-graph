@@ -106,19 +106,20 @@ export async function oauthCompleteProfile(
   provider: string,
   name: string,
   avatarUrl?: string,
-  username?: string
-): Promise<{ is_new_user: boolean; onboarding_completed: boolean; user_id: string }> {
+  username?: string,
+  accessToken?: string,
+): Promise<{ is_new_user: boolean; onboarding_completed: boolean; user_id: string; session_token?: string }> {
   const params = new URLSearchParams({ email, provider, name });
   if (avatarUrl) params.set('avatar_url', avatarUrl);
   if (username) params.set('username', username);
   const res = await fetch(`${API_BASE}/auth/oauth/complete-profile`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, provider, name, avatar_url: avatarUrl, username }),
+    body: JSON.stringify({ email, provider, name, avatar_url: avatarUrl, username, access_token: accessToken }),
   });
   if (!res.ok) {
     // Non-critical — proceed as new user if this fails
-    return { is_new_user: true, onboarding_completed: false, user_id: '' };
+    return { is_new_user: true, onboarding_completed: false, user_id: '', session_token: undefined };
   }
   return res.json();
 }
@@ -479,12 +480,13 @@ export async function fetchGraph(
 export async function runAnalysis(
   repoId: string,
   requirement: string,
-  targetLanguage: string = 'en'
+  targetLanguage: string = 'en',
+  sessionToken?: string,
 ): Promise<{ analysis_id: string; status: string; result?: AnalysisReport; brief?: string }> {
   const res = await fetch(`${API_BASE}/repositories/${repoId}/analyze`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ requirement, run_sync: true, target_language: targetLanguage }),
+    headers: { 'Content-Type': 'application/json', ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}) },
+    body: JSON.stringify({ requirement, run_sync: false, target_language: targetLanguage }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: 'Analysis failed' }));
@@ -494,17 +496,63 @@ export async function runAnalysis(
     throw e;
   }
   const data = await res.json();
-  if (data.status === 'failed') {
-    throw new Error(data.error || (data.result && data.result.error) || 'Analysis failed');
+  if (data.status === 'completed' && data.result) return data;
+  const analysisId = data.analysis_id;
+  if (!analysisId) throw new Error('Analysis job was not created');
+  return waitForAnalysis(analysisId, sessionToken);
+}
+
+async function waitForAnalysis(analysisId: string, sessionToken?: string): Promise<{ analysis_id: string; status: string; result?: AnalysisReport; brief?: string }> {
+  for (let attempt = 0; attempt < 180; attempt += 1) {
+    await new Promise((resolve) => window.setTimeout(resolve, 2000));
+    const statusRes = await fetch(`${API_BASE}/analyses/${analysisId}`, {
+      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : undefined,
+    });
+    if (!statusRes.ok) throw new Error('Could not check analysis status');
+    const status = await statusRes.json();
+    if (status.status === 'failed') throw new Error(status.error_message || 'Analysis failed');
+    if (status.status === 'completed') {
+      const [report, brief] = await Promise.all([
+        fetchAnalysisReport(analysisId, sessionToken),
+        fetchImplementationBrief(analysisId, sessionToken),
+      ]);
+      return { analysis_id: analysisId, status: 'completed', result: report, brief: brief.brief_markdown };
+    }
   }
-  return data;
+  throw new Error('Analysis is still running. You can return to it from Analysis History.');
+}
+
+export interface AnalysisHistoryItem {
+  analysis_id: string;
+  repository_id: string;
+  repository_name: string;
+  requirement: string;
+  status: string;
+  created_at: string;
+  completed_at?: string | null;
+}
+
+export async function fetchAnalysisHistory(sessionToken: string): Promise<AnalysisHistoryItem[]> {
+  const res = await fetch(`${API_BASE}/analysis-history`, { headers: { Authorization: `Bearer ${sessionToken}` } });
+  if (!res.ok) throw new Error('Failed to load analysis history');
+  return res.json();
+}
+
+export async function revokeAccountSession(sessionToken: string): Promise<void> {
+  await fetch(`${API_BASE}/auth/logout`, { method: 'POST', headers: { Authorization: `Bearer ${sessionToken}` } });
+}
+
+export async function deleteAnalysisHistory(analysisId: string, sessionToken: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/analysis-history/${encodeURIComponent(analysisId)}`, { method: 'DELETE', headers: { Authorization: `Bearer ${sessionToken}` } });
+  if (!res.ok) throw new Error('Failed to delete analysis');
 }
 
 export async function analyzeScreenshot(
   repoId: string,
   requirement: string,
   screenshot: File,
-  targetLanguage: string = 'en'
+  targetLanguage: string = 'en',
+  sessionToken?: string,
 ): Promise<{ analysis_id: string; status: string; result?: AnalysisReport; brief?: string }> {
   const formData = new FormData();
   formData.append('requirement', requirement);
@@ -513,6 +561,7 @@ export async function analyzeScreenshot(
 
   const res = await fetch(`${API_BASE}/repositories/${repoId}/analyze-screenshot`, {
     method: 'POST',
+    headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : undefined,
     body: formData,
   });
   if (!res.ok) {
@@ -527,17 +576,23 @@ export async function analyzeScreenshot(
   }
   const body = await res.json();
   if (body.status === 'failed') throw new ScreenshotAnalysisFailedError();
-  return body;
+  if (body.result) return body;
+  if (!body.analysis_id) throw new ScreenshotAnalysisFailedError();
+  return waitForAnalysis(body.analysis_id, sessionToken);
 }
 
-export async function fetchAnalysisReport(analysisId: string): Promise<AnalysisReport> {
-  const res = await fetch(`${API_BASE}/analyses/${analysisId}/report`);
+export async function fetchAnalysisReport(analysisId: string, sessionToken?: string): Promise<AnalysisReport> {
+  const res = await fetch(`${API_BASE}/analyses/${analysisId}/report`, {
+    headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : undefined,
+  });
   if (!res.ok) throw new Error('Failed to fetch report');
   return res.json();
 }
 
-export async function fetchImplementationBrief(analysisId: string): Promise<{ brief_markdown: string }> {
-  const res = await fetch(`${API_BASE}/analyses/${analysisId}/implementation-brief`);
+export async function fetchImplementationBrief(analysisId: string, sessionToken?: string): Promise<{ brief_markdown: string }> {
+  const res = await fetch(`${API_BASE}/analyses/${analysisId}/implementation-brief`, {
+    headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : undefined,
+  });
   if (!res.ok) throw new Error('Failed to fetch brief');
   return res.json();
 }

@@ -105,6 +105,8 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = Field(default="", description="SMTP password")
     SMTP_FROM: str = Field(default="ScopeGraph <verify@auth.scopegraph.top>", description="Sender email address")
     SMTP_USE_TLS: bool = Field(default=True, description="Use STARTTLS")
+    ANALYSIS_RETENTION_DAYS: int = Field(default=7, ge=1, le=30)
+    WEB_APP_URL: str = Field(default="https://www.scopegraph.top", description="Public web app URL")
 
     # Auth JWT
     SECRET_KEY: str = Field(default="scopegraph-dev-secret-change-in-production", description="JWT signing secret")

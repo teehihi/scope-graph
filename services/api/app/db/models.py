@@ -28,6 +28,8 @@ class User(Base):
     provider = Column(String(20), nullable=False, default="email")  # email | github | google
     avatar_url = Column(String(1024), nullable=True)
     username = Column(String(255), nullable=True)
+    session_token_hash = Column(String(64), nullable=True, index=True)
+    session_expires_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, nullable=False, default=utc_now)
     updated_at = Column(DateTime, nullable=False, default=utc_now, onupdate=utc_now)
 
@@ -115,7 +117,9 @@ class AnalysisRun(Base):
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
     repository_id = Column(String(36), ForeignKey("repositories.id", ondelete="CASCADE"), nullable=False, index=True)
+    requested_by_email = Column(String(255), nullable=True, index=True)
     requirement_text = Column(Text, nullable=False)
+    target_language = Column(String(8), nullable=False, default="en")
     status = Column(String(50), default="queued")  # queued, processing, completed, failed
     provider = Column(String(50), default="offline_demo")
     model = Column(String(100), default="meta-llama/Llama-3.3-70B-Instruct")

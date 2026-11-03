@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { confirmCheckoutSession, fetchSubscription, SubscriptionPlan } from '../api/client';
+import { confirmCheckoutSession, fetchSubscription, revokeAccountSession, SubscriptionPlan } from '../api/client';
 
 export interface User {
   name: string;
@@ -13,6 +13,7 @@ export interface User {
   role?: string;
   onboarded?: boolean;
   githubToken?: string;
+  sessionToken?: string;
 }
 
 interface AuthContextType {
@@ -27,7 +28,8 @@ interface AuthContextType {
     provider?: 'email' | 'github' | 'google' | 'demo',
     username?: string,
     onboarded?: boolean,
-    githubToken?: string
+    githubToken?: string,
+    sessionToken?: string
   ) => void;
   loginAsDemo: () => void;
   updateUser: (updates: Partial<User>) => void;
@@ -55,6 +57,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored) as Partial<User>;
+        if (!parsed.isDemo && !parsed.sessionToken) {
+          localStorage.removeItem(STORAGE_KEY);
+          setUser(null);
+          return;
+        }
         // Plan is billing state, so only the backend subscription record may grant it.
         // Older builds cached the plan in localStorage, which could mark unpaid users as paid.
         setUser({ ...parsed, plan: 'free' } as User);
@@ -74,7 +81,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     provider: 'email' | 'github' | 'google' | 'demo' = 'email',
     username?: string,
     onboarded?: boolean,
-    githubToken?: string
+    githubToken?: string,
+    sessionToken?: string
   ) => {
     const hasOnboarded =
       onboarded !== undefined
@@ -92,6 +100,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       username,
       onboarded: hasOnboarded,
       githubToken: savedGithubToken,
+      sessionToken,
     };
     setUser(newUser);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(newUser));
@@ -120,6 +129,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    if (user?.sessionToken) void revokeAccountSession(user.sessionToken).catch(() => undefined);
     setUser(null);
     localStorage.removeItem(STORAGE_KEY);
     setBillingConfirmation(null);

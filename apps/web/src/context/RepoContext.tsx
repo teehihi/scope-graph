@@ -51,6 +51,8 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const { user, isLoading: isAuthLoading } = useAuth();
   const userEmailRef = useRef<string | undefined>(user?.email);
   userEmailRef.current = user?.email;
+  const sessionTokenRef = useRef<string | undefined>(user?.sessionToken);
+  sessionTokenRef.current = user?.sessionToken;
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [activeRepo, setActiveRepo] = useState<Repository | null>(null);
   const [isLoadingSample, setIsLoadingSample] = useState(false);
@@ -82,8 +84,8 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAnalysisError(null);
     try {
       const resp = screenshot
-        ? await analyzeScreenshot(repo.id, req, screenshot, language)
-        : await runAnalysis(repo.id, req, language);
+        ? await analyzeScreenshot(repo.id, req, screenshot, language, sessionTokenRef.current)
+        : await runAnalysis(repo.id, req, language, sessionTokenRef.current);
       if (resp && resp.result) {
         const report = resp.result;
         if (!Array.isArray(report.affected_items)) {

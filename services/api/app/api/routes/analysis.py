@@ -1,9 +1,11 @@
 import uuid
+import datetime
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.db.database import get_db
-from app.db.models import Repository, AnalysisRun
+from app.db.models import Repository, AnalysisRun, User
+from app.core.sessions import optional_session_user, require_session_user
 from app.jobs.queue import enqueue_job, get_cache, set_cache, make_analysis_cache_key
 from app.jobs.tasks import task_run_analysis
 from app.analysis.orchestrator import AnalysisOrchestrator
@@ -18,10 +20,52 @@ from app.billing.entitlements import (
 
 router = APIRouter(tags=["analysis"])
 
+
+@router.get("/analysis-history")
+def list_analysis_history(user: User = Depends(require_session_user), db: Session = Depends(get_db)):
+    cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=settings.ANALYSIS_RETENTION_DAYS)
+    runs = (
+        db.query(AnalysisRun, Repository.name)
+        .join(Repository, AnalysisRun.repository_id == Repository.id)
+        .filter(AnalysisRun.requested_by_email == user.email, AnalysisRun.created_at >= cutoff)
+        .order_by(AnalysisRun.created_at.desc())
+        .limit(100)
+        .all()
+    )
+    return [{
+        "analysis_id": run.id,
+        "repository_id": run.repository_id,
+        "repository_name": repo_name,
+        "requirement": run.requirement_text,
+        "status": run.status,
+        "created_at": run.created_at,
+        "completed_at": run.completed_at,
+    } for run, repo_name in runs]
+
+
+@router.delete("/analysis-history/{analysis_id}")
+def delete_analysis_history(analysis_id: str, user: User = Depends(require_session_user), db: Session = Depends(get_db)):
+    run = db.query(AnalysisRun).filter(
+        AnalysisRun.id == analysis_id,
+        AnalysisRun.requested_by_email == user.email,
+    ).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Analysis run not found")
+    if run.status in {"queued", "processing"}:
+        raise HTTPException(status_code=409, detail="An active analysis cannot be deleted")
+    db.delete(run)
+    db.commit()
+    return {"status": "deleted", "analysis_id": analysis_id}
+
 class AnalyzeRequest(BaseModel):
     requirement: str
     run_sync: bool = False
     target_language: str = "en"
+
+
+def _ensure_analysis_access(run: AnalysisRun, user: User | None) -> None:
+    if run.requested_by_email and (not isinstance(user, User) or user.email != run.requested_by_email):
+        raise HTTPException(status_code=404, detail="Analysis run not found")
 
 
 @router.post("/repositories/{repository_id}/analyze-screenshot")
@@ -30,9 +74,10 @@ def analyze_screenshot(
     requirement: str = Form(...),
     screenshot: UploadFile = File(...),
     target_language: str = Form("en"),
+    current_user: User | None = Depends(optional_session_user),
     db: Session = Depends(get_db),
 ):
-    """Run a synchronous image-assisted analysis without using the text cache."""
+    """Queue a validated image-assisted analysis without using the text cache."""
     try:
         repo = db.query(Repository).filter(Repository.id == repository_id).first()
         if not repo:
@@ -60,15 +105,30 @@ def analyze_screenshot(
             status = 413 if "size limit" in str(error) else 400
             raise HTTPException(status_code=status, detail=str(error)) from None
 
-        run = AnalysisOrchestrator(db).run_analysis(
-            repository_id, req_text, target_language=target_language, screenshot=image,
+        analysis_id = str(uuid.uuid4())
+        run = AnalysisRun(
+            id=analysis_id,
+            repository_id=repository_id,
+            requested_by_email=current_user.email if isinstance(current_user, User) else None,
+            requirement_text=req_text,
+            target_language=target_language,
+            status="queued",
         )
+        db.add(run)
+        db.commit()
         record_feature_usage(db, repo, "vision")
+        enqueue_job(
+            task_run_analysis, repository_id, req_text, analysis_id, target_language,
+            current_user.email if isinstance(current_user, User) else None, image._data, image.mime_type,
+        )
+        db.refresh(run)
+        if run.status == "completed":
+            return {"analysis_id": run.id, "status": run.status, "result": run.result_json, "brief": run.brief_markdown}
+        if run.status == "failed":
+            return {"analysis_id": run.id, "status": run.status, "error": run.error_message}
         return {
-            "analysis_id": run.id,
-            "status": run.status,
-            "result": run.result_json,
-            "brief": run.brief_markdown,
+            "analysis_id": analysis_id,
+            "status": "queued",
         }
     finally:
         screenshot.file.close()
@@ -77,8 +137,11 @@ def analyze_screenshot(
 def trigger_analysis(
     repository_id: str,
     payload: AnalyzeRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(optional_session_user),
 ):
+    if not isinstance(current_user, User):
+        current_user = None
     repo = db.query(Repository).filter(Repository.id == repository_id).first()
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
@@ -110,7 +173,9 @@ def trigger_analysis(
         # Cache hit: record or return cached run
         run = AnalysisRun(
             repository_id=repository_id,
+            requested_by_email=current_user.email if current_user else None,
             requirement_text=req_text,
+            target_language=payload.target_language,
             status="completed",
             provider=cached_result.get("operational_metadata", {}).get("provider", "cached"),
             model=cached_result.get("operational_metadata", {}).get("model", settings.META_AI_MODEL),
@@ -133,7 +198,9 @@ def trigger_analysis(
     run = AnalysisRun(
         id=analysis_id,
         repository_id=repository_id,
+        requested_by_email=current_user.email if current_user else None,
         requirement_text=req_text,
+        target_language=payload.target_language,
         status="queued" if not payload.run_sync else "processing",
     )
     db.add(run)
@@ -163,7 +230,10 @@ def trigger_analysis(
         }
     else:
         # Enqueue in Redis queue
-        job_id = enqueue_job(task_run_analysis, repository_id, req_text, analysis_id)
+        job_id = enqueue_job(
+            task_run_analysis, repository_id, req_text, analysis_id,
+            payload.target_language, current_user.email if current_user else None,
+        )
         return {
             "analysis_id": analysis_id,
             "job_id": job_id,
@@ -171,10 +241,15 @@ def trigger_analysis(
         }
 
 @router.get("/analyses/{analysis_id}")
-def get_analysis_status(analysis_id: str, db: Session = Depends(get_db)):
+def get_analysis_status(
+    analysis_id: str,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(optional_session_user),
+):
     run = db.query(AnalysisRun).filter(AnalysisRun.id == analysis_id).first()
     if not run:
         raise HTTPException(status_code=404, detail="Analysis run not found")
+    _ensure_analysis_access(run, current_user)
     return {
         "analysis_id": run.id,
         "repository_id": run.repository_id,
@@ -190,19 +265,29 @@ def get_analysis_status(analysis_id: str, db: Session = Depends(get_db)):
     }
 
 @router.get("/analyses/{analysis_id}/report")
-def get_analysis_report(analysis_id: str, db: Session = Depends(get_db)):
+def get_analysis_report(
+    analysis_id: str,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(optional_session_user),
+):
     run = db.query(AnalysisRun).filter(AnalysisRun.id == analysis_id).first()
     if not run:
         raise HTTPException(status_code=404, detail="Analysis run not found")
+    _ensure_analysis_access(run, current_user)
     if run.status != "completed":
         raise HTTPException(status_code=400, detail=f"Analysis is not completed (current status: {run.status})")
     return run.result_json
 
 @router.get("/analyses/{analysis_id}/implementation-brief")
-def get_analysis_brief(analysis_id: str, db: Session = Depends(get_db)):
+def get_analysis_brief(
+    analysis_id: str,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(optional_session_user),
+):
     run = db.query(AnalysisRun).filter(AnalysisRun.id == analysis_id).first()
     if not run:
         raise HTTPException(status_code=404, detail="Analysis run not found")
+    _ensure_analysis_access(run, current_user)
     if run.status != "completed":
         raise HTTPException(status_code=400, detail=f"Analysis is not completed (current status: {run.status})")
     return {

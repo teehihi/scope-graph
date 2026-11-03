@@ -15,6 +15,7 @@ import { GraphPage } from './pages/app/Graph';
 import { ImpactPage } from './pages/app/Impact';
 import { RepositoriesPage } from './pages/app/Repositories';
 import { SettingsPage } from './pages/app/Settings';
+import { AnalysisHistoryPage } from './pages/app/AnalysisHistory';
 
 export const App: React.FC = () => {
   const { pathname, navigate } = useRouter();
@@ -118,6 +119,9 @@ export const App: React.FC = () => {
     }
     if (pathname === '/app/settings') {
       return <SettingsPage />;
+    }
+    if (pathname === '/app/history') {
+      return <AnalysisHistoryPage />;
     }
   }
 

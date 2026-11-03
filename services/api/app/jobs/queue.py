@@ -2,6 +2,8 @@ import os
 import json
 import logging
 import hashlib
+import threading
+import uuid
 from typing import Any, Callable
 from redis import Redis
 from rq import Queue, Retry
@@ -49,10 +51,11 @@ def enqueue_job(func: Callable, *args, **kwargs) -> str:
         )
         return str(job.id)
     else:
-        # Fallback to direct synchronous execution
-        logger.info("Executing job %s in-process (fallback mode)", func.__name__)
-        func(*args, **kwargs)
-        return "in_process_fallback"
+        # Keep HTTP requests non-blocking when Redis is not configured.
+        job_id = f"local-{uuid.uuid4()}"
+        logger.warning("Redis unavailable; executing %s on a local background thread", func.__name__)
+        threading.Thread(target=func, args=args, kwargs=kwargs, daemon=True, name=f"scopegraph-{func.__name__}").start()
+        return job_id
 
 # Redis Cache helpers
 def get_cache(key: str) -> dict[str, Any] | None:

@@ -141,6 +141,8 @@ export const Register: React.FC = () => {
         'email',
         result.user.username,
         false, // not onboarded yet
+        undefined,
+        result.access_token,
       );
       setStep('success');
       setTimeout(() => navigate('/onboarding'), 1200);
