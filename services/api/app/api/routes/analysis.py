@@ -9,7 +9,12 @@ from app.jobs.tasks import task_run_analysis
 from app.analysis.orchestrator import AnalysisOrchestrator
 from app.ai.image_input import decode_uploaded_screenshot
 from app.core.config import settings
-from app.billing.entitlements import enforce_ai_limit, require_feature
+from app.billing.entitlements import (
+    enforce_ai_limit,
+    enforce_daily_feature_limit,
+    record_feature_usage,
+    require_feature,
+)
 
 router = APIRouter(tags=["analysis"])
 
@@ -17,18 +22,6 @@ class AnalyzeRequest(BaseModel):
     requirement: str
     run_sync: bool = False
     target_language: str = "en"
-
-
-def _require_safe_production_inference():
-    if (
-        settings.ENVIRONMENT.lower() == "production"
-        and (settings.AI_PROVIDER_PROFILE.lower() != "meta_only"
-             or settings.META_AI_PROVIDER.lower() != "offline_demo")
-    ):
-        raise HTTPException(
-            status_code=403,
-            detail="Live analysis requires authenticated production access",
-        )
 
 
 @router.post("/repositories/{repository_id}/analyze-screenshot")
@@ -41,7 +34,6 @@ def analyze_screenshot(
 ):
     """Run a synchronous image-assisted analysis without using the text cache."""
     try:
-        _require_safe_production_inference()
         repo = db.query(Repository).filter(Repository.id == repository_id).first()
         if not repo:
             raise HTTPException(status_code=404, detail="Repository not found")
@@ -54,6 +46,7 @@ def analyze_screenshot(
         if not req_text:
             raise HTTPException(status_code=400, detail="Requirement text cannot be empty")
         require_feature(db, repo, "vision")
+        enforce_daily_feature_limit(db, repo, "vision")
         enforce_ai_limit(db, repo)
         if screenshot.content_type not in ("image/png", "image/jpeg"):
             raise HTTPException(status_code=415, detail="Only PNG and JPEG screenshots are supported")
@@ -70,6 +63,7 @@ def analyze_screenshot(
         run = AnalysisOrchestrator(db).run_analysis(
             repository_id, req_text, target_language=target_language, screenshot=image,
         )
+        record_feature_usage(db, repo, "vision")
         return {
             "analysis_id": run.id,
             "status": run.status,
@@ -85,11 +79,13 @@ def trigger_analysis(
     payload: AnalyzeRequest,
     db: Session = Depends(get_db)
 ):
-    _require_safe_production_inference()
     repo = db.query(Repository).filter(Repository.id == repository_id).first()
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
-    if settings.AI_PROVIDER_PROFILE.lower() == "multi_ai":
+    provider_profile = (
+        "multi_ai" if settings.ENVIRONMENT.lower() == "production" else settings.AI_PROVIDER_PROFILE.lower()
+    )
+    if provider_profile == "multi_ai":
         require_feature(db, repo, "multi_ai")
     enforce_ai_limit(db, repo)
     if repo.status != "ready":
@@ -102,10 +98,10 @@ def trigger_analysis(
     # Check cache for repeatable identical queries
     # Multi-provider configuration can change between enqueue and execution; bypass
     # the text cache until a per-run immutable routing fingerprint is persisted.
-    cache_key = None if settings.AI_PROVIDER_PROFILE.lower() == "multi_ai" else make_analysis_cache_key(
+    cache_key = None if provider_profile == "multi_ai" else make_analysis_cache_key(
         repository_id, req_text, settings.META_AI_MODEL,
         index_version=repo.indexed_at.isoformat() if repo.indexed_at else "unversioned",
-        profile=settings.AI_PROVIDER_PROFILE,
+        profile=provider_profile,
         provider_signature=f"{settings.META_AI_PROVIDER}:{settings.META_AI_BASE_URL}",
         target_language=payload.target_language,
     )

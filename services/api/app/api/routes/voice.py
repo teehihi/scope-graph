@@ -14,7 +14,11 @@ from app.ai.routing import AIStage, StageExecutionError, build_stage_router
 from app.core.config import settings
 from app.db.database import SessionLocal, get_db
 from app.db.models import Repository
-from app.billing.entitlements import require_feature
+from app.billing.entitlements import (
+    enforce_daily_feature_limit,
+    record_feature_usage,
+    require_feature,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +59,7 @@ async def process_voice_requirement(
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
     require_feature(db, repo, "voice")
+    enforce_daily_feature_limit(db, repo, "voice")
 
     content_type = file.content_type or "audio/wav"
     audio_bytes = await file.read()
@@ -102,6 +107,7 @@ async def process_voice_requirement(
         refine_data = refine_resp.data
 
         total_dur = round(time.perf_counter() - t0, 3)
+        record_feature_usage(db, repo, "voice")
 
         return {
             "status": "success",
@@ -127,6 +133,7 @@ async def process_voice_requirement(
         if error.stage == AIStage.REQUIREMENT_REFINEMENT and raw_transcript:
             logger.warning("Voice refinement failed (%s); returning preserved transcript", error.code)
             total_dur = round(time.perf_counter() - t0, 3)
+            record_feature_usage(db, repo, "voice")
             return {
                 "status": "transcribed",
                 "raw_transcript": raw_transcript,
@@ -250,6 +257,7 @@ async def voice_streaming_socket(websocket: WebSocket, repository_id: str):
             return
         try:
             require_feature(db, repo, "voice")
+            enforce_daily_feature_limit(db, repo, "voice")
         except HTTPException as error:
             await websocket.send_text(json.dumps({"type": "error", "message": error.detail}))
             await websocket.close(code=1008)
@@ -300,6 +308,14 @@ async def voice_streaming_socket(websocket: WebSocket, repository_id: str):
             handshake = json.loads(await asyncio.wait_for(meta_ws.recv(), timeout=10.0))
             if not isinstance(handshake, dict) or not handshake.get("sessionId"):
                 raise RuntimeError("Meta realtime ASR handshake was rejected")
+
+            usage_db = SessionLocal()
+            try:
+                usage_repo = usage_db.query(Repository).filter(Repository.id == repository_id).first()
+                if usage_repo:
+                    record_feature_usage(usage_db, usage_repo, "voice")
+            finally:
+                usage_db.close()
 
             async def relay_events() -> None:
                 async for message in meta_ws:

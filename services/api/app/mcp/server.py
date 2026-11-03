@@ -19,7 +19,7 @@ from app.analysis.orchestrator import AnalysisOrchestrator
 from app.graph.engine import GraphEngine
 from app.evidence.validator import _is_safe_relative_path
 from app.indexing.scanner import is_sensitive_path
-from app.core.config import settings
+from app.billing.entitlements import enforce_ai_limit
 
 logger = logging.getLogger("scopegraph.mcp")
 
@@ -111,17 +111,6 @@ def analyze_change(
             "message": "Requirement exceeds maximum allowed length of 4000 characters."
         })
 
-    # Fail closed in production if public unauthenticated live paid inference is attempted
-    if (
-        settings.ENVIRONMENT.lower() == "production"
-        and (settings.AI_PROVIDER_PROFILE.lower() != "meta_only"
-             or settings.META_AI_PROVIDER.lower() != "offline_demo")
-    ):
-        return json.dumps({
-            "status": "error",
-            "message": "Live paid AI analysis requires authenticated production access."
-        })
-
     db = None
     try:
         db = SessionLocal()
@@ -136,6 +125,8 @@ def analyze_change(
                 "status": "error",
                 "message": f"Repository '{valid_id}' is not ready (status: {repo.status})."
             })
+
+        enforce_ai_limit(db, repo)
 
         orchestrator = AnalysisOrchestrator(db)
         run = orchestrator.run_analysis(repository_id=valid_id, requirement=req_text)

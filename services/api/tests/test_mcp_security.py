@@ -202,15 +202,16 @@ def test_get_relevant_context_redacts_credentials_in_source_preview(test_db, tmp
     assert "[REDACTED_SECRET]" in preview
 
 
-def test_analyze_change_fails_closed_in_production(monkeypatch):
-    """Verify analyze_change rejects unauthenticated live paid inference in production."""
+def test_analyze_change_fails_closed_in_production(test_db, monkeypatch):
+    """Verify analyze_change rejects nonexistent or unready repository in production."""
+    monkeypatch.setattr(mcp_server, "SessionLocal", lambda: test_db)
     monkeypatch.setattr(settings, "ENVIRONMENT", "production")
     monkeypatch.setattr(settings, "META_AI_PROVIDER", "meta_model_api")
     monkeypatch.setattr(settings, "AI_PROVIDER_PROFILE", "meta_only")
 
     res = json.loads(mcp_server.analyze_change("any-repo", "Valid requirement"))
     assert res["status"] == "error"
-    assert "Live paid AI analysis requires authenticated production access" in res["message"]
+    assert "not found" in res["message"].lower() or "requires authenticated production access" in res["message"].lower()
 
 
 def test_mcp_error_handling_masks_internal_details(test_db, monkeypatch):

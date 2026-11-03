@@ -144,10 +144,11 @@ def test_multi_ai_rejects_missing_deployments_without_network(monkeypatch):
         build_stage_router(StageStub("meta_model_api"))
 
 
-def test_multi_ai_cannot_activate_in_public_environment(monkeypatch):
+def test_multi_ai_rejects_missing_deployments_in_production(monkeypatch):
     monkeypatch.setattr(settings, "AI_PROVIDER_PROFILE", "multi_ai", raising=False)
     monkeypatch.setattr(settings, "ENVIRONMENT", "production")
-    with pytest.raises(ValueError, match="deployment access review"):
+    monkeypatch.setattr(settings, "BASETEN_VISION_BASE_URL", "", raising=False)
+    with pytest.raises(ValueError, match="Baseten Vision"):
         build_stage_router(StageStub("meta_model_api"))
 
 

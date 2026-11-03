@@ -6,10 +6,14 @@ from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.db.models import AnalysisRun, Repository, UserSubscription
+from app.db.models import AnalysisRun, FeatureUsage, Repository, UserSubscription
 
 ACTIVE_STATUSES = {"active", "trialing"}
-AI_LIMITS = {"free": (5, "day"), "plus": (500, "month"), "pro": (None, "month")}
+AI_LIMITS = {"free": (15, "day"), "plus": (500, "month"), "pro": (None, "month")}
+DAILY_FEATURE_LIMITS = {
+    "vision": {"free": 10, "plus": 36, "pro": None},
+    "voice": {"free": 30, "plus": 50, "pro": None},
+}
 
 
 def active_plan_for_email(db: Session, email: str | None) -> str:
@@ -28,11 +32,46 @@ def plan_for_repository(db: Session, repository: Repository) -> str:
     return active_plan_for_email(db, repository.owner_email)
 
 
+def _usage_key(repository: Repository) -> str:
+    email = (repository.owner_email or "").strip().lower()
+    return email or f"repository:{repository.id}"
+
+
 def require_feature(db: Session, repository: Repository, feature: str) -> str:
+    """Return the plan for an included feature; daily metering is enforced separately."""
+    if feature not in {"vision", "voice", "multi_ai"}:
+        raise ValueError("Unknown metered feature")
     plan = plan_for_repository(db, repository)
-    if feature in {"vision", "voice", "multi_ai"} and plan not in {"plus", "pro"}:
-        raise HTTPException(status_code=403, detail=f"{feature} requires a Developer Plus or Team & Enterprise Pro subscription")
     return plan
+
+
+def enforce_daily_feature_limit(
+    db: Session, repository: Repository, feature: str, now: datetime | None = None,
+) -> None:
+    plan = plan_for_repository(db, repository)
+    limit = DAILY_FEATURE_LIMITS.get(feature, {}).get(plan)
+    if limit is None:
+        return
+    owner_key = _usage_key(repository)
+    now = now or datetime.now(timezone.utc)
+    start = now.astimezone(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
+    count = (
+        db.query(FeatureUsage)
+        .filter(
+            func.lower(FeatureUsage.owner_key) == owner_key,
+            FeatureUsage.feature == feature,
+            FeatureUsage.created_at >= start,
+        )
+        .count()
+    )
+    if count >= limit:
+        raise HTTPException(status_code=429, detail=f"Your {plan} plan has reached its daily {feature} limit")
+
+
+def record_feature_usage(db: Session, repository: Repository, feature: str) -> None:
+    owner_key = _usage_key(repository)
+    db.add(FeatureUsage(owner_key=owner_key, feature=feature))
+    db.commit()
 
 
 def enforce_ai_limit(db: Session, repository: Repository, now: datetime | None = None) -> None:
@@ -47,16 +86,12 @@ def enforce_ai_limit(db: Session, repository: Repository, now: datetime | None =
         else now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     )
     owner_email = (repository.owner_email or "").strip().lower()
-    if not owner_email:
-        # Public/sample repositories have no account identity; account quotas
-        # are enforced for repositories linked to a billing email.
-        return
-    count = (
-        db.query(AnalysisRun)
-        .join(Repository, AnalysisRun.repository_id == Repository.id)
-        .filter(func.lower(Repository.owner_email) == owner_email, AnalysisRun.created_at >= start)
-        .count()
-    )
+    query = db.query(AnalysisRun).join(Repository, AnalysisRun.repository_id == Repository.id)
+    if owner_email:
+        query = query.filter(func.lower(Repository.owner_email) == owner_email)
+    else:
+        query = query.filter(AnalysisRun.repository_id == repository.id)
+    count = query.filter(AnalysisRun.created_at >= start).count()
     if count >= limit:
         raise HTTPException(status_code=429, detail=f"Your {plan} plan has reached its AI analysis limit for this {period}")
 

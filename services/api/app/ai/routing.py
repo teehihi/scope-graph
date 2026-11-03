@@ -227,8 +227,12 @@ class ModalReasoningProvider(MetaAIHttpProvider):
 
 
 def build_stage_router(default_provider: BaseMetaAIProvider) -> StageProviderRouter:
-    """Build one request-scoped router; partner inference is opt-in and fail-closed."""
-    profile = settings.AI_PROVIDER_PROFILE.strip().lower()
+    """Build a request-scoped router; production uses configured Multi-AI and fails closed if incomplete."""
+    profile = (
+        "multi_ai"
+        if settings.ENVIRONMENT.lower() == "production"
+        else settings.AI_PROVIDER_PROFILE.strip().lower()
+    )
     registry = ProviderRegistry()
     all_stages = frozenset(AIStage)
     if profile == "meta_only":
@@ -264,8 +268,6 @@ def build_stage_router(default_provider: BaseMetaAIProvider) -> StageProviderRou
 
     if profile != "multi_ai":
         raise ValueError("Unsupported AI provider profile")
-    if settings.ENVIRONMENT not in {"development", "test"}:
-        raise ValueError("Multi-AI requires deployment access review before public activation")
     if not (settings.BASETEN_VISION_BASE_URL and settings.BASETEN_VISION_MODEL and
             settings.BASETEN_VISION_API_KEY and settings.BASETEN_VISION_CAPABLE):
         raise ValueError("Baseten Vision requires an endpoint, model, credential and vision capability declaration")

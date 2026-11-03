@@ -3,7 +3,6 @@ from sqlalchemy import text
 from pydantic import BaseModel
 from app.db.database import engine, get_db
 from sqlalchemy.orm import Session
-from app.billing.entitlements import active_plan_for_email
 from app.jobs.queue import get_redis_connection
 from app.core.config import settings
 
@@ -65,7 +64,9 @@ def system_info():
         "temperature": settings.META_AI_TEMPERATURE,
         "max_tokens": settings.META_AI_MAX_TOKENS,
         "environment": settings.ENVIRONMENT,
-        "provider_profile": settings.AI_PROVIDER_PROFILE,
+        "provider_profile": (
+            "multi_ai" if settings.ENVIRONMENT.lower() == "production" else settings.AI_PROVIDER_PROFILE
+        ),
     }
 
 class UpdateSettingsPayload(BaseModel):
@@ -86,7 +87,10 @@ def update_system_settings(payload: UpdateSettingsPayload, db: Session = Depends
     """
     global CUSTOM_USER_API_KEY
 
-    if settings.ENVIRONMENT.lower() == "production":
+    if settings.ENVIRONMENT.lower() == "production" and any((
+        payload.provider, payload.model, payload.base_url, payload.api_key,
+        payload.reset_api_key, payload.temperature is not None, payload.max_tokens is not None,
+    )):
         raise HTTPException(status_code=403, detail="Runtime AI settings are disabled in production")
     if payload.provider is not None and payload.provider.strip():
         settings.META_AI_PROVIDER = payload.provider.strip()
@@ -102,9 +106,9 @@ def update_system_settings(payload: UpdateSettingsPayload, db: Session = Depends
         profile = payload.provider_profile.strip().lower()
         if profile not in {"meta_only", "multi_ai"}:
             raise HTTPException(status_code=422, detail="provider_profile must be meta_only or multi_ai")
+        if settings.ENVIRONMENT.lower() == "production" and profile != "multi_ai":
+            raise HTTPException(status_code=403, detail="Multi-AI is enabled by default in production")
         if profile == "multi_ai":
-            if active_plan_for_email(db, payload.email) not in {"plus", "pro"}:
-                raise HTTPException(status_code=403, detail="Multi-AI reasoning requires an active paid subscription")
             try:
                 from app.ai.provider import get_ai_provider
                 from app.ai.routing import build_stage_router

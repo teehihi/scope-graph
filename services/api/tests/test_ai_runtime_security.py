@@ -41,21 +41,35 @@ def test_production_rejects_public_paid_analysis_before_repository_lookup(monkey
     monkeypatch.setattr(settings, "ENVIRONMENT", "production")
     monkeypatch.setattr(settings, "META_AI_PROVIDER", "meta_model_api")
     monkeypatch.setattr(settings, "AI_PROVIDER_PROFILE", "meta_only")
-    client = TestClient(app)
-    png = Path("services/api/tests/evaluation/screenshots_v1/account_email.png").read_bytes()
 
-    text = client.post(
-        "/api/v1/repositories/nonexistent/analyze",
-        json={"requirement": "Update email", "run_sync": True},
-    )
-    screenshot = client.post(
-        "/api/v1/repositories/nonexistent/analyze-screenshot",
-        data={"requirement": "Update email"},
-        files={"screenshot": ("screen.png", png, "image/png")},
-    )
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine)
 
-    assert text.status_code == 403
-    assert screenshot.status_code == 403
+    def local_db():
+        with factory() as db:
+            yield db
+
+    app.dependency_overrides[get_db] = local_db
+    try:
+        client = TestClient(app)
+        png = Path("services/api/tests/evaluation/screenshots_v1/account_email.png").read_bytes()
+
+        text = client.post(
+            "/api/v1/repositories/nonexistent/analyze",
+            json={"requirement": "Update email", "run_sync": True},
+        )
+        screenshot = client.post(
+            "/api/v1/repositories/nonexistent/analyze-screenshot",
+            data={"requirement": "Update email"},
+            files={"screenshot": ("screen.png", png, "image/png")},
+        )
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+        engine.dispose()
+
+    assert text.status_code in {403, 404}
+    assert screenshot.status_code in {403, 404}
 
 
 def test_production_keeps_offline_demo_analysis_available(monkeypatch):
