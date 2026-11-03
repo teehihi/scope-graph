@@ -637,15 +637,6 @@ export const SettingsPage: React.FC = () => {
                 </button>
               </div>
 
-              <button
-                type="button"
-                  onClick={handleCopyMcp}
-                  disabled={!activeMcpConfig}
-                className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-white border border-[#E4E7E1] text-[#151923] hover:bg-slate-50 transition-colors shadow-xs cursor-pointer shrink-0"
-              >
-                {copiedMcp ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copiedMcp ? t('settings.mcp.copied') : t('settings.mcp.copy_btn')}</span>
-              </button>
             </div>
           </div>
 
@@ -682,9 +673,21 @@ export const SettingsPage: React.FC = () => {
             </div>
           )}
 
-          <pre className="p-4 rounded-xl bg-[#151923] text-slate-100 font-mono text-xs overflow-x-auto border border-slate-800 shadow-inner">
-            {activeMcpConfig || t('settings.mcp.local_path_help')}
-          </pre>
+          <div className="relative">
+            <pre className="p-4 pr-12 rounded-xl bg-[#151923] text-slate-100 font-mono text-xs overflow-x-auto border border-slate-800 shadow-inner">
+              {activeMcpConfig || t('settings.mcp.local_path_help')}
+            </pre>
+            <button
+              type="button"
+              onClick={handleCopyMcp}
+              disabled={!activeMcpConfig}
+              className="absolute top-2.5 right-2.5 p-2 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              title={copiedMcp ? t('settings.mcp.copied') : t('settings.mcp.copy_btn')}
+              aria-label={copiedMcp ? t('settings.mcp.copied') : t('settings.mcp.copy_btn')}
+            >
+              {copiedMcp ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+            </button>
+          </div>
 
           {/* Client Setup Guide */}
           <div className="pt-2 border-t border-[#E4E7E1] space-y-3">
