@@ -124,12 +124,26 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
         self.last_request_attempts = 0
         url = f"{self.base_url}/chat/completions"
         effective_max_tokens = max_tokens or self.max_tokens
+        system_message = {
+            "role": "developer" if self.provider_name == "meta_model_api" else "system",
+            "content": system_prompt,
+        }
+        is_chat_history = (
+            isinstance(user_prompt, list)
+            and all(
+                isinstance(item, dict)
+                and item.get("role") in {"user", "assistant"}
+                and isinstance(item.get("content"), str)
+                for item in user_prompt
+            )
+        )
+        messages = [system_message, *user_prompt] if is_chat_history else [
+            system_message,
+            {"role": "user", "content": user_prompt},
+        ]
         payload = {
             "model": self.model,
-            "messages": [
-                {"role": "developer" if self.provider_name == "meta_model_api" else "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
+            "messages": messages,
             "max_tokens": effective_max_tokens,
         }
         if self.provider_name != "meta_model_api":
