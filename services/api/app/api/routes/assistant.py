@@ -88,6 +88,22 @@ _LOCAL_VIETNAMESE_REPLY = {
 }
 
 
+_LOCAL_SCOUT_IDENTITY_REPLY = {
+    "en": "I’m Scout, a virtual assistant developed by the ScopeGraph Team, with Nguyen Nhat Thien and Pham Cong Truong. I don’t have verified information about the AI model I use or other in-depth technical details.",
+    "vi": "Tôi là Scout, trợ lý ảo do ScopeGraph Team phát triển (Nguyen Nhat Thien và Pham Cong Truong). Hiện tôi chưa có thông tin được xác minh về mô hình AI đang sử dụng hoặc các chi tiết kỹ thuật chuyên sâu khác.",
+    "ja": "私はScoutです。Nguyen Nhat ThienとPham Cong Truongが所属するScopeGraph Teamによって開発されたバーチャルアシスタントです。使用しているAIモデルやその他の詳しい技術情報について、確認済みの情報はありません。",
+    "ko": "저는 Nguyen Nhat Thien과 Pham Cong Truong이 함께하는 ScopeGraph Team이 개발한 가상 비서 Scout입니다. 사용 중인 AI 모델이나 그 밖의 심층적인 기술 정보에 대해서는 확인된 내용이 없습니다.",
+    "zh": "我是 Scout，由 Nguyen Nhat Thien 和 Pham Cong Truong 所在的 ScopeGraph Team 开发的虚拟助手。目前，我没有关于所用 AI 模型或其他深入技术细节的已核实信息。",
+    "es": "Soy Scout, un asistente virtual desarrollado por el equipo de ScopeGraph, con Nguyen Nhat Thien y Pham Cong Truong. No dispongo de información verificada sobre el modelo de IA que utilizo ni sobre otros detalles técnicos especializados.",
+    "fr": "Je suis Scout, un assistant virtuel développé par l’équipe ScopeGraph, avec Nguyen Nhat Thien et Pham Cong Truong. Je ne dispose pas d’informations vérifiées sur le modèle d’IA que j’utilise ni sur d’autres détails techniques approfondis.",
+    "de": "Ich bin Scout, ein virtueller Assistent, entwickelt vom ScopeGraph Team mit Nguyen Nhat Thien und Pham Cong Truong. Verifizierte Informationen zu meinem KI-Modell oder weiteren technischen Details liegen mir nicht vor.",
+    "hi": "मैं Scout हूँ, ScopeGraph Team द्वारा विकसित एक वर्चुअल सहायक। इस टीम में Nguyen Nhat Thien और Pham Cong Truong शामिल हैं। मैं अपने AI मॉडल या अन्य विस्तृत तकनीकी जानकारी के बारे में सत्यापित जानकारी नहीं दे सकता।",
+    "th": "ฉันคือ Scout ผู้ช่วยเสมือนที่พัฒนาโดย ScopeGraph Team ซึ่งประกอบด้วย Nguyen Nhat Thien และ Pham Cong Truong ขณะนี้ฉันไม่มีข้อมูลที่ยืนยันได้เกี่ยวกับโมเดล AI ที่ใช้งานหรือรายละเอียดทางเทคนิคเชิงลึกอื่น ๆ",
+    "it": "Sono Scout, un assistente virtuale sviluppato dal team ScopeGraph insieme a Nguyen Nhat Thien e Pham Cong Truong. Non dispongo di informazioni verificate sul modello di IA che utilizzo né su altri dettagli tecnici approfonditi.",
+    "ru": "Я Scout, виртуальный помощник, разработанный командой ScopeGraph при участии Nguyen Nhat Thien и Pham Cong Truong. У меня нет проверенной информации об используемой модели ИИ или других подробных технических сведениях.",
+}
+
+
 def _smalltalk_intent(message: str) -> str | None:
     """Match only standalone pleasantries so real questions still reach the assistant."""
     normalized = unicodedata.normalize("NFKD", message.casefold())
@@ -105,6 +121,30 @@ def _smalltalk_intent(message: str) -> str | None:
         if normalized in candidates:
             return intent
     return None
+
+
+def _is_scout_identity_question(message: str) -> bool:
+    """Recognize questions about Scout's ownership, creators, or underlying model."""
+    normalized = unicodedata.normalize("NFKD", message.casefold()).replace("đ", "d")
+    normalized = "".join(char for char in normalized if not unicodedata.combining(char))
+    normalized = re.sub(r"[^\w\s]", " ", normalized, flags=re.UNICODE)
+    normalized = " ".join(normalized.split())
+
+    identity_terms = (
+        "owner", "ownership", "owned by", "who owns", "who developed", "developed by",
+        "who created", "created by", "who built", "built by", "who made you", "creator",
+        "developer of", "your developer", "chủ sở hữu", "chủ quyền", "so huu", "chu quyen",
+        "sở hữu", "thuộc về ai", "phat trien boi ai", "ai phat trien", "ai tao ra", "ai lam ra", "ai xay dung",
+    )
+    if any(term in normalized for term in identity_terms):
+        return True
+
+    has_model_term = any(term in normalized for term in ("model", "mô hình", "mo hinh", "llm"))
+    asks_about_scout = any(
+        term in normalized.split()
+        for term in ("you", "your", "scout", "bạn", "ban", "cậu", "cau", "mình", "minh")
+    ) or any(term in normalized for term in ("model gì", "model gi", "model nào", "model nao", "mô hình gì", "mo hinh gi", "mô hình nào", "mo hinh nao", "llm nào", "llm nao"))
+    return has_model_term and asks_about_scout
 
 
 @router.post("/chat")
@@ -125,6 +165,13 @@ def chat(payload: ChatRequest, request: Request):
             "answer": answer,
             "grounded": True,
             "model": "local-smalltalk",
+        }
+
+    if _is_scout_identity_question(message):
+        return {
+            "answer": _LOCAL_SCOUT_IDENTITY_REPLY.get(payload.language, _LOCAL_SCOUT_IDENTITY_REPLY["en"]),
+            "grounded": True,
+            "model": "local-scout-identity",
         }
 
     messages = [
