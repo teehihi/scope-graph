@@ -673,7 +673,7 @@ export const SettingsPage: React.FC = () => {
             </div>
           )}
 
-          {activeMcpConfig ? (
+          {activeMcpConfig && (
             <div className="relative">
               <pre className="p-4 pr-12 rounded-xl bg-[#151923] text-slate-100 font-mono text-xs overflow-x-auto border border-slate-800 shadow-inner">
                 {activeMcpConfig}
@@ -687,10 +687,6 @@ export const SettingsPage: React.FC = () => {
               >
                 {copiedMcp ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
               </button>
-            </div>
-          ) : (
-            <div className="rounded-xl border border-[#E4E7E1] bg-[#F7F8F5] px-4 py-3 text-sm leading-relaxed text-[#687180]">
-              {t('settings.mcp.local_path_help')}
             </div>
           )}
 
