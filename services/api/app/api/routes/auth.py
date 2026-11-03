@@ -45,15 +45,7 @@ def _generate_otp() -> str:
     return "".join(random.choices(string.digits, k=6))
 
 def _send_otp_email(to_email: str, otp: str, name: str = "") -> bool:
-    """Send OTP email; only local development may fall back to a logged code."""
-    if not settings.SMTP_HOST or not settings.SMTP_USER:
-        if settings.ENVIRONMENT.lower() != "production":
-            # Local-only fallback. Never write production verification codes to logs.
-            logger.info("=== DEV OTP for %s: %s ===", to_email, otp)
-            return True
-        logger.error("Registration email is unavailable because SMTP is not configured")
-        return False
-
+    """Send OTP via Resend HTTPS or SMTP; only local development may log the code."""
     subject = "ScopeGraph – Your verification code"
     body_html = f"""
 <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#F7F8F5;border-radius:16px">
@@ -69,6 +61,40 @@ def _send_otp_email(to_email: str, otp: str, name: str = "") -> bool:
   </p>
 </div>
 """
+
+    if settings.RESEND_API_KEY:
+        try:
+            response = httpx.post(
+                "https://api.resend.com/emails",
+                headers={"Authorization": f"Bearer {settings.RESEND_API_KEY}"},
+                json={
+                    "from": settings.SMTP_FROM,
+                    "to": [to_email],
+                    "subject": subject,
+                    "html": body_html,
+                },
+                timeout=10.0,
+            )
+            if response.is_success:
+                logger.info("Registration verification email accepted by provider for %s", to_email)
+                return True
+            logger.warning(
+                "Email provider rejected verification email for %s (HTTP %s)",
+                to_email,
+                response.status_code,
+            )
+            return False
+        except httpx.HTTPError as exc:
+            logger.warning("Email provider request failed for %s (%s)", to_email, type(exc).__name__)
+            return False
+
+    if not settings.SMTP_HOST or not settings.SMTP_USER:
+        if settings.ENVIRONMENT.lower() != "production":
+            logger.info("=== DEV OTP for %s: %s ===", to_email, otp)
+            return True
+        logger.error("Registration email is unavailable because email delivery is not configured")
+        return False
+
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject

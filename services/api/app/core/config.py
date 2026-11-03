@@ -97,7 +97,8 @@ class Settings(BaseSettings):
     MODAL_REASONING_REQUEST_BUDGET: int = Field(default=2, ge=1, le=10)
     MODAL_REASONING_META_FALLBACK: bool = False
 
-    # Email / SMTP (for OTP verification)
+    # Email delivery for OTP verification. Resend uses HTTPS on Render Free.
+    RESEND_API_KEY: str = Field(default="", description="Resend API key for HTTPS email delivery")
     SMTP_HOST: str = Field(default="", description="SMTP host for sending emails")
     SMTP_PORT: int = Field(default=587, description="SMTP port")
     SMTP_USER: str = Field(default="", description="SMTP username")
