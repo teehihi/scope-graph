@@ -10,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 from app.analysis.explanations import build_impact_story, generate_plain_test_checklist, map_user_consequence
 from app.ai.provider import AIProviderResponse, OfflineDemoProvider
 from app.db.database import Base, get_db
-from app.db.models import Repository, IndexedFile, IndexedSymbol, DependencyEdge
+from app.db.models import Repository, IndexedFile, IndexedSymbol, DependencyEdge, UserSubscription
 from app.main import app
 
 
@@ -25,8 +25,9 @@ def voice_db():
     TestingSession = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     session = TestingSession()
 
-    repo = Repository(id="test-voice-repo", name="sample-auth", status="ready")
+    repo = Repository(id="test-voice-repo", name="sample-auth", status="ready", owner_email="voice@example.com")
     session.add(repo)
+    session.add(UserSubscription(email="voice@example.com", plan="plus", subscription_status="active"))
     session.commit()
 
     f1 = IndexedFile(id="f1", repository_id="test-voice-repo", path="services/user_service.py", language="python")

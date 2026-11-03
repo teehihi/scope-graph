@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
+import { createCheckoutSession, fetchSubscription } from '../api/client';
+import { useRouter } from '../router';
 import {
   X,
   Check,
@@ -12,7 +15,7 @@ import {
   Mic,
   Activity,
   ArrowRight,
-  CheckCircle2,
+  LoaderCircle,
 } from 'lucide-react';
 
 interface UpgradeModalProps {
@@ -22,10 +25,13 @@ interface UpgradeModalProps {
 
 export const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose }) => {
   const { t } = useLanguage();
+  const { user, isLoading: isAuthLoading, updateUser } = useAuth();
+  const { navigate } = useRouter();
   const dialogRef = useRef<HTMLDialogElement | null>(null);
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'annually'>('monthly');
-  const [activePlan, setActivePlan] = useState<'free' | 'plus' | 'pro'>('free');
-  const [upgradedMessage, setUpgradedMessage] = useState<string | null>(null);
+  const [checkoutPlan, setCheckoutPlan] = useState<'plus' | 'pro' | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const activePlan = user ? user.plan : 'free';
+  const autoCheckoutHandled = useRef(false);
 
   // Manage native <dialog> lifecycle
   useEffect(() => {
@@ -40,7 +46,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose }) =
       if (dialog.open) {
         dialog.close();
       }
-      setUpgradedMessage(null);
+      setCheckoutError(null);
     }
   }, [isOpen]);
 
@@ -57,15 +63,45 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose }) =
     }
   };
 
-  const handleSelectPlan = (plan: 'free' | 'plus' | 'pro') => {
-    if (plan === 'free') return;
-    setActivePlan(plan);
-    const planName = plan === 'plus' ? t('pricing.plus_title') : t('pricing.pro_title');
-    setUpgradedMessage(t('pricing.upgrade_success', { plan: planName }));
-    setTimeout(() => {
-      setUpgradedMessage(null);
-    }, 4000);
+  const handleSelectPlan = async (plan: 'free' | 'plus' | 'pro') => {
+    if (plan === 'free' || checkoutPlan || isAuthLoading || activePlan === plan) return;
+    if (!user) {
+      const returnTo = `/?pricing=true&checkout=${plan}`;
+      navigate(`/login?redirect=${encodeURIComponent(returnTo)}`);
+      return;
+    }
+
+    setCheckoutError(null);
+    setCheckoutPlan(plan);
+    try {
+      const session = await createCheckoutSession(plan, user.email);
+      window.location.assign(session.checkout_url);
+    } catch {
+      setCheckoutPlan(null);
+      setCheckoutError(t('pricing.checkout_failed'));
+    }
   };
+
+  useEffect(() => {
+    if (!isOpen || isAuthLoading || !user?.email || autoCheckoutHandled.current) return;
+    const requestedPlan = new URLSearchParams(window.location.search).get('checkout');
+    if (requestedPlan !== 'plus' && requestedPlan !== 'pro') return;
+
+    autoCheckoutHandled.current = true;
+    const url = new URL(window.location.href);
+    url.searchParams.delete('checkout');
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+
+    void fetchSubscription(user.email)
+      .then((subscription) => {
+        if (subscription.plan === requestedPlan) {
+          updateUser({ plan: subscription.plan });
+          return;
+        }
+        void handleSelectPlan(requestedPlan);
+      })
+      .catch(() => setCheckoutError(t('pricing.checkout_failed')));
+  }, [isOpen, isAuthLoading, user?.email]);
 
   return (
     <dialog
@@ -96,7 +132,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose }) =
         {/* Modal Header */}
         <div className="relative text-center max-w-2xl mx-auto mb-8 sm:mb-10">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold tracking-wide mb-3 shadow-2xs">
-            <Sparkles className="w-3.5 h-3.5 text-[#526BEE]" />
+            <Sparkles className="w-3.5 h-3.5 text-[#C7F36B]" />
             <span>{t('pricing.nav_title')}</span>
           </div>
 
@@ -107,38 +143,9 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose }) =
             {t('pricing.modal_desc')}
           </p>
 
-          {/* Billing Cycle Switcher - Modern Rounded Pill */}
-          <div className="inline-flex items-center p-1 mt-6 rounded-full bg-slate-100 border border-slate-200/60 shadow-inner">
-            <button
-              type="button"
-              onClick={() => setBillingCycle('monthly')}
-              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${billingCycle === 'monthly'
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-900'
-                }`}
-            >
-              {t('pricing.cycle_monthly')}
-            </button>
-            <button
-              type="button"
-              onClick={() => setBillingCycle('annually')}
-              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${billingCycle === 'annually'
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-900'
-                }`}
-            >
-              <span>{t('pricing.cycle_annually')}</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#C7F36B] text-[#151923] font-extrabold">
-                {t('pricing.save_20')}
-              </span>
-            </button>
-          </div>
-
-          {/* Success Notification Banner */}
-          {upgradedMessage && (
-            <div className="mt-4 p-3 rounded-2xl bg-emerald-50 border border-emerald-200/80 text-emerald-800 text-xs font-bold flex items-center justify-center gap-2 animate-in fade-in duration-200 shadow-xs">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span>{upgradedMessage}</span>
+          {checkoutError && (
+            <div role="alert" className="mt-3 text-xs font-semibold text-rose-700">
+              {checkoutError}
             </div>
           )}
         </div>
@@ -237,7 +244,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose }) =
               {/* Price */}
               <div className="my-5">
                 <span className="text-3xl font-extrabold text-[#C7F36B]">
-                  {billingCycle === 'monthly' ? t('pricing.plus_price_monthly') : t('pricing.plus_price_annual')}
+                  {t('pricing.plus_price_monthly')}
                 </span>
                 <span className="text-xs text-slate-400 ml-1.5 font-medium">{t('pricing.plus_period')}</span>
               </div>
@@ -286,11 +293,17 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose }) =
             {/* Action */}
             <button
               type="button"
-              onClick={() => handleSelectPlan('plus')}
-              className="w-full mt-7 py-3 rounded-xl bg-[#C7F36B] text-[#151923] hover:bg-[#d6f88d] hover:shadow-lg hover:shadow-[#C7F36B]/30 active:scale-[0.99] transition-all text-xs font-extrabold flex items-center justify-center gap-2 cursor-pointer group shadow-sm"
+              onClick={() => void handleSelectPlan('plus')}
+              disabled={isAuthLoading || checkoutPlan !== null || activePlan === 'plus'}
+              className={`w-full mt-7 py-3 rounded-xl transition-all text-xs font-extrabold flex items-center justify-center gap-2 shadow-sm ${activePlan === 'plus' ? 'bg-slate-200 text-slate-500 cursor-default' : 'bg-[#C7F36B] text-[#151923] hover:bg-[#d6f88d] hover:shadow-lg hover:shadow-[#C7F36B]/30 active:scale-[0.99] cursor-pointer group'}`}
             >
-              <span>{t('pricing.plus_cta')}</span>
-              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+              {activePlan === 'plus' ? (
+                <span>{t('pricing.current_plan_badge')}</span>
+              ) : checkoutPlan === 'plus' ? (
+                <><LoaderCircle className="w-3.5 h-3.5 animate-spin" /><span>{t('pricing.checkout_loading')}</span></>
+              ) : (
+                <><span>{t('pricing.plus_cta')}</span><ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" /></>
+              )}
             </button>
           </div>
 
@@ -310,7 +323,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose }) =
               {/* Price */}
               <div className="my-5">
                 <span className="text-3xl font-extrabold text-slate-900">
-                  {billingCycle === 'monthly' ? t('pricing.pro_price_monthly') : t('pricing.pro_price_annual')}
+                  {t('pricing.pro_price_monthly')}
                 </span>
                 <span className="text-xs text-slate-400 ml-1.5 font-medium">{t('pricing.pro_period')}</span>
               </div>
@@ -359,11 +372,17 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose }) =
             {/* Action */}
             <button
               type="button"
-              onClick={() => handleSelectPlan('pro')}
-              className="w-full mt-7 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-800 hover:bg-slate-100 transition-all text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+              onClick={() => void handleSelectPlan('pro')}
+              disabled={isAuthLoading || checkoutPlan !== null || activePlan === 'pro'}
+              className={`w-full mt-7 py-2.5 rounded-xl border transition-all text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs ${activePlan === 'pro' ? 'border-slate-200 bg-slate-100 text-slate-500 cursor-default' : 'border-slate-300 bg-white text-slate-800 hover:bg-slate-100 cursor-pointer'}`}
             >
-              <span>{t('pricing.pro_cta')}</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              {activePlan === 'pro' ? (
+                <span>{t('pricing.current_plan_badge')}</span>
+              ) : checkoutPlan === 'pro' ? (
+                <><LoaderCircle className="w-3.5 h-3.5 animate-spin" /><span>{t('pricing.checkout_loading')}</span></>
+              ) : (
+                <><span>{t('pricing.pro_cta')}</span><ArrowRight className="w-3.5 h-3.5" /></>
+              )}
             </button>
           </div>
         </div>

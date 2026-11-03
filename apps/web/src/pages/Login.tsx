@@ -43,7 +43,7 @@ export const Login: React.FC = () => {
     setTimeout(() => {
       loginAsDemo();
       setIsLoading(false);
-      navigate('/app/dashboard');
+      navigate(redirectTarget);
     }, 300);
   };
 
@@ -52,6 +52,7 @@ export const Login: React.FC = () => {
       const clientId = import.meta.env.VITE_GITHUB_CLIENT_ID || 'Ov23lifjNq0eAxACh6IW';
       const redirectUri = `${window.location.origin}/auth/callback/github`;
       sessionStorage.setItem('scopegraph_oauth_provider', 'github');
+      sessionStorage.setItem('scopegraph_auth_return_url', redirectTarget);
       window.location.href = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=read:user%20user:email%20repo`;
       return;
     }
@@ -61,6 +62,7 @@ export const Login: React.FC = () => {
         '68011630163-6ce0k7lnlmp7stvn3cae2r6lpbnmccta.apps.googleusercontent.com';
       const redirectUri = `${window.location.origin}/auth/callback/google`;
       sessionStorage.setItem('scopegraph_oauth_provider', 'google');
+      sessionStorage.setItem('scopegraph_auth_return_url', redirectTarget);
       window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(
         redirectUri
       )}&response_type=code&scope=openid%20email%20profile&access_type=offline&prompt=select_account`;

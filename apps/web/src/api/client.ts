@@ -14,6 +14,64 @@ import {
 const RAW_API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.trim() || '';
 const API_BASE = RAW_API_URL ? `${RAW_API_URL.replace(/\/$/, '')}/api/v1` : '/api/v1';
 
+export type SubscriptionPlan = 'free' | 'plus' | 'pro';
+
+export interface AssistantMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export async function sendAssistantMessage(
+  message: string,
+  history: AssistantMessage[],
+  language: string,
+  signal?: AbortSignal
+): Promise<{ answer: string; grounded: boolean; model: string }> {
+  const res = await fetch(`${API_BASE}/assistant/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, history, language }),
+    signal,
+  });
+  if (!res.ok) throw new Error('Assistant request failed');
+  return res.json();
+}
+
+export interface SubscriptionStatus {
+  plan: SubscriptionPlan;
+  subscription_status: string | null;
+}
+
+export async function createCheckoutSession(
+  plan: Exclude<SubscriptionPlan, 'free'>,
+  email: string
+): Promise<{ checkout_url: string; session_id: string }> {
+  const res = await fetch(`${API_BASE}/billing/create-checkout-session`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ plan, email }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Could not start checkout' }));
+    throw new Error(err.detail || 'Could not start checkout');
+  }
+  return res.json();
+}
+
+export async function fetchSubscription(email: string): Promise<SubscriptionStatus> {
+  const res = await fetch(`${API_BASE}/billing/subscription?email=${encodeURIComponent(email)}`);
+  if (!res.ok) throw new Error('Could not load subscription');
+  return res.json();
+}
+
+export async function confirmCheckoutSession(sessionId: string, email: string): Promise<SubscriptionStatus> {
+  const res = await fetch(
+    `${API_BASE}/billing/checkout-session/${encodeURIComponent(sessionId)}?email=${encodeURIComponent(email)}`
+  );
+  if (!res.ok) throw new Error('Could not confirm checkout');
+  return res.json();
+}
+
 export interface RealtimeVoiceStream {
   sendAudio: (frame: ArrayBuffer) => void;
   finish: () => Promise<string>;

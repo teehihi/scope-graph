@@ -303,17 +303,14 @@ export const Onboarding: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-3.5 p-3 rounded-2xl bg-[#F7F8F5] border border-[#E4E7E1]">
-                  {user?.avatarUrl ? (
-                    <img
-                      src={user.avatarUrl}
-                      alt={user.name}
-                      className="w-11 h-11 rounded-full border-2 border-white shadow-xs object-cover"
-                    />
-                  ) : (
-                    <div className="w-11 h-11 rounded-full bg-[#151923] text-white flex items-center justify-center font-bold text-xs">
-                      {user?.name ? user.name.slice(0, 2).toUpperCase() : 'SG'}
-                    </div>
-                  )}
+                  <img
+                    src={user?.avatarUrl || '/default-avatar.webp'}
+                    alt={user?.name || 'User avatar'}
+                    className="w-11 h-11 rounded-full border-2 border-white shadow-xs object-cover"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = '/default-avatar.webp';
+                    }}
+                  />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-[#151923] truncate">

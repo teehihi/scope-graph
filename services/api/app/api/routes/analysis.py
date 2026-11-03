@@ -9,6 +9,7 @@ from app.jobs.tasks import task_run_analysis
 from app.analysis.orchestrator import AnalysisOrchestrator
 from app.ai.image_input import decode_uploaded_screenshot
 from app.core.config import settings
+from app.billing.entitlements import enforce_ai_limit, require_feature
 
 router = APIRouter(tags=["analysis"])
 
@@ -52,6 +53,8 @@ def analyze_screenshot(
         req_text = requirement.strip()
         if not req_text:
             raise HTTPException(status_code=400, detail="Requirement text cannot be empty")
+        require_feature(db, repo, "vision")
+        enforce_ai_limit(db, repo)
         if screenshot.content_type not in ("image/png", "image/jpeg"):
             raise HTTPException(status_code=415, detail="Only PNG and JPEG screenshots are supported")
 
@@ -86,6 +89,9 @@ def trigger_analysis(
     repo = db.query(Repository).filter(Repository.id == repository_id).first()
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
+    if settings.AI_PROVIDER_PROFILE.lower() == "multi_ai":
+        require_feature(db, repo, "multi_ai")
+    enforce_ai_limit(db, repo)
     if repo.status != "ready":
         raise HTTPException(status_code=400, detail=f"Repository is not ready for analysis (status: {repo.status})")
 

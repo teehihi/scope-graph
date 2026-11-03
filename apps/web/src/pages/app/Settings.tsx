@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage, AVAILABLE_LANGUAGES, Language } from '../../context/LanguageContext';
 import { AppLayout } from '../../components/layouts/AppLayout';
+import { UpgradeModal } from '../../components/UpgradeModal';
 import { fetchSystemInfo, updateSystemSettings, testAiConnection } from '../../api/client';
 import { SystemInfo } from '../../types';
 import {
@@ -21,6 +22,7 @@ import {
   EyeOff,
   RotateCcw,
   Activity,
+  LockKeyhole,
 } from 'lucide-react';
 
 interface ProviderPreset {
@@ -123,6 +125,8 @@ export const SettingsPage: React.FC = () => {
   const [isMobileDropdownOpen, setIsMobileDropdownOpen] = useState(false);
   const [isAdvancedModalOpen, setIsAdvancedModalOpen] = useState(false);
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+  const [multiAiError, setMultiAiError] = useState(false);
 
   // Advanced modal custom dropdown states
   const [isProviderDropdownOpen, setIsProviderDropdownOpen] = useState(false);
@@ -252,6 +256,24 @@ export const SettingsPage: React.FC = () => {
     setLanguage(lang);
     setSaveToast(true);
     setTimeout(() => setSaveToast(false), 2500);
+  };
+
+  const handleToggleMultiAi = async () => {
+    if (user?.plan !== 'plus' && user?.plan !== 'pro') {
+      setIsUpgradeModalOpen(true);
+      return;
+    }
+    setMultiAiError(false);
+    setIsSaving(true);
+    try {
+      const providerProfile = systemInfo?.provider_profile === 'multi_ai' ? 'meta_only' : 'multi_ai';
+      const updated = await updateSystemSettings({ provider_profile: providerProfile, email: user?.email });
+      setSystemInfo(updated);
+    } catch {
+      setMultiAiError(true);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const currentLangObj = AVAILABLE_LANGUAGES.find((l) => l.code === language) || AVAILABLE_LANGUAGES[0];
@@ -496,6 +518,29 @@ export const SettingsPage: React.FC = () => {
                 </span>
               )}
             </div>
+          </div>
+
+          <div className="pt-1 flex items-center justify-between gap-4 p-3.5 rounded-xl bg-[#F7F8F5] border border-[#E4E7E1]">
+            <div className="min-w-0">
+              <h4 className="text-xs font-bold text-[#151923]">{t('settings.ai.multi_ai_title')}</h4>
+              <p className="mt-1 text-[11px] leading-relaxed text-[#8B929E]">{t('settings.ai.multi_ai_desc')}</p>
+              {multiAiError && <p role="alert" className="mt-1 text-[11px] font-semibold text-rose-700">{t('settings.ai.profile_error')}</p>}
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={systemInfo?.provider_profile === 'multi_ai'}
+              aria-label={t('settings.ai.multi_ai_title')}
+              onClick={() => void handleToggleMultiAi()}
+              disabled={isSaving}
+              title={user?.plan === 'plus' || user?.plan === 'pro' ? undefined : t('pricing.plus_title')}
+              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-60 ${systemInfo?.provider_profile === 'multi_ai' ? 'bg-[#526BEE]' : 'bg-slate-300'}`}
+            >
+              {user?.plan !== 'plus' && user?.plan !== 'pro' ? (
+                <LockKeyhole className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-white p-0.5 text-[#526BEE] shadow" />
+              ) : null}
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${systemInfo?.provider_profile === 'multi_ai' ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
           </div>
         </div>
 
@@ -866,6 +911,7 @@ export const SettingsPage: React.FC = () => {
           </div>,
           document.body
         )}
+      <UpgradeModal isOpen={isUpgradeModalOpen} onClose={() => setIsUpgradeModalOpen(false)} />
     </AppLayout>
   );
 };

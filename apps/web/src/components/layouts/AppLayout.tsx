@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useRouter, Link } from '../../router';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { FloatingAssistant } from '../FloatingAssistant';
 import { ScopeGraphLogoMark } from '../BrandIcons';
 import {
   LayoutDashboard,
@@ -13,6 +14,7 @@ import {
   ChevronRight,
   Menu,
   X,
+  CheckCircle2,
 } from 'lucide-react';
 
 interface AppLayoutProps {
@@ -29,7 +31,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   children,
 }) => {
   const { pathname, navigate } = useRouter();
-  const { user, logout } = useAuth();
+  const { user, logout, billingConfirmation, dismissBillingConfirmation } = useAuth();
   const { t } = useLanguage();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -48,6 +50,22 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
 
   return (
     <div className="flex h-screen w-screen bg-[#F7F8F5] text-[#151923] overflow-hidden font-sans selection:bg-[#C7F36B] selection:text-[#151923]">
+      {billingConfirmation && (
+        <div role="status" className="fixed right-4 top-4 z-[100] flex max-w-md items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-800 shadow-lg">
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+          <span>{t('pricing.upgrade_success', {
+            plan: billingConfirmation === 'plus' ? t('pricing.plus_title') : t('pricing.pro_title'),
+          })}</span>
+          <button
+            type="button"
+            onClick={dismissBillingConfirmation}
+            aria-label={t('pricing.close')}
+            className="ml-1 rounded-lg p-1 text-emerald-700 hover:bg-emerald-100"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
       {/* 1. Desktop Dark Ink Sidebar */}
       <aside className="hidden lg:flex w-64 bg-[#151923] text-white flex-col shrink-0 border-r border-slate-800/40 z-30">
         {/* Top ScopeGraph Logo Lockup */}
@@ -100,24 +118,34 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         {/* Bottom User Row */}
         <div className="p-3 border-t border-slate-800/80 bg-slate-900/40">
           <div className="flex items-center justify-between p-2 rounded-xl bg-slate-800/50 border border-slate-800">
-            <div className="min-w-0 pr-2">
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-white truncate">
-                  {user?.name || 'Developer'}
-                </span>
-                {user?.isDemo && (
-                  <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded bg-[#C7F36B] text-[#151923]">
-                    Demo
+            <div className="flex items-center gap-2.5 min-w-0 pr-2">
+              <img
+                src={user?.avatarUrl || '/default-avatar.webp'}
+                alt={user?.name || 'User avatar'}
+                className="w-8 h-8 rounded-full object-cover border border-slate-700 shrink-0"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = '/default-avatar.webp';
+                }}
+              />
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-white truncate">
+                    {user?.name || 'Developer'}
                   </span>
-                )}
+                  {user?.isDemo && (
+                    <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded bg-[#C7F36B] text-[#151923]">
+                      Demo
+                    </span>
+                  )}
+                </div>
+                <p className="text-[10px] text-[#8B929E] truncate font-mono">
+                  {user?.email || 'demo@scopegraph.dev'}
+                </p>
               </div>
-              <p className="text-[10px] text-[#8B929E] truncate font-mono">
-                {user?.email || 'demo@scopegraph.dev'}
-              </p>
             </div>
             <button
               onClick={handleLogout}
-              className="p-1.5 rounded-lg text-[#8B929E] hover:text-rose-400 hover:bg-slate-800 transition-colors"
+              className="p-1.5 rounded-lg text-[#8B929E] hover:text-rose-400 hover:bg-slate-800 transition-colors shrink-0"
               title="Log out"
             >
               <LogOut className="w-4 h-4" />
@@ -200,24 +228,34 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         {/* Bottom User Row */}
         <div className="p-3 border-t border-slate-800/80 bg-slate-900/40">
           <div className="flex items-center justify-between p-2 rounded-xl bg-slate-800/50 border border-slate-800">
-            <div className="min-w-0 pr-2">
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-white truncate">
-                  {user?.name || 'Developer'}
-                </span>
-                {user?.isDemo && (
-                  <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded bg-[#C7F36B] text-[#151923]">
-                    Demo
+            <div className="flex items-center gap-2.5 min-w-0 pr-2">
+              <img
+                src={user?.avatarUrl || '/default-avatar.webp'}
+                alt={user?.name || 'User avatar'}
+                className="w-8 h-8 rounded-full object-cover border border-slate-700 shrink-0"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = '/default-avatar.webp';
+                }}
+              />
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-white truncate">
+                    {user?.name || 'Developer'}
                   </span>
-                )}
+                  {user?.isDemo && (
+                    <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded bg-[#C7F36B] text-[#151923]">
+                      Demo
+                    </span>
+                  )}
+                </div>
+                <p className="text-[10px] text-[#8B929E] truncate font-mono">
+                  {user?.email || 'demo@scopegraph.dev'}
+                </p>
               </div>
-              <p className="text-[10px] text-[#8B929E] truncate font-mono">
-                {user?.email || 'demo@scopegraph.dev'}
-              </p>
             </div>
             <button
               onClick={handleLogout}
-              className="p-1.5 rounded-lg text-[#8B929E] hover:text-rose-400 hover:bg-slate-800 transition-colors"
+              className="p-1.5 rounded-lg text-[#8B929E] hover:text-rose-400 hover:bg-slate-800 transition-colors shrink-0"
               title="Log out"
             >
               <LogOut className="w-4 h-4" />
@@ -254,6 +292,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           {children}
         </main>
       </div>
+      <FloatingAssistant />
     </div>
   );
 };

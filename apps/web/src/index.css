@@ -155,4 +155,86 @@ code, pre, .font-mono {
   animation: floating-4 4s ease-in-out infinite;
 }
 
+@keyframes assistantMessageIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes assistantPanelIn {
+  from { opacity: 0; transform: translateY(14px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes assistantTyping {
+  0%, 60%, 100% { opacity: 0.35; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+
+@keyframes assistantLauncherPulse {
+  0% { box-shadow: 0 0 0 0 rgba(31, 181, 139, 0.42); }
+  75%, 100% { box-shadow: 0 0 0 14px rgba(31, 181, 139, 0); }
+}
+
+@property --assistant-border-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes assistantBorderFlow {
+  to { --assistant-border-angle: 360deg; }
+}
+
+.assistant-message {
+  animation: assistantMessageIn 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.assistant-panel {
+  transform-origin: bottom right;
+  animation: assistantPanelIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.assistant-composer {
+  border: 1.5px solid transparent;
+  background: linear-gradient(#fff, #fff) padding-box, #dce8e2 border-box;
+  transition: box-shadow 0.25s ease, background-color 0.25s ease;
+}
+
+.assistant-composer:focus-within {
+  background:
+    linear-gradient(#fff, #fff) padding-box,
+    conic-gradient(
+      from var(--assistant-border-angle),
+      #dce8e2 0deg 42deg,
+      #f2d28e 49deg 57deg,
+      #ed6acb 73deg 84deg,
+      #b45fd4 99deg 109deg,
+      #dce8e2 124deg 360deg
+    ) border-box;
+  box-shadow: 0 0 0 2px rgba(220, 232, 226, 0.45), 0 4px 16px rgba(202, 104, 190, 0.12);
+  animation: assistantBorderFlow 8s linear infinite;
+}
+
+.assistant-typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: #1fb58b;
+  animation: assistantTyping 0.9s ease-in-out infinite;
+}
+
+.assistant-launcher:not(.rotate-90) {
+  animation: assistantLauncherPulse 2.8s ease-out 0.8s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assistant-message,
+  .assistant-panel,
+  .assistant-composer:focus-within,
+  .assistant-typing-dot,
+  .assistant-launcher:not(.rotate-90) {
+    animation: none;
+  }
+}
+
 

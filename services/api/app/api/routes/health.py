@@ -1,7 +1,9 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 from pydantic import BaseModel
-from app.db.database import engine
+from app.db.database import engine, get_db
+from sqlalchemy.orm import Session
+from app.billing.entitlements import active_plan_for_email
 from app.jobs.queue import get_redis_connection
 from app.core.config import settings
 
@@ -63,6 +65,7 @@ def system_info():
         "temperature": settings.META_AI_TEMPERATURE,
         "max_tokens": settings.META_AI_MAX_TOKENS,
         "environment": settings.ENVIRONMENT,
+        "provider_profile": settings.AI_PROVIDER_PROFILE,
     }
 
 class UpdateSettingsPayload(BaseModel):
@@ -73,9 +76,11 @@ class UpdateSettingsPayload(BaseModel):
     reset_api_key: bool = False
     temperature: float | None = None
     max_tokens: int | None = None
+    provider_profile: str | None = None
+    email: str | None = None
 
 @router.put("/system/settings")
-def update_system_settings(payload: UpdateSettingsPayload):
+def update_system_settings(payload: UpdateSettingsPayload, db: Session = Depends(get_db)):
     """
     Update runtime AI settings dynamically without requiring server restart.
     """
@@ -93,6 +98,22 @@ def update_system_settings(payload: UpdateSettingsPayload):
         settings.META_AI_TEMPERATURE = round(max(0.0, min(1.0, float(payload.temperature))), 2)
     if payload.max_tokens is not None:
         settings.META_AI_MAX_TOKENS = max(500, min(16000, int(payload.max_tokens)))
+    if payload.provider_profile is not None:
+        profile = payload.provider_profile.strip().lower()
+        if profile not in {"meta_only", "multi_ai"}:
+            raise HTTPException(status_code=422, detail="provider_profile must be meta_only or multi_ai")
+        if profile == "multi_ai":
+            if active_plan_for_email(db, payload.email) not in {"plus", "pro"}:
+                raise HTTPException(status_code=403, detail="Multi-AI reasoning requires an active paid subscription")
+            try:
+                from app.ai.provider import get_ai_provider
+                from app.ai.routing import build_stage_router
+
+                stage_router = build_stage_router(get_ai_provider())
+                stage_router.close()
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+        settings.AI_PROVIDER_PROFILE = profile
 
     if payload.reset_api_key:
         CUSTOM_USER_API_KEY = None

@@ -91,3 +91,18 @@ class AnalysisRun(Base):
     completed_at = Column(DateTime, nullable=True)
 
     repository = relationship("Repository", back_populates="analyses")
+
+
+class UserSubscription(Base):
+    """Billing state keyed to the email used by the current demo authentication flow."""
+
+    __tablename__ = "user_subscriptions"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    email = Column(String(255), nullable=False, unique=True, index=True)
+    plan = Column(String(20), nullable=False, default="free")
+    stripe_customer_id = Column(String(255), nullable=True, index=True)
+    stripe_subscription_id = Column(String(255), nullable=True, index=True)
+    subscription_status = Column(String(50), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+    updated_at = Column(DateTime, nullable=False, default=utc_now, onupdate=utc_now)

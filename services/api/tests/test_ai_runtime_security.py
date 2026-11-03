@@ -2,9 +2,13 @@
 
 from fastapi.testclient import TestClient
 from pathlib import Path
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.api.routes import health
 from app.core.config import settings
+from app.db.database import Base, get_db
 from app.main import app
 
 
@@ -59,9 +63,22 @@ def test_production_keeps_offline_demo_analysis_available(monkeypatch):
     monkeypatch.setattr(settings, "META_AI_PROVIDER", "offline_demo")
     monkeypatch.setattr(settings, "AI_PROVIDER_PROFILE", "meta_only")
 
-    response = TestClient(app).post(
-        "/api/v1/repositories/nonexistent/analyze",
-        json={"requirement": "Update email", "run_sync": True},
-    )
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine)
+
+    def local_db():
+        with factory() as db:
+            yield db
+
+    app.dependency_overrides[get_db] = local_db
+    try:
+        response = TestClient(app).post(
+            "/api/v1/repositories/nonexistent/analyze",
+            json={"requirement": "Update email", "run_sync": True},
+        )
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+        engine.dispose()
 
     assert response.status_code == 404

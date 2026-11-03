@@ -6,6 +6,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { Github, ArrowRight, Sparkles } from 'lucide-react';
 import { LanguageSelectorDropdown } from '../LanguageSelectorDropdown';
 import { UpgradeModal } from '../UpgradeModal';
+import { FloatingAssistant } from '../FloatingAssistant';
 
 interface MarketingLayoutProps {
   children: React.ReactNode;
@@ -13,7 +14,7 @@ interface MarketingLayoutProps {
 }
 
 export const MarketingLayout: React.FC<MarketingLayoutProps> = ({ children, onOpenUpgradeModal }) => {
-  const { isAuthenticated, loginAsDemo } = useAuth();
+  const { user, isAuthenticated, loginAsDemo } = useAuth();
   const { navigate } = useRouter();
   const { t } = useLanguage();
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
@@ -66,13 +67,24 @@ export const MarketingLayout: React.FC<MarketingLayoutProps> = ({ children, onOp
           {/* Language Selector */}
           <LanguageSelectorDropdown variant="rounded" />
 
-          {isAuthenticated ? (
+          {isAuthenticated && user ? (
             <Link
               to="/app/dashboard"
-              className="flex items-center gap-1.5 text-xs font-bold px-4 py-2 rounded-xl bg-[#151923] text-white hover:bg-[#526BEE] hover:shadow-md hover:shadow-[#526BEE]/25 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 shadow-sm"
+              className="flex items-center gap-2.5 px-3 py-1.5 rounded-full border border-[#E4E7E1] bg-white hover:border-[#151923] hover:bg-slate-50 transition-all shadow-2xs group"
+              title={user.name || user.username || 'Dashboard'}
             >
-              <span>{t('nav.dashboard')}</span>
-              <ArrowRight className="w-3.5 h-3.5 text-[#C7F36B]" />
+              <img
+                src={user.avatarUrl || '/default-avatar.webp'}
+                alt={user.name || 'User avatar'}
+                className="w-7 h-7 rounded-full object-cover border border-[#E4E7E1] shadow-2xs shrink-0"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = '/default-avatar.webp';
+                }}
+              />
+              <span className="text-xs font-bold text-[#151923] max-w-[130px] truncate group-hover:text-[#526BEE] transition-colors">
+                {user.name || user.username || 'Developer'}
+              </span>
+              <ArrowRight className="w-3.5 h-3.5 text-[#8B929E] group-hover:text-[#151923] group-hover:translate-x-0.5 transition-all mr-0.5 shrink-0" />
             </Link>
           ) : (
             <>
@@ -106,6 +118,8 @@ export const MarketingLayout: React.FC<MarketingLayoutProps> = ({ children, onOp
         isOpen={isUpgradeModalOpen}
         onClose={() => setIsUpgradeModalOpen(false)}
       />
+
+      <FloatingAssistant />
 
       {/* Footer */}
       <footer className="border-t border-[#E4E7E1] bg-white py-12 px-6 sm:px-12">

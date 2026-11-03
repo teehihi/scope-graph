@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     )
     REDIS_ENABLED: bool = Field(default=True, description="Enable Redis queue/cache if reachable")
 
+    # Stripe Billing
+    STRIPE_PUBLISHABLE_KEY: str = Field(default="")
+    STRIPE_SECRET_KEY: str = Field(default="")
+    STRIPE_PRODUCT_PLUS: str = Field(default="prod_VYfLUY5c7cyCC1")
+    STRIPE_PRODUCT_PRO: str = Field(default="prod_VYfMFqbyB9dPy4")
+    STRIPE_WEBHOOK_SECRET: str = Field(default="")
+
     # Storage and Limits
     WORKSPACE_DIR: str = Field(default="./data/workspaces", description="Root directory for uploaded repositories")
     MAX_UPLOAD_SIZE_MB: int = Field(default=25, description="Max upload archive size in MB")

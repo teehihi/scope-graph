@@ -14,6 +14,7 @@ from app.ai.routing import AIStage, StageExecutionError, build_stage_router
 from app.core.config import settings
 from app.db.database import SessionLocal, get_db
 from app.db.models import Repository
+from app.billing.entitlements import require_feature
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,7 @@ async def process_voice_requirement(
     repo = db.query(Repository).filter(Repository.id == repository_id).first()
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
+    require_feature(db, repo, "voice")
 
     content_type = file.content_type or "audio/wav"
     audio_bytes = await file.read()
@@ -245,6 +247,12 @@ async def voice_streaming_socket(websocket: WebSocket, repository_id: str):
         if not repo:
             await websocket.send_text(json.dumps({"type": "error", "message": "Repository not found"}))
             await websocket.close()
+            return
+        try:
+            require_feature(db, repo, "voice")
+        except HTTPException as error:
+            await websocket.send_text(json.dumps({"type": "error", "message": error.detail}))
+            await websocket.close(code=1008)
             return
         keywords = get_repo_keywords(db, repository_id, limit=20)
     finally:

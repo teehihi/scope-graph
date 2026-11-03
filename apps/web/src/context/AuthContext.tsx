@@ -1,9 +1,11 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { confirmCheckoutSession, fetchSubscription, SubscriptionPlan } from '../api/client';
 
 export interface User {
   name: string;
   email: string;
   isDemo: boolean;
+  plan: SubscriptionPlan;
   avatarUrl?: string;
   username?: string;
   provider?: 'email' | 'github' | 'google' | 'demo';
@@ -29,22 +31,33 @@ interface AuthContextType {
   ) => void;
   loginAsDemo: () => void;
   updateUser: (updates: Partial<User>) => void;
+  billingConfirmation: Exclude<SubscriptionPlan, 'free'> | null;
+  dismissBillingConfirmation: () => void;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const STORAGE_KEY = 'scopegraph_auth_user';
+const isSubscriptionPlan = (value: unknown): value is SubscriptionPlan =>
+  value === 'free' || value === 'plus' || value === 'pro';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [billingConfirmation, setBillingConfirmation] = useState<Exclude<SubscriptionPlan, 'free'> | null>(null);
+  const handledCheckoutSession = useRef<string | null>(null);
+  const activeUserEmail = useRef<string | null>(null);
+  activeUserEmail.current = user?.email.trim().toLowerCase() || null;
 
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
-        setUser(JSON.parse(stored));
+        const parsed = JSON.parse(stored) as Partial<User>;
+        // Plan is billing state, so only the backend subscription record may grant it.
+        // Older builds cached the plan in localStorage, which could mark unpaid users as paid.
+        setUser({ ...parsed, plan: 'free' } as User);
       }
     } catch (e) {
       console.error('Failed to parse auth user', e);
@@ -69,11 +82,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         : isDemo || localStorage.getItem(`scopegraph_onboarded_${email}`) === 'true';
 
     const savedGithubToken = githubToken || localStorage.getItem(`scopegraph_gh_token_${email}`) || undefined;
-
     const newUser: User = {
       name: name || (email.split('@')[0] ? email.split('@')[0].replace(/[^a-zA-Z0-9]/g, ' ') : 'Developer'),
       email,
       isDemo,
+      plan: 'free',
       avatarUrl,
       provider,
       username,
@@ -109,7 +122,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = () => {
     setUser(null);
     localStorage.removeItem(STORAGE_KEY);
+    setBillingConfirmation(null);
   };
+
+  const dismissBillingConfirmation = () => setBillingConfirmation(null);
+
+  useEffect(() => {
+    if (isLoading || !user?.email) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('billing') === 'success' && params.get('session_id')) return;
+
+    let cancelled = false;
+    fetchSubscription(user.email)
+      .then((subscription) => {
+        if (!cancelled && isSubscriptionPlan(subscription.plan) && subscription.plan !== user.plan) {
+          updateUser({ plan: subscription.plan });
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoading, user?.email]);
+
+  useEffect(() => {
+    if (isLoading || !user?.email) return;
+    const currentUrl = new URL(window.location.href);
+    const params = currentUrl.searchParams;
+    const requestedPlan = params.get('plan');
+    const sessionId = params.get('session_id');
+    if (
+      params.get('billing') !== 'success' ||
+      !sessionId ||
+      (requestedPlan !== 'plus' && requestedPlan !== 'pro') ||
+      handledCheckoutSession.current === sessionId
+    ) return;
+
+    handledCheckoutSession.current = sessionId;
+    const requestedEmail = user.email.trim().toLowerCase();
+    confirmCheckoutSession(sessionId, user.email)
+      .then((subscription) => {
+        if (activeUserEmail.current === requestedEmail && subscription.plan === requestedPlan) {
+          updateUser({ plan: subscription.plan });
+          setBillingConfirmation(subscription.plan);
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        currentUrl.searchParams.delete('billing');
+        currentUrl.searchParams.delete('plan');
+        currentUrl.searchParams.delete('session_id');
+        window.history.replaceState({}, '', `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`);
+      });
+  }, [isLoading, user?.email]);
 
   return (
     <AuthContext.Provider
@@ -120,6 +185,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         loginAsDemo,
         updateUser,
+        billingConfirmation,
+        dismissBillingConfirmation,
         logout,
       }}
     >

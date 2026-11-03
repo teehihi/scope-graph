@@ -17,7 +17,7 @@ from app.analysis import orchestrator as orchestrator_module
 from app.api.routes import analysis as analysis_routes
 from app.core.config import settings
 from app.db.database import Base, get_db
-from app.db.models import IndexedFile, IndexedSymbol, Repository
+from app.db.models import IndexedFile, IndexedSymbol, Repository, UserSubscription
 from app.main import app
 
 
@@ -52,12 +52,13 @@ def client(tmp_path, monkeypatch):
     source.write_text("def list_articles():\n    return []\n", encoding="utf-8")
     with factory() as db:
         db.add_all([
-            Repository(id="visual-repo", name="Visual", workspace_path=str(tmp_path), status="ready"),
+            Repository(id="visual-repo", name="Visual", workspace_path=str(tmp_path), status="ready", owner_email="vision@example.com"),
             Repository(id="pending-repo", name="Pending", workspace_path=str(tmp_path), status="indexing"),
             IndexedFile(id="visual-file", repository_id="visual-repo", path="app/article_listing.py"),
             IndexedSymbol(id="visual-symbol", repository_id="visual-repo", file_id="visual-file",
                           name="list_articles", symbol_type="function", line_start=1, line_end=2),
         ])
+        db.add(UserSubscription(email="vision@example.com", plan="plus", subscription_status="active"))
         db.commit()
 
     def local_db():

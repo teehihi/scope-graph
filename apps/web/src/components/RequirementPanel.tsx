@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Terminal, RotateCcw, Paperclip, ImageIcon, X, AlertCircle, Mic, MicOff, Sparkles, HelpCircle, Check, Palette, Ruler, Type, Move, Circle } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
+import { UpgradeModal } from './UpgradeModal';
 import { VoiceStreamer } from '../utils/audioStreamer';
 import { sendVoiceRequirement, refineRequirement, interpretScreenshotPreview, openRealtimeVoiceStream, RealtimeVoiceStream } from '../api/client';
 import { ScreenshotPreviewResponse, SuggestedOption } from '../types';
@@ -25,6 +27,9 @@ export const RequirementPanel: React.FC<RequirementPanelProps> = ({
   activeRepoId,
 }) => {
   const { t, language } = useLanguage();
+  const { user } = useAuth();
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+  const canUsePaidFeatures = user?.plan === 'plus' || user?.plan === 'pro';
   const defaultReq = t('dash.default_req');
   const [requirement, setRequirement] = useState(defaultReq);
   const prevDefaultRef = useRef(defaultReq);
@@ -95,6 +100,10 @@ export const RequirementPanel: React.FC<RequirementPanelProps> = ({
     { label: t('dash.preset_token_label'), req: t('dash.preset_token_req') },
   ];
   const handleFileSelect = async (file: File) => {
+    if (!canUsePaidFeatures) {
+      setIsUpgradeModalOpen(true);
+      return;
+    }
     setFormatError(null);
     setScreenshotInsight(null);
     const validTypes = ['image/png', 'image/jpeg'];
@@ -160,6 +169,10 @@ export const RequirementPanel: React.FC<RequirementPanelProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!requirement.trim() || isAnalyzing) return;
+    if (screenshot && !canUsePaidFeatures) {
+      setIsUpgradeModalOpen(true);
+      return;
+    }
     onAnalyze(requirement.trim(), screenshot);
   };
 
@@ -181,6 +194,10 @@ export const RequirementPanel: React.FC<RequirementPanelProps> = ({
   // Start Voice Streaming & Recording
   const handleStartVoice = async () => {
     if (!activeRepoId) return;
+    if (!canUsePaidFeatures) {
+      setIsUpgradeModalOpen(true);
+      return;
+    }
     setVoiceError(null);
     setRequirement('');
     setRawTranscript('');
@@ -716,7 +733,7 @@ export const RequirementPanel: React.FC<RequirementPanelProps> = ({
                 {/* Voice Microphone Trigger Button */}
                 <button
                   type="button"
-                  onClick={voiceState === 'listening' ? handleStopVoice : handleStartVoice}
+                  onClick={() => void (voiceState === 'listening' ? handleStopVoice() : handleStartVoice())}
                   disabled={!activeRepoId || isAnalyzing || voiceState === 'transcribing' || voiceState === 'refining'}
                   className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
                     voiceState === 'listening'
@@ -745,7 +762,13 @@ export const RequirementPanel: React.FC<RequirementPanelProps> = ({
                 <button
                   id="tour-impact-attach"
                   type="button"
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => {
+                    if (!canUsePaidFeatures) {
+                      setIsUpgradeModalOpen(true);
+                      return;
+                    }
+                    fileInputRef.current?.click();
+                  }}
                   className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
                     screenshot
                       ? 'bg-[#EBFACD] text-[#151923] border border-[#C7F36B] shadow-2xs'
@@ -804,6 +827,7 @@ export const RequirementPanel: React.FC<RequirementPanelProps> = ({
           </div>
         </form>
       </div>
+      <UpgradeModal isOpen={isUpgradeModalOpen} onClose={() => setIsUpgradeModalOpen(false)} />
     </div>
   );
 };

@@ -56,9 +56,11 @@ export interface SystemInfo {
   temperature: number;
   max_tokens: number;
   environment: string;
+  provider_profile?: 'meta_only' | 'multi_ai';
 }
 
 export interface UpdateSystemSettingsRequest {
+  email?: string;
   provider?: string;
   model?: string;
   base_url?: string;
@@ -66,6 +68,7 @@ export interface UpdateSystemSettingsRequest {
   reset_api_key?: boolean;
   temperature?: number;
   max_tokens?: number;
+  provider_profile?: 'meta_only' | 'multi_ai';
 }
 
 export interface EndpointInfo {

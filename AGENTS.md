@@ -35,9 +35,13 @@ Agents must distinguish between **Implemented**, **Partially Implemented**, and 
 | **Background Task Queue & Caching**| **Implemented** | `services/api/app/jobs/queue.py`, `tasks.py`, `worker.py` (Redis RQ with in-process sync fallback; SHA-256 analysis caching) |
 | **REST API Layer** | **Implemented** | `services/api/app/api/routes/` (`repositories.py`, `analysis.py`, `health.py`) |
 | **Web Dashboard & Visualizer** | **Implemented** | `apps/web/` (React 18, Vite 6, Tailwind CSS 3.4, `@xyflow/react` v12.4, Lucide icons, client-side router, layout shells) |
-| **Multi-Language Parsing (TS/JS/Go)** | **Partially Implemented** | File language detection exists (`scanner.py`), but AST symbol/call resolution currently supports Python only. |
-| **Authentication Backend** | **Partially Implemented** | Client-side `AuthContext` (localStorage demo persistence) exists; backend API is currently stateless without JWT/session tables. |
-| **Direct Git Clone Ingestion** | **Planned** | Currently ingests via ZIP archive upload or bundled sample microservice (`/load-sample`). |
+| **Hierarchical Cluster Graph Engine** | **Implemented** | `apps/web/src/components/GraphCanvas.tsx` (hierarchical cluster navigation, smooth drill-down, hover isolation, vertical layout dock, walkthrough tour) |
+| **Spoken Voice & Vibecoder Story** | **Implemented** | `services/api/app/api/routes/voice.py`, `apps/web/src/components/RequirementPanel.tsx`, `ReportPanel.tsx` (waveform recording, VAD, plain-language impact stories, test checklists) |
+| **AI Floating Assistant (Scout)** | **Implemented** | `services/api/app/api/routes/assistant.py`, `apps/web/src/components/FloatingAssistant.tsx` (contextual repository assistant chatbot) |
+| **User Subscription & Billing** | **Implemented** | `services/api/app/billing/`, `services/api/app/api/routes/billing.py`, `apps/web/src/components/UpgradeModal.tsx`, `services/api/app/db/models.py` (Stripe sessions, 3-tier plans, credit limiter) |
+| **Multi-Language Parsing (TS/JS/Go)** | **Partially Implemented** | Python AST parser (`parser.py`) + lightweight regex symbol extraction for TS/JS (`ts_parser.py`); Go AST parser planned. |
+| **Authentication & User Entitlements** | **Implemented** | Client-side `AuthContext`, backend `User` & `Subscription` models (`models.py`), Alembic migration `8c3a21f7b904`, token checks and quota enforcement. |
+| **Direct Git Clone Ingestion** | **Planned** | Currently ingests via ZIP archive upload, GitHub OAuth archive fetch, or bundled sample microservice (`/load-sample`). |
 | **Multi-Provider AI Stage Routing** | **Implemented, opt-in; partner live verification pending** | `services/api/app/ai/routing.py`, `orchestrator.py` (Meta-only default; explicit Baseten vision and Modal reasoning settings with capability and request-budget checks). |
 
 ---

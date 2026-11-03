@@ -5,13 +5,14 @@ import { useLanguage } from '../context/LanguageContext';
 import { UpgradeModal } from '../components/UpgradeModal';
 import { ScopeGraphLogoMark } from '../components/BrandIcons';
 import { LanguageSelectorDropdown } from '../components/LanguageSelectorDropdown';
+import { FloatingAssistant } from '../components/FloatingAssistant';
 import AOS from 'aos';
 import 'aos/dist/aos.css';
 import { Sparkles, Code2, ShieldCheck, ArrowRight, Zap, Play, Network, FlaskConical } from 'lucide-react';
 
 export const Landing: React.FC = () => {
   const { navigate, search } = useRouter();
-  const { loginAsDemo } = useAuth();
+  const { user, isAuthenticated, loginAsDemo } = useAuth();
   const { t } = useLanguage();
 
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
@@ -44,7 +45,9 @@ export const Landing: React.FC = () => {
   }, []);
 
   const handleLaunchDemo = () => {
-    loginAsDemo();
+    if (!isAuthenticated) {
+      loginAsDemo();
+    }
     navigate('/app/dashboard');
   };
 
@@ -109,21 +112,44 @@ export const Landing: React.FC = () => {
           <div className="hidden md:flex items-center gap-2.5 lg:gap-3 shrink-0">
             <LanguageSelectorDropdown showActiveFlag={false} />
 
-            <Link
-              to="/login"
-              className="px-5 py-2 text-sm text-center bg-white text-[#151923] border border-[#E4E7E1] rounded-full font-bold shadow-2xs hover:border-[#151923] hover:bg-slate-50 transition-all"
-            >
-              {t('landing.nav_login')}
-            </Link>
+            {isAuthenticated && user ? (
+              <Link
+                to="/app/dashboard"
+                className="flex items-center gap-2.5 px-3 py-1.5 rounded-full border border-[#E4E7E1] bg-white hover:border-[#151923] hover:bg-slate-50 transition-all shadow-2xs group"
+                title={user.name || user.username || 'Dashboard'}
+              >
+                <img
+                  src={user.avatarUrl || '/default-avatar.webp'}
+                  alt={user.name || 'User avatar'}
+                  className="w-8 h-8 rounded-full object-cover border border-[#E4E7E1] shadow-2xs shrink-0"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).src = '/default-avatar.webp';
+                  }}
+                />
+                <span className="text-sm font-bold text-[#151923] max-w-[140px] lg:max-w-[180px] truncate group-hover:text-[#526BEE] transition-colors leading-tight">
+                  {user.name || user.username || 'Developer'}
+                </span>
+                <ArrowRight className="w-3.5 h-3.5 text-[#8B929E] group-hover:text-[#151923] group-hover:translate-x-0.5 transition-all mr-0.5 shrink-0" />
+              </Link>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  className="px-5 py-2 text-sm text-center bg-white text-[#151923] border border-[#E4E7E1] rounded-full font-bold shadow-2xs hover:border-[#151923] hover:bg-slate-50 transition-all"
+                >
+                  {t('landing.nav_login')}
+                </Link>
 
-            <button
-              type="button"
-              onClick={handleLaunchDemo}
-              className="group px-5 py-2 text-sm text-center bg-[#151923] text-[#F7F8F5] hover:bg-[#C7F36B] hover:text-[#151923] rounded-full font-bold shadow-sm hover:shadow-md hover:shadow-[#C7F36B]/25 transform transition hover:scale-105 duration-200 cursor-pointer flex items-center justify-center gap-1.5"
-            >
-              <span>{t('landing.nav_signup')}</span>
-              <ArrowRight className="w-3.5 h-3.5 text-[#C7F36B] group-hover:text-[#151923] transition-colors" />
-            </button>
+                <button
+                  type="button"
+                  onClick={handleLaunchDemo}
+                  className="group px-5 py-2 text-sm text-center bg-[#151923] text-[#F7F8F5] hover:bg-[#C7F36B] hover:text-[#151923] rounded-full font-bold shadow-sm hover:shadow-md hover:shadow-[#C7F36B]/25 transform transition hover:scale-105 duration-200 cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <span>{t('landing.nav_signup')}</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-[#C7F36B] group-hover:text-[#151923] transition-colors" />
+                </button>
+              </>
+            )}
           </div>
 
           {/* Mobile Hamburger Button */}
@@ -196,24 +222,49 @@ export const Landing: React.FC = () => {
             <div className="flex flex-col gap-3 pt-3 border-t border-[#E4E7E1]/60">
               <LanguageSelectorDropdown showActiveFlag={false} />
 
-              <Link
-                to="/login"
-                className="w-full py-2 text-sm text-center bg-white text-[#151923] border border-[#E4E7E1] rounded-full font-bold shadow-2xs hover:border-[#151923] hover:bg-slate-50 transition-all"
-              >
-                {t('landing.nav_login')}
-              </Link>
+              {isAuthenticated && user ? (
+                <Link
+                  to="/app/dashboard"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center justify-between p-3 rounded-2xl border border-[#E4E7E1] bg-white group hover:border-[#151923] transition-colors shadow-2xs"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <img
+                      src={user.avatarUrl || '/default-avatar.webp'}
+                      alt={user.name || 'User avatar'}
+                      className="w-9 h-9 rounded-full object-cover border border-[#E4E7E1] shadow-2xs shrink-0"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = '/default-avatar.webp';
+                      }}
+                    />
+                    <span className="text-sm font-bold text-[#151923] truncate">
+                      {user.name || user.username || 'Developer'}
+                    </span>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-[#8B929E] group-hover:text-[#151923] group-hover:translate-x-0.5 transition-all mr-1 shrink-0" />
+                </Link>
+              ) : (
+                <>
+                  <Link
+                    to="/login"
+                    className="w-full py-2 text-sm text-center bg-white text-[#151923] border border-[#E4E7E1] rounded-full font-bold shadow-2xs hover:border-[#151923] hover:bg-slate-50 transition-all"
+                  >
+                    {t('landing.nav_login')}
+                  </Link>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setIsMobileMenuOpen(false);
-                  handleLaunchDemo();
-                }}
-                className="group w-full py-2 text-sm text-center bg-[#151923] text-[#F7F8F5] hover:bg-[#C7F36B] hover:text-[#151923] rounded-full font-bold shadow-sm flex items-center justify-center gap-1.5"
-              >
-                <span>{t('landing.nav_signup')}</span>
-                <ArrowRight className="w-3.5 h-3.5 text-[#C7F36B] group-hover:text-[#151923] transition-colors" />
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      handleLaunchDemo();
+                    }}
+                    className="group w-full py-2 text-sm text-center bg-[#151923] text-[#F7F8F5] hover:bg-[#C7F36B] hover:text-[#151923] rounded-full font-bold shadow-sm flex items-center justify-center gap-1.5"
+                  >
+                    <span>{t('landing.nav_signup')}</span>
+                    <ArrowRight className="w-3.5 h-3.5 text-[#C7F36B] group-hover:text-[#151923] transition-colors" />
+                  </button>
+                </>
+              )}
             </div>
           </nav>
         )}
@@ -255,7 +306,7 @@ export const Landing: React.FC = () => {
                 onClick={handleLaunchDemo}
                 className="group w-full sm:w-auto bg-[#151923] hover:bg-[#C7F36B] text-[#F7F8F5] hover:text-[#151923] text-lg font-bold rounded-full py-4 px-9 focus:outline-none transform transition hover:scale-105 duration-300 ease-in-out cursor-pointer shadow-lg hover:shadow-[#C7F36B]/30 flex items-center justify-center gap-2"
               >
-                <span>{t('landing.hero_btn_join')}</span>
+                <span>{isAuthenticated ? t('nav.dashboard') : t('landing.hero_btn_join')}</span>
                 <ArrowRight className="w-5 h-5 text-[#C7F36B] group-hover:text-[#151923] group-hover:translate-x-1 transition-all" />
               </button>
 
@@ -906,6 +957,7 @@ export const Landing: React.FC = () => {
         isOpen={isUpgradeModalOpen}
         onClose={() => setIsUpgradeModalOpen(false)}
       />
+      <FloatingAssistant />
     </div>
   );
 };
