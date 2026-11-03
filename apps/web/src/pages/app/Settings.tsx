@@ -247,7 +247,7 @@ export const SettingsPage: React.FC = () => {
   // Uses frontend reverse proxy to completely mask backend URL
   const mcpRemoteUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/mcp/`
-    : 'https://scopegraph.vercel.app/mcp/';
+    : 'https://www.scopegraph.top/mcp/';
 
   const mcpRemoteConfig = selectedClient === 'claude'
     ? mcpRemoteUrl

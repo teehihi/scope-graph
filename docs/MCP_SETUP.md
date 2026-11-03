@@ -4,7 +4,7 @@ ScopeGraph exposes three Model Context Protocol tools: `analyze_change`, `get_re
 
 ## Remote setup (Windows and macOS)
 
-The hosted endpoint is `https://scopegraph.vercel.app/mcp/` and uses Streamable HTTP. The legacy SSE endpoint remains available at `https://scopegraph.vercel.app/mcp/sse` for clients that only support SSE. Both endpoints are routed through the ScopeGraph API service.
+The hosted endpoint is `https://www.scopegraph.top/mcp/` and uses Streamable HTTP. The legacy SSE endpoint remains available at `https://www.scopegraph.top/mcp/sse` for clients that only support SSE. Both endpoints are routed through the ScopeGraph API service.
 
 ### Cursor
 
@@ -14,7 +14,7 @@ Create or edit `.cursor/mcp.json` in the project root (or `~/.cursor/mcp.json` f
 {
   "mcpServers": {
     "scopegraph": {
-      "url": "https://scopegraph.vercel.app/mcp/"
+      "url": "https://www.scopegraph.top/mcp/"
     }
   }
 }
@@ -34,7 +34,7 @@ Do not search the MCP Store for ScopeGraph. The Store lists published entries; t
 {
   "mcpServers": {
     "scopegraph": {
-      "serverUrl": "https://scopegraph.vercel.app/mcp/"
+      "serverUrl": "https://www.scopegraph.top/mcp/"
     }
   }
 }
@@ -44,7 +44,7 @@ Antigravity requires Streamable HTTP for remote servers; the `/mcp/sse` endpoint
 
 ### Claude Desktop remote connector
 
-Remote servers are added in **Settings -> Connectors -> Add custom connector**. Paste `https://scopegraph.vercel.app/mcp/` as the connector URL and add it. Remote connectors are not configured in `claude_desktop_config.json`.
+Remote servers are added in **Settings -> Connectors -> Add custom connector**. Paste `https://www.scopegraph.top/mcp/` as the connector URL and add it. Remote connectors are not configured in `claude_desktop_config.json`.
 
 ## Local setup (Windows and macOS)
 

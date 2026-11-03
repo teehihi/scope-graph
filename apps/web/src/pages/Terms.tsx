@@ -172,11 +172,11 @@ export const Terms: React.FC = () => {
                   {t('terms.help_card_desc')}
                 </p>
                 <a
-                  href="mailto:legal@scopegraph.ai"
+                  href="mailto:legal@scopegraph.top"
                   className="inline-flex items-center gap-1.5 text-xs font-bold text-[#151923] hover:text-[#526BEE] hover:underline"
                 >
                   <Mail className="w-3.5 h-3.5" />
-                  <span>legal@scopegraph.ai</span>
+                  <span>legal@scopegraph.top</span>
                 </a>
               </div>
           </aside>
@@ -353,7 +353,7 @@ export const Terms: React.FC = () => {
               </p>
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#F7F8F5] border border-[#E4E7E1] text-xs font-mono font-bold text-[#151923]">
                 <Mail className="w-4 h-4 text-[#526BEE]" />
-                <span>legal@scopegraph.ai</span>
+                <span>legal@scopegraph.top</span>
               </div>
             </section>
 

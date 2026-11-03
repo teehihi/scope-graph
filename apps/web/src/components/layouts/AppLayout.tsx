@@ -158,7 +158,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                   )}
                 </div>
                 <p className="text-[10px] text-[#8B929E] truncate font-mono">
-                  {user?.email || 'demo@scopegraph.dev'}
+                  {user?.email || 'demo@scopegraph.top'}
                 </p>
               </div>
             </div>
@@ -268,7 +268,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                   )}
                 </div>
                 <p className="text-[10px] text-[#8B929E] truncate font-mono">
-                  {user?.email || 'demo@scopegraph.dev'}
+                  {user?.email || 'demo@scopegraph.top'}
                 </p>
               </div>
             </div>

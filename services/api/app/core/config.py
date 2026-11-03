@@ -103,7 +103,7 @@ class Settings(BaseSettings):
     SMTP_PORT: int = Field(default=587, description="SMTP port")
     SMTP_USER: str = Field(default="", description="SMTP username")
     SMTP_PASSWORD: str = Field(default="", description="SMTP password")
-    SMTP_FROM: str = Field(default="noreply@scopegraph.dev", description="Sender email address")
+    SMTP_FROM: str = Field(default="ScopeGraph <verify@auth.scopegraph.top>", description="Sender email address")
     SMTP_USE_TLS: bool = Field(default=True, description="Use STARTTLS")
 
     # Auth JWT
@@ -123,7 +123,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = Field(default="", description="Google OAuth Client ID")
     GOOGLE_CLIENT_SECRET: str = Field(default="", description="Google OAuth Client Secret")
     GOOGLE_REDIRECT_URI: str = Field(
-        default="https://scopegraph.vercel.app/auth/callback/google",
+        default="https://www.scopegraph.top/auth/callback/google",
         description="Google OAuth callback URL"
     )
 

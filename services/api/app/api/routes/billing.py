@@ -77,17 +77,17 @@ def _email(value: str | None) -> str | None:
 
 
 def _frontend_origin(request: Request, return_url: str | None) -> str:
-    candidate = return_url or request.headers.get("origin") or "https://scopegraph.vercel.app"
+    candidate = return_url or request.headers.get("origin") or "https://www.scopegraph.top"
     try:
         parsed = urlsplit(candidate)
         port = parsed.port
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid return_url") from exc
     host = (parsed.hostname or "").lower()
-    allowed_hosts = {"scopegraph.vercel.app", "localhost", "127.0.0.1"}
+    allowed_hosts = {"www.scopegraph.top", "scopegraph.top", "scopegraph.vercel.app", "localhost", "127.0.0.1"}
     if parsed.scheme not in {"http", "https"} or host not in allowed_hosts or parsed.username or parsed.password:
         raise HTTPException(status_code=400, detail="return_url must use a ScopeGraph or local development origin")
-    if host == "scopegraph.vercel.app" and (parsed.scheme != "https" or port not in {None, 443}):
+    if host in {"www.scopegraph.top", "scopegraph.top", "scopegraph.vercel.app"} and (parsed.scheme != "https" or port not in {None, 443}):
         raise HTTPException(status_code=400, detail="ScopeGraph return URLs must use HTTPS")
     netloc = parsed.netloc.lower()
     return f"{parsed.scheme}://{netloc}"

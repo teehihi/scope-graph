@@ -17,11 +17,15 @@ _mcp_transport_security = TransportSecuritySettings(
     allowed_hosts=[
         "scopegraph-api.onrender.com",
         "scopegraph.vercel.app",
+        "www.scopegraph.top",
+        "scopegraph.top",
         "localhost",
         "127.0.0.1",
     ],
     allowed_origins=[
         "https://scopegraph.vercel.app",
+        "https://www.scopegraph.top",
+        "https://scopegraph.top",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     ],

@@ -104,7 +104,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const loginAsDemo = () => {
-    login('demo@scopegraph.dev', 'Demo User', true, undefined, 'demo', undefined, true);
+    login('demo@scopegraph.top', 'Demo User', true, undefined, 'demo', undefined, true);
   };
 
   const updateUser = (updates: Partial<User>) => {

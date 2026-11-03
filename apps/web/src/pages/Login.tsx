@@ -244,7 +244,7 @@ export const Login: React.FC = () => {
           className="group w-full flex items-center justify-center gap-2 text-xs font-semibold px-4 py-2.5 rounded-xl bg-white text-[#151923] border border-[#E4E7E1] hover:bg-[#C7F36B] hover:text-[#151923] hover:border-[#C7F36B] hover:shadow-md hover:shadow-[#C7F36B]/25 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 shadow-xs cursor-pointer disabled:opacity-50"
         >
           <UserCheck className="w-4 h-4 text-inherit transition-colors" />
-          <span>Continue with demo account (demo@scopegraph.dev)</span>
+          <span>Continue with demo account (demo@scopegraph.top)</span>
         </button>
 
         <div className="text-center pt-0.5">

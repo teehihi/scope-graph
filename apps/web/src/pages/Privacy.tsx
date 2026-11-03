@@ -170,11 +170,11 @@ export const Privacy: React.FC = () => {
                   {t('privacy.contact_card_desc')}
                 </p>
                 <a
-                  href="mailto:privacy@scopegraph.ai"
+                  href="mailto:privacy@scopegraph.top"
                   className="inline-flex items-center gap-1.5 text-xs font-bold text-[#151923] hover:text-[#526BEE] hover:underline"
                 >
                   <Mail className="w-3.5 h-3.5" />
-                  <span>privacy@scopegraph.ai</span>
+                  <span>privacy@scopegraph.top</span>
                 </a>
               </div>
           </aside>
@@ -355,7 +355,7 @@ export const Privacy: React.FC = () => {
               </p>
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#F7F8F5] border border-[#E4E7E1] text-xs font-mono font-bold text-[#151923]">
                 <Mail className="w-4 h-4 text-[#526BEE]" />
-                <span>privacy@scopegraph.ai</span>
+                <span>privacy@scopegraph.top</span>
               </div>
             </section>
 

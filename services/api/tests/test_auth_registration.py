@@ -114,12 +114,12 @@ def test_resend_provider_sends_email_over_https(monkeypatch):
         return FakeResponse()
 
     monkeypatch.setattr(auth.settings, "RESEND_API_KEY", "re_test_key")
-    monkeypatch.setattr(auth.settings, "SMTP_FROM", "ScopeGraph <onboarding@resend.dev>")
+    monkeypatch.setattr(auth.settings, "SMTP_FROM", "ScopeGraph <verify@auth.scopegraph.top>")
     monkeypatch.setattr(auth.httpx, "post", fake_post)
 
     assert auth._send_otp_email("new-user@example.com", "123456", "New User")
     assert calls["url"] == "https://api.resend.com/emails"
     assert calls["headers"]["Authorization"] == "Bearer re_test_key"
     assert calls["payload"]["to"] == ["new-user@example.com"]
-    assert calls["payload"]["from"] == "ScopeGraph <onboarding@resend.dev>"
+    assert calls["payload"]["from"] == "ScopeGraph <verify@auth.scopegraph.top>"
     assert calls["timeout"] == 10.0

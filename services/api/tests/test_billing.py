@@ -93,7 +93,7 @@ def test_create_checkout_session_uses_monthly_plan_price_and_safe_return_origin(
     response = client.post(
         "/api/v1/billing/create-checkout-session",
         json={"plan": "plus", "email": "Dev@Example.com"},
-        headers={"Origin": "https://scopegraph.vercel.app"},
+        headers={"Origin": "https://www.scopegraph.top"},
     )
 
     assert response.status_code == 200
@@ -106,7 +106,7 @@ def test_create_checkout_session_uses_monthly_plan_price_and_safe_return_origin(
     assert create_args["mode"] == "subscription"
     assert create_args["line_items"] == [{"price": "price_plus_monthly", "quantity": 1}]
     assert create_args["customer_email"] == "dev@example.com"
-    assert create_args["success_url"].startswith("https://scopegraph.vercel.app/app/dashboard?billing=success&plan=plus")
+    assert create_args["success_url"].startswith("https://www.scopegraph.top/app/dashboard?billing=success&plan=plus")
     assert "session_id={CHECKOUT_SESSION_ID}" in create_args["success_url"]
     assert create_args["metadata"] == {"plan": "plus", "email": "dev@example.com"}
     assert create_args["subscription_data"]["metadata"] == create_args["metadata"]

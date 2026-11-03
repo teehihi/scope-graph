@@ -8,7 +8,7 @@ export const Documentation: React.FC = () => {
   const { t } = useLanguage();
   const mcpEndpoint = typeof window !== 'undefined'
     ? `${window.location.origin}/mcp/`
-    : 'https://scopegraph.vercel.app/mcp/';
+    : 'https://www.scopegraph.top/mcp/';
 
   return (
     <MarketingLayout>
