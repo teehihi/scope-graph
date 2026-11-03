@@ -6,13 +6,18 @@ import { Loader } from '../components/Loader';
 import { AlertCircle, ArrowLeft, RefreshCw, CheckCircle2 } from 'lucide-react';
 
 export const AuthCallback: React.FC = () => {
-  const { navigate, search } = useRouter();
+  const { navigate, search, pathname } = useRouter();
   const { user: currentUser, login, updateUser } = useAuth();
   const hasExchangedRef = useRef(false);
 
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
+
+  const isGoogle =
+    pathname.includes('google') ||
+    sessionStorage.getItem('scopegraph_oauth_provider') === 'google';
+  const providerName = isGoogle ? 'Google' : 'GitHub';
 
   useEffect(() => {
     const params = new URLSearchParams(search);
@@ -37,7 +42,11 @@ export const AuthCallback: React.FC = () => {
     const exchangeCode = async () => {
       try {
         const apiUrl = import.meta.env.VITE_API_URL || '';
-        const endpoint = `${apiUrl}/api/v1/auth/github`;
+        const endpoint = isGoogle
+          ? `${apiUrl}/api/v1/auth/google`
+          : `${apiUrl}/api/v1/auth/github`;
+
+        const callbackUrl = `${window.location.origin}/auth/callback/${isGoogle ? 'google' : 'github'}`;
 
         const response = await fetch(endpoint, {
           method: 'POST',
@@ -45,13 +54,13 @@ export const AuthCallback: React.FC = () => {
             'Content-Type': 'application/json',
             Accept: 'application/json',
           },
-          body: JSON.stringify({ code }),
+          body: JSON.stringify({ code, redirect_uri: callbackUrl }),
         });
 
         const data = await response.json();
 
         if (!response.ok) {
-          throw new Error(data.detail || 'Failed to exchange GitHub authorization code');
+          throw new Error(data.detail || `Failed to exchange ${providerName} authorization code`);
         }
 
         const user = data.user;
@@ -60,19 +69,21 @@ export const AuthCallback: React.FC = () => {
 
         const oauthAction = sessionStorage.getItem('scopegraph_oauth_action');
         sessionStorage.removeItem('scopegraph_oauth_action');
+        sessionStorage.removeItem('scopegraph_oauth_provider');
 
-        // Check if user was already in a session and simply linking GitHub (e.g. from Demo or Email account)
+        // Check if user was already in a session and simply linking GitHub/Google
         if (oauthAction === 'link_account' && currentUser) {
-          // Keep current identity (Demo User or Email user), attach GitHub token and metadata
-          updateUser({
-            githubToken: data.access_token,
-            username: user.username,
-          });
-          if (currentUser.email) {
-            localStorage.setItem(`scopegraph_gh_token_${currentUser.email}`, data.access_token);
+          if (!isGoogle) {
+            updateUser({
+              githubToken: data.access_token,
+              username: user.username,
+            });
+            if (currentUser.email) {
+              localStorage.setItem(`scopegraph_gh_token_${currentUser.email}`, data.access_token);
+            }
           }
         } else {
-          // Regular "Login with GitHub" flow
+          // Regular "Login with OAuth" flow
           const hasOnboarded =
             localStorage.getItem(`scopegraph_onboarded_${user.email}`) === 'true';
 
@@ -81,7 +92,7 @@ export const AuthCallback: React.FC = () => {
             user.name,
             false,
             user.avatar_url,
-            'github',
+            isGoogle ? 'google' : 'github',
             user.username,
             hasOnboarded,
             data.access_token
@@ -105,13 +116,13 @@ export const AuthCallback: React.FC = () => {
       } catch (err: any) {
         setStatus('error');
         setErrorMessage(
-          err.message || 'An unexpected error occurred during GitHub authentication.'
+          err.message || `An unexpected error occurred during ${providerName} authentication.`
         );
       }
     };
 
     exchangeCode();
-  }, [search, login, navigate]);
+  }, [search, login, navigate, isGoogle, providerName]);
 
   return (
     <div className="min-h-screen bg-[#F7F8F5] text-[#151923] flex flex-col justify-center items-center p-4 sm:p-6 font-sans">
@@ -120,7 +131,7 @@ export const AuthCallback: React.FC = () => {
         <div className="flex flex-col items-center space-y-3">
           <ScopeGraphLogoMark size={48} dark={false} />
           <h1 className="text-xl font-bold text-[#151923] tracking-tight">
-            GitHub Authentication
+            {providerName} Authentication
           </h1>
         </div>
 
@@ -133,7 +144,7 @@ export const AuthCallback: React.FC = () => {
                 Verifying authorization...
               </p>
               <p className="text-[11px] text-[#8B929E]">
-                Connecting to GitHub and loading your profile.
+                Connecting to {providerName} and loading your profile.
               </p>
             </div>
           </div>

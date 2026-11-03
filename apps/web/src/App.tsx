@@ -4,6 +4,9 @@ import { useAuth } from './context/AuthContext';
 import { Landing } from './pages/Landing';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
+import { Documentation } from './pages/Documentation';
+import { Privacy } from './pages/Privacy';
+import { Terms } from './pages/Terms';
 import { AuthCallback } from './pages/AuthCallback';
 import { Onboarding } from './pages/Onboarding';
 import { NotFound } from './pages/NotFound';
@@ -30,7 +33,8 @@ export const App: React.FC = () => {
     // 2. Unauthenticated visits to /app/* or /onboarding redirect to /login
     if (pathname.startsWith('/app') || pathname === '/onboarding') {
       if (!isAuthenticated) {
-        navigate(`/login?redirect=${encodeURIComponent(pathname)}`);
+        const returnPath = `${pathname}${window.location.search}${window.location.hash}`;
+        navigate(`/login?redirect=${encodeURIComponent(returnPath)}`);
         return;
       }
     }
@@ -55,6 +59,18 @@ export const App: React.FC = () => {
     return <Landing />;
   }
 
+  if (pathname === '/docs' || pathname === '/documentation') {
+    return <Documentation />;
+  }
+
+  if (pathname === '/privacy') {
+    return <Privacy />;
+  }
+
+  if (pathname === '/terms') {
+    return <Terms />;
+  }
+
   if (pathname === '/login') {
     return <Login />;
   }
@@ -67,6 +83,8 @@ export const App: React.FC = () => {
   if (
     pathname === '/auth/callback/github' ||
     pathname === '/auth/callback/github/' ||
+    pathname === '/auth/callback/google' ||
+    pathname === '/auth/callback/google/' ||
     pathname === '/auth/callback' ||
     pathname === '/auth/callback/'
   ) {

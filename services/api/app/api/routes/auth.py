@@ -13,8 +13,17 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 class GitHubAuthRequest(BaseModel):
     code: str = Field(description="GitHub authorization code")
+    redirect_uri: str | None = Field(default=None, description="Optional custom redirect URI")
 
 class GitHubUrlResponse(BaseModel):
+    url: str
+    client_id: str
+
+class GoogleAuthRequest(BaseModel):
+    code: str = Field(description="Google authorization code")
+    redirect_uri: str | None = Field(default=None, description="Optional custom redirect URI")
+
+class GoogleUrlResponse(BaseModel):
     url: str
     client_id: str
 
@@ -58,6 +67,8 @@ async def exchange_github_code(req: GitHubAuthRequest):
             detail="GitHub OAuth is not configured. Please set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET in .env."
         )
 
+    redirect_uri = req.redirect_uri or settings.GITHUB_REDIRECT_URI
+
     async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
         # 1. Exchange code for access_token with retry
         token_data = None
@@ -70,7 +81,7 @@ async def exchange_github_code(req: GitHubAuthRequest):
                         "client_id": settings.GITHUB_CLIENT_ID,
                         "client_secret": settings.GITHUB_CLIENT_SECRET,
                         "code": req.code,
-                        "redirect_uri": settings.GITHUB_REDIRECT_URI,
+                        "redirect_uri": redirect_uri,
                     },
                     timeout=15.0,
                 )
@@ -161,6 +172,128 @@ async def exchange_github_code(req: GitHubAuthRequest):
                 provider="github",
             ),
             access_token=gh_token,
+        )
+
+@router.get("/google/url", response_model=GoogleUrlResponse)
+async def get_google_auth_url(redirect_uri: str | None = None):
+    """Generate Google OAuth authorize URL."""
+    if not settings.GOOGLE_CLIENT_ID:
+        raise HTTPException(
+            status_code=400,
+            detail="Google OAuth is not configured. Please set GOOGLE_CLIENT_ID in your .env file."
+        )
+
+    target_redirect = redirect_uri or settings.GOOGLE_REDIRECT_URI
+    scope = "openid email profile"
+    url = (
+        f"https://accounts.google.com/o/oauth2/v2/auth"
+        f"?client_id={settings.GOOGLE_CLIENT_ID}"
+        f"&redirect_uri={target_redirect}"
+        f"&response_type=code"
+        f"&scope={scope}"
+        f"&access_type=offline"
+        f"&prompt=select_account"
+    )
+    return GoogleUrlResponse(url=url, client_id=settings.GOOGLE_CLIENT_ID)
+
+@router.post("/google", response_model=AuthResponse)
+async def exchange_google_code(req: GoogleAuthRequest):
+    """Exchange authorization code for Google access token and user profile."""
+    if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
+        raise HTTPException(
+            status_code=400,
+            detail="Google OAuth is not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env."
+        )
+
+    redirect_uri = req.redirect_uri or settings.GOOGLE_REDIRECT_URI
+
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+        # 1. Exchange code for access_token with retry
+        token_data = None
+        for attempt in range(3):
+            try:
+                token_resp = await client.post(
+                    "https://oauth2.googleapis.com/token",
+                    data={
+                        "client_id": settings.GOOGLE_CLIENT_ID,
+                        "client_secret": settings.GOOGLE_CLIENT_SECRET,
+                        "code": req.code,
+                        "grant_type": "authorization_code",
+                        "redirect_uri": redirect_uri,
+                    },
+                    headers={"Accept": "application/json"},
+                    timeout=15.0,
+                )
+                if token_resp.status_code == 200:
+                    token_data = token_resp.json()
+                    break
+                else:
+                    logger.warning(
+                        "Google token endpoint returned status %s: %s (attempt %s)",
+                        token_resp.status_code,
+                        token_resp.text,
+                        attempt + 1
+                    )
+            except Exception as exc:
+                logger.warning("Attempt %s to exchange Google code failed: %r", attempt + 1, exc)
+                if attempt < 2:
+                    await asyncio.sleep(0.5)
+
+        if not token_data:
+            logger.error("Failed to connect to Google OAuth server after 3 attempts")
+            raise HTTPException(status_code=502, detail="Failed to connect to Google OAuth server")
+
+        if "error" in token_data:
+            error_desc = token_data.get("error_description", token_data["error"])
+            logger.warning("Google OAuth token error: %s", error_desc)
+            raise HTTPException(status_code=400, detail=f"Google OAuth error: {error_desc}")
+
+        access_token = token_data.get("access_token")
+        if not access_token:
+            raise HTTPException(status_code=400, detail="No access token returned by Google")
+
+        # 2. Fetch User Profile
+        user_headers = {"Authorization": f"Bearer {access_token}"}
+        user_data = None
+        for attempt in range(3):
+            try:
+                user_resp = await client.get(
+                    "https://www.googleapis.com/oauth2/v3/userinfo",
+                    headers=user_headers,
+                    timeout=15.0
+                )
+                if user_resp.status_code == 200:
+                    user_data = user_resp.json()
+                    break
+                else:
+                    logger.warning("Google userinfo endpoint returned status %s (attempt %s)", user_resp.status_code, attempt + 1)
+            except Exception as exc:
+                logger.warning("Attempt %s to fetch Google user profile failed: %r", attempt + 1, exc)
+                if attempt < 2:
+                    await asyncio.sleep(0.5)
+
+        if not user_data:
+            logger.error("Failed to fetch Google user profile after 3 attempts")
+            raise HTTPException(status_code=502, detail="Failed to fetch Google user profile")
+
+        sub = str(user_data.get("sub", ""))
+        email = user_data.get("email") or f"{sub}@gmail.com"
+        name = user_data.get("name") or user_data.get("given_name") or "Google User"
+        avatar_url = user_data.get("picture")
+        username = email.split("@")[0] if "@" in email else (sub or "google_user")
+
+        logger.info("Successfully authenticated Google user: %s (%s)", username, email)
+
+        return AuthResponse(
+            user=UserResponse(
+                id=sub or "google_user",
+                email=email,
+                name=name,
+                username=username,
+                avatar_url=avatar_url,
+                provider="google",
+            ),
+            access_token=access_token,
         )
 
 class GitHubRepoItem(BaseModel):

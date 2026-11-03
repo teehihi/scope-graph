@@ -1,9 +1,11 @@
-import React from 'react';
-import { Link } from '../../router';
+import React, { useState } from 'react';
+import { useRouter, Link } from '../../router';
 import { ScopeGraphLogoMark } from '../BrandIcons';
 import { useAuth } from '../../context/AuthContext';
-import { useLanguage, AVAILABLE_LANGUAGES, Language } from '../../context/LanguageContext';
-import { Github, ArrowRight, Sparkles, Globe } from 'lucide-react';
+import { useLanguage } from '../../context/LanguageContext';
+import { Github, ArrowRight, Sparkles } from 'lucide-react';
+import { LanguageSelectorDropdown } from '../LanguageSelectorDropdown';
+import { UpgradeModal } from '../UpgradeModal';
 
 interface MarketingLayoutProps {
   children: React.ReactNode;
@@ -11,8 +13,18 @@ interface MarketingLayoutProps {
 }
 
 export const MarketingLayout: React.FC<MarketingLayoutProps> = ({ children, onOpenUpgradeModal }) => {
-  const { isAuthenticated } = useAuth();
-  const { language, setLanguage, t } = useLanguage();
+  const { isAuthenticated, loginAsDemo } = useAuth();
+  const { navigate } = useRouter();
+  const { t } = useLanguage();
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+
+  const handleOpenPricing = () => {
+    if (onOpenUpgradeModal) {
+      onOpenUpgradeModal();
+    } else {
+      setIsUpgradeModalOpen(true);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#F7F8F5] text-[#151923] flex flex-col font-sans selection:bg-[#C7F36B] selection:text-[#151923]">
@@ -27,55 +39,39 @@ export const MarketingLayout: React.FC<MarketingLayoutProps> = ({ children, onOp
 
         {/* Center / Right Links */}
         <nav className="hidden md:flex items-center gap-7 text-xs font-semibold text-[#8B929E]">
-          <a href="#how-it-works" className="hover:text-[#151923] transition-colors">
-            How it works
-          </a>
-          <a href="#what-you-get" className="hover:text-[#151923] transition-colors">
-            Features
-          </a>
-          <a href="#mcp" className="hover:text-[#151923] transition-colors">
-            MCP Agent
-          </a>
-          <a href="#demo" className="hover:text-[#151923] transition-colors">
-            Demo
-          </a>
-          {onOpenUpgradeModal && (
-            <button
-              type="button"
-              onClick={onOpenUpgradeModal}
-              className="text-[#151923] font-bold hover:text-[#526BEE] flex items-center gap-1.5 transition-colors cursor-pointer px-2.5 py-1 rounded-lg hover:bg-slate-100"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-[#526BEE]" />
-              <span>{t('pricing.nav_title')}</span>
-            </button>
-          )}
+          <Link to="/" className="hover:text-[#151923] transition-colors">
+            {t('landing.nav_home')}
+          </Link>
+          <Link to="/?section=features" className="hover:text-[#151923] transition-colors">
+            {t('landing.nav_features')}
+          </Link>
+          <Link to="/?section=mcp-section" className="hover:text-[#151923] transition-colors">
+            {t('landing.nav_mcp')}
+          </Link>
+          <Link to="/docs" className="hover:text-[#151923] transition-colors">
+            {t('docs.title')}
+          </Link>
+          <button
+            type="button"
+            onClick={handleOpenPricing}
+            className="group text-[#8B929E] hover:text-[#526BEE] font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-[#8B929E] group-hover:text-[#526BEE] transition-colors" />
+            <span>{t('landing.nav_pricing')}</span>
+          </button>
         </nav>
 
         {/* Auth CTA & Language buttons */}
         <div className="flex items-center gap-3">
           {/* Language Selector */}
-          <div className="relative flex items-center gap-1 bg-white border border-[#E4E7E1] rounded-xl px-2 py-1 shadow-2xs">
-            <Globe className="w-3.5 h-3.5 text-[#8B929E]" />
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value as Language)}
-              aria-label="Language"
-              className="bg-transparent text-xs font-bold text-[#151923] outline-none cursor-pointer pr-1"
-            >
-              {AVAILABLE_LANGUAGES.map((l) => (
-                <option key={l.code} value={l.code}>
-                  {l.flag} {l.code.toUpperCase()}
-                </option>
-              ))}
-            </select>
-          </div>
+          <LanguageSelectorDropdown variant="rounded" />
 
           {isAuthenticated ? (
             <Link
               to="/app/dashboard"
               className="flex items-center gap-1.5 text-xs font-bold px-4 py-2 rounded-xl bg-[#151923] text-white hover:bg-[#526BEE] hover:shadow-md hover:shadow-[#526BEE]/25 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 shadow-sm"
             >
-              <span>Go to App</span>
+              <span>{t('nav.dashboard')}</span>
               <ArrowRight className="w-3.5 h-3.5 text-[#C7F36B]" />
             </Link>
           ) : (
@@ -84,15 +80,19 @@ export const MarketingLayout: React.FC<MarketingLayoutProps> = ({ children, onOp
                 to="/login"
                 className="hidden sm:inline-block text-xs font-semibold px-3 py-2 text-[#151923] hover:text-[#526BEE] transition-colors"
               >
-                Log in
+                {t('landing.nav_login')}
               </Link>
-              <Link
-                to="/register"
-                className="group flex items-center gap-1.5 text-xs font-bold px-4 py-2 rounded-xl bg-[#151923] text-[#F7F8F5] hover:bg-[#C7F36B] hover:text-[#151923] hover:shadow-md hover:shadow-[#C7F36B]/25 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 shadow-sm"
+              <button
+                type="button"
+                onClick={() => {
+                  loginAsDemo();
+                  navigate('/app/dashboard');
+                }}
+                className="group flex items-center gap-1.5 text-xs font-bold px-4 py-2 rounded-xl bg-[#151923] text-[#F7F8F5] hover:bg-[#C7F36B] hover:text-[#151923] hover:shadow-md hover:shadow-[#C7F36B]/25 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 shadow-sm cursor-pointer"
               >
-                <span>Get started</span>
+                <span>{t('landing.nav_signup')}</span>
                 <ArrowRight className="w-3.5 h-3.5 text-[#C7F36B] group-hover:text-[#151923] group-hover:translate-x-0.5 transition-all" />
-              </Link>
+              </button>
             </>
           )}
         </div>
@@ -100,6 +100,12 @@ export const MarketingLayout: React.FC<MarketingLayoutProps> = ({ children, onOp
 
       {/* Main Content */}
       <main className="flex-1">{children}</main>
+
+      {/* Upgrade / Pricing Modal */}
+      <UpgradeModal
+        isOpen={isUpgradeModalOpen}
+        onClose={() => setIsUpgradeModalOpen(false)}
+      />
 
       {/* Footer */}
       <footer className="border-t border-[#E4E7E1] bg-white py-12 px-6 sm:px-12">
@@ -117,26 +123,31 @@ export const MarketingLayout: React.FC<MarketingLayoutProps> = ({ children, onOp
           </div>
 
           <div className="flex items-center gap-6 text-xs text-[#8B929E]">
-            {onOpenUpgradeModal && (
-              <button
-                type="button"
-                onClick={onOpenUpgradeModal}
-                className="font-semibold hover:text-[#151923] transition-colors cursor-pointer"
-              >
-                {t('pricing.nav_title')}
-              </button>
-            )}
+            <Link to="/docs" className="font-semibold hover:text-[#151923] transition-colors">
+              {t('docs.title')}
+            </Link>
+            <Link to="/privacy" className="font-semibold hover:text-[#151923] transition-colors">
+              {t('privacy.title')}
+            </Link>
+            <Link to="/terms" className="font-semibold hover:text-[#151923] transition-colors">
+              {t('terms.title')}
+            </Link>
+            <button
+              type="button"
+              onClick={handleOpenPricing}
+              className="font-semibold hover:text-[#151923] transition-colors cursor-pointer"
+            >
+              {t('landing.nav_pricing')}
+            </button>
             <a
-              href="https://github.com"
+              href="https://github.com/teehihi/scope-graph"
               target="_blank"
               rel="noreferrer"
               className="flex items-center gap-1.5 hover:text-[#151923] transition-colors"
             >
               <Github className="w-4 h-4" />
-              <span>GitHub Repository</span>
+              <span>GitHub</span>
             </a>
-            <span className="text-slate-300">•</span>
-            <span>Built for Modern Engineering Teams</span>
           </div>
         </div>
       </footer>

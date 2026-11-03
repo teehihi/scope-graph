@@ -11,11 +11,11 @@ router = APIRouter(tags=["health"])
 ORIGINAL_ENV_API_KEY: str = settings.META_AI_API_KEY
 CUSTOM_USER_API_KEY: str | None = None
 
-@router.get("/health")
+@router.api_route("/health", methods=["GET", "HEAD"])
 def health():
     return {"status": "ok", "service": "scopegraph-api"}
 
-@router.get("/ready")
+@router.api_route("/ready", methods=["GET", "HEAD"])
 def readiness():
     db_ok = False
     try:

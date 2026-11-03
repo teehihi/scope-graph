@@ -108,3 +108,51 @@ code, pre, .font-mono {
   border: 1px solid #E4E7E1;
   box-shadow: 0 4px 20px -2px rgba(21, 25, 35, 0.08), 0 2px 6px -1px rgba(21, 25, 35, 0.04);
 }
+
+/* Floating animation utilities (ScopeGraph Brand Kit v2) */
+.bg-cream {
+  background-color: #F7F8F5;
+}
+.text-darken {
+  color: #151923;
+}
+.bg-brand-blue {
+  background-color: #526BEE;
+}
+.text-brand-blue {
+  color: #526BEE;
+}
+.bg-brand-lime {
+  background-color: #C7F36B;
+}
+.text-brand-lime {
+  color: #C7F36B;
+}
+.bg-yellow-500 {
+  background-color: #526BEE !important;
+}
+.text-yellow-500 {
+  color: #526BEE !important;
+}
+
+@keyframes floating {
+  0% { transform: translate(0, 0px); }
+  50% { transform: translate(0, 8px); }
+  100% { transform: translate(0, 0px); }
+}
+
+@keyframes floating-4 {
+  0% { transform: translate(0, 0px); }
+  50% { transform: translate(0, 8px); }
+  100% { transform: translate(0, 0px); }
+}
+
+.floating {
+  animation: floating 3s ease-in-out infinite;
+}
+
+.floating-4 {
+  animation: floating-4 4s ease-in-out infinite;
+}
+
+

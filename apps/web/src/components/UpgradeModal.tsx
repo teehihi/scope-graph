@@ -74,115 +74,132 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose }) =
       onClick={handleDialogClick}
       aria-labelledby="upgrade-dialog-title"
       aria-describedby="upgrade-dialog-desc"
-      className="m-auto rounded-3xl border border-[#E4E7E1] bg-[#F7F8F5] p-0 text-[#151923] shadow-2xl backdrop:bg-black/60 backdrop:backdrop-blur-sm max-w-5xl w-full max-h-[92vh] overflow-y-auto overscroll-contain animate-in fade-in-0 zoom-in-95 duration-200 outline-none"
+      className="m-auto rounded-[32px] border border-slate-200/80 bg-white/95 backdrop-blur-xl p-0 text-[#151923] shadow-2xl shadow-slate-900/30 backdrop:bg-slate-950/70 backdrop:backdrop-blur-md max-w-5xl w-full max-h-[92vh] overflow-y-auto overscroll-contain outline-none transition-all"
     >
       <div className="relative p-6 sm:p-10">
+        {/* Subtle Ambient Background Glow */}
+        <div
+          aria-hidden="true"
+          className="absolute -top-24 left-1/2 -translate-x-1/2 w-[600px] h-[250px] bg-gradient-to-b from-[#C7F36B]/15 via-[#526BEE]/10 to-transparent blur-3xl pointer-events-none rounded-full"
+        />
+
         {/* Close Button */}
         <button
           type="button"
           onClick={onClose}
           aria-label={t('pricing.close')}
-          className="absolute top-6 right-6 p-2 rounded-xl text-[#8B929E] hover:text-[#151923] hover:bg-[#E4E7E1]/50 transition-colors cursor-pointer"
+          className="absolute top-5 right-5 sm:top-6 sm:right-6 p-2 rounded-full text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer z-10"
         >
           <X className="w-5 h-5" />
         </button>
 
         {/* Modal Header */}
-        <div className="text-center max-w-2xl mx-auto mb-8 sm:mb-10">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#EBFACD] text-[#151923] border border-[#C7F36B] text-[11px] font-bold tracking-wide uppercase mb-3">
-            <Sparkles className="w-3.5 h-3.5 text-[#151923]" />
+        <div className="relative text-center max-w-2xl mx-auto mb-8 sm:mb-10">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold tracking-wide mb-3 shadow-2xs">
+            <Sparkles className="w-3.5 h-3.5 text-[#526BEE]" />
             <span>{t('pricing.nav_title')}</span>
           </div>
-          <h2 id="upgrade-dialog-title" className="text-2xl sm:text-3xl font-extrabold text-[#151923] tracking-tight">
+
+          <h2 id="upgrade-dialog-title" className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
             {t('pricing.modal_title')}
           </h2>
-          <p id="upgrade-dialog-desc" className="text-xs sm:text-sm text-[#8B929E] mt-2 leading-relaxed">
+          <p id="upgrade-dialog-desc" className="text-xs sm:text-sm text-slate-500 mt-2 leading-relaxed">
             {t('pricing.modal_desc')}
           </p>
 
-          {/* Billing Cycle Switcher */}
-          <div className="inline-flex items-center gap-1 mt-6 p-1 rounded-xl bg-white border border-[#E4E7E1] shadow-xs">
+          {/* Billing Cycle Switcher - Modern Rounded Pill */}
+          <div className="inline-flex items-center p-1 mt-6 rounded-full bg-slate-100 border border-slate-200/60 shadow-inner">
             <button
               type="button"
               onClick={() => setBillingCycle('monthly')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                billingCycle === 'monthly'
-                  ? 'bg-[#151923] text-white shadow-xs'
-                  : 'text-[#8B929E] hover:text-[#151923]'
-              }`}
+              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${billingCycle === 'monthly'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900'
+                }`}
             >
               {t('pricing.cycle_monthly')}
             </button>
             <button
               type="button"
               onClick={() => setBillingCycle('annually')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                billingCycle === 'annually'
-                  ? 'bg-[#151923] text-white shadow-xs'
-                  : 'text-[#8B929E] hover:text-[#151923]'
-              }`}
+              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${billingCycle === 'annually'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900'
+                }`}
             >
               <span>{t('pricing.cycle_annually')}</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-[#C7F36B] text-[#151923] font-extrabold">
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#C7F36B] text-[#151923] font-extrabold">
                 {t('pricing.save_20')}
               </span>
             </button>
           </div>
 
-          {/* Success Banner */}
+          {/* Success Notification Banner */}
           {upgradedMessage && (
-            <div className="mt-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center justify-center gap-2 animate-in fade-in duration-200">
+            <div className="mt-4 p-3 rounded-2xl bg-emerald-50 border border-emerald-200/80 text-emerald-800 text-xs font-bold flex items-center justify-center gap-2 animate-in fade-in duration-200 shadow-xs">
               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
               <span>{upgradedMessage}</span>
             </div>
           )}
         </div>
 
-        {/* 3 Tier Pricing Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
-          {/* TIER 1: FREE */}
-          <div className="flex flex-col justify-between p-6 sm:p-7 rounded-2xl border-2 border-[#E4E7E1] bg-white relative transition-all duration-200 hover:border-slate-300">
+        {/* 3 Tier Cards Grid */}
+        <div className="relative grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch pt-2">
+          {/* TIER 1: COMMUNITY FREE */}
+          <div className="flex flex-col justify-between p-6 rounded-2xl border border-slate-200/80 bg-slate-50/60 hover:bg-white hover:shadow-md transition-all duration-200">
             <div>
               <div className="flex items-center justify-between mb-2">
-                <h3 className="font-bold text-base text-[#151923]">{t('pricing.free_title')}</h3>
+                <h3 className="font-bold text-base text-slate-900">{t('pricing.free_title')}</h3>
                 {activePlan === 'free' && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">
                     {t('pricing.current_plan_badge')}
                   </span>
                 )}
               </div>
-              <p className="text-xs text-[#8B929E] min-h-[36px]">{t('pricing.free_desc')}</p>
+              <p className="text-xs text-slate-500 min-h-[36px]">{t('pricing.free_desc')}</p>
 
               {/* Price */}
-              <div className="my-6">
-                <span className="text-3xl font-extrabold text-[#151923]">{t('pricing.free_price')}</span>
-                <span className="text-xs text-[#8B929E] ml-1.5 font-medium">{t('pricing.free_period')}</span>
+              <div className="my-5">
+                <span className="text-3xl font-extrabold text-slate-900">{t('pricing.free_price')}</span>
+                <span className="text-xs text-slate-400 ml-1.5 font-medium">{t('pricing.free_period')}</span>
               </div>
 
-              {/* Feature Checklist */}
-              <div className="space-y-3 border-t border-[#E4E7E1] pt-5 text-xs text-[#151923]">
+              {/* Features */}
+              <div className="space-y-3 border-t border-slate-200/70 pt-5 text-xs text-slate-700">
                 <div className="flex items-start gap-2.5">
-                  <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
                   <span>{t('pricing.feature_scans_free')}</span>
                 </div>
                 <div className="flex items-start gap-2.5">
-                  <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
                   <span>{t('pricing.feature_ai_free')}</span>
                 </div>
                 <div className="flex items-start gap-2.5">
-                  <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
                   <span>{t('pricing.feature_models_free')}</span>
                 </div>
                 <div className="flex items-start gap-2.5">
-                  <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
                   <span>{t('pricing.feature_vision_free')}</span>
                 </div>
                 <div className="flex items-start gap-2.5">
-                  <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
                   <span>{t('pricing.feature_voice_free')}</span>
                 </div>
                 <div className="flex items-start gap-2.5">
-                  <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
                   <span>{t('pricing.feature_support_free')}</span>
                 </div>
               </div>
@@ -192,63 +209,75 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose }) =
             <button
               type="button"
               disabled
-              className="w-full mt-8 py-3 rounded-xl border border-[#E4E7E1] bg-slate-50 text-slate-400 text-xs font-bold cursor-not-allowed text-center"
+              className="w-full mt-7 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-400 text-xs font-bold cursor-default shadow-2xs text-center"
             >
               {t('pricing.free_cta')}
             </button>
           </div>
 
-          {/* TIER 2: DEVELOPER PLUS (POPULAR) */}
-          <div className="flex flex-col justify-between p-6 sm:p-7 rounded-2xl border-2 border-[#151923] bg-white relative shadow-xl shadow-[#C7F36B]/15 transition-all duration-200 hover:-translate-y-1">
-            {/* Top Badge */}
-            <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-[#151923] text-[#C7F36B] border border-[#C7F36B]/40 text-[10px] font-extrabold tracking-wider uppercase flex items-center gap-1 shadow-sm">
-              <Zap className="w-3 h-3 text-[#C7F36B]" />
+          {/* TIER 2: DEVELOPER PLUS (FEATURED / HIGH-END DARK CARD) */}
+          <div className="flex flex-col justify-between p-6 sm:p-7 rounded-2xl bg-[#151923] text-white shadow-xl shadow-slate-900/25 relative sm:-translate-y-2 sm:scale-[1.02] border border-slate-700 transition-all duration-300">
+            {/* Top Popular Badge */}
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-[#C7F36B] text-[#151923] text-[10px] font-extrabold tracking-wider uppercase flex items-center gap-1 shadow-md">
+              <Zap className="w-3 h-3 fill-current" />
               <span>{t('pricing.plus_badge')}</span>
             </div>
 
             <div>
               <div className="flex items-center justify-between mb-2">
-                <h3 className="font-extrabold text-base text-[#151923]">{t('pricing.plus_title')}</h3>
+                <h3 className="font-extrabold text-base text-white">{t('pricing.plus_title')}</h3>
                 {activePlan === 'plus' && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#EBFACD] text-[#151923] border border-[#C7F36B]">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#C7F36B]/20 text-[#C7F36B] border border-[#C7F36B]/40">
                     {t('pricing.current_plan_badge')}
                   </span>
                 )}
               </div>
-              <p className="text-xs text-[#8B929E] min-h-[36px]">{t('pricing.plus_desc')}</p>
+              <p className="text-xs text-slate-400 min-h-[36px]">{t('pricing.plus_desc')}</p>
 
               {/* Price */}
-              <div className="my-6">
-                <span className="text-3xl font-extrabold text-[#151923]">
+              <div className="my-5">
+                <span className="text-3xl font-extrabold text-[#C7F36B]">
                   {billingCycle === 'monthly' ? t('pricing.plus_price_monthly') : t('pricing.plus_price_annual')}
                 </span>
-                <span className="text-xs text-[#8B929E] ml-1.5 font-medium">{t('pricing.plus_period')}</span>
+                <span className="text-xs text-slate-400 ml-1.5 font-medium">{t('pricing.plus_period')}</span>
               </div>
 
-              {/* Feature Checklist */}
-              <div className="space-y-3 border-t border-[#E4E7E1] pt-5 text-xs text-[#151923]">
+              {/* Features */}
+              <div className="space-y-3 border-t border-slate-800 pt-5 text-xs text-slate-200">
                 <div className="flex items-start gap-2.5 font-medium">
-                  <Check className="w-4 h-4 text-[#526BEE] shrink-0 mt-0.5" />
+                  <div className="w-4 h-4 rounded-full bg-[#C7F36B]/20 text-[#C7F36B] flex items-center justify-center shrink-0 mt-0.5">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
                   <span>{t('pricing.feature_scans_plus')}</span>
                 </div>
                 <div className="flex items-start gap-2.5 font-medium">
-                  <Check className="w-4 h-4 text-[#526BEE] shrink-0 mt-0.5" />
+                  <div className="w-4 h-4 rounded-full bg-[#C7F36B]/20 text-[#C7F36B] flex items-center justify-center shrink-0 mt-0.5">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
                   <span>{t('pricing.feature_ai_plus')}</span>
                 </div>
                 <div className="flex items-start gap-2.5 font-medium">
-                  <Cpu className="w-4 h-4 text-[#151923] shrink-0 mt-0.5" />
+                  <div className="w-4 h-4 rounded-full bg-[#C7F36B]/20 text-[#C7F36B] flex items-center justify-center shrink-0 mt-0.5">
+                    <Cpu className="w-2.5 h-2.5" />
+                  </div>
                   <span>{t('pricing.feature_models_plus')}</span>
                 </div>
                 <div className="flex items-start gap-2.5 font-medium">
-                  <Eye className="w-4 h-4 text-[#526BEE] shrink-0 mt-0.5" />
+                  <div className="w-4 h-4 rounded-full bg-[#C7F36B]/20 text-[#C7F36B] flex items-center justify-center shrink-0 mt-0.5">
+                    <Eye className="w-2.5 h-2.5" />
+                  </div>
                   <span>{t('pricing.feature_vision_plus')}</span>
                 </div>
                 <div className="flex items-start gap-2.5 font-medium">
-                  <Mic className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div className="w-4 h-4 rounded-full bg-[#C7F36B]/20 text-[#C7F36B] flex items-center justify-center shrink-0 mt-0.5">
+                    <Mic className="w-2.5 h-2.5" />
+                  </div>
                   <span>{t('pricing.feature_voice_plus')}</span>
                 </div>
                 <div className="flex items-start gap-2.5 font-medium">
-                  <Activity className="w-4 h-4 text-[#F5A623] shrink-0 mt-0.5" />
+                  <div className="w-4 h-4 rounded-full bg-[#C7F36B]/20 text-[#C7F36B] flex items-center justify-center shrink-0 mt-0.5">
+                    <Activity className="w-2.5 h-2.5" />
+                  </div>
                   <span>{t('pricing.feature_support_plus')}</span>
                 </div>
               </div>
@@ -258,64 +287,70 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose }) =
             <button
               type="button"
               onClick={() => handleSelectPlan('plus')}
-              className="w-full mt-8 py-3 rounded-xl bg-[#151923] text-[#F7F8F5] hover:bg-[#C7F36B] hover:text-[#151923] hover:shadow-lg hover:shadow-[#C7F36B]/30 active:scale-[0.99] transition-all text-xs font-bold flex items-center justify-center gap-2 cursor-pointer group"
+              className="w-full mt-7 py-3 rounded-xl bg-[#C7F36B] text-[#151923] hover:bg-[#d6f88d] hover:shadow-lg hover:shadow-[#C7F36B]/30 active:scale-[0.99] transition-all text-xs font-extrabold flex items-center justify-center gap-2 cursor-pointer group shadow-sm"
             >
               <span>{t('pricing.plus_cta')}</span>
-              <ArrowRight className="w-3.5 h-3.5 text-[#C7F36B] group-hover:text-[#151923] group-hover:translate-x-0.5 transition-all" />
+              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
             </button>
           </div>
 
-          {/* TIER 3: PRO / ENTERPRISE */}
-          <div className="flex flex-col justify-between p-6 sm:p-7 rounded-2xl border-2 border-[#E4E7E1] bg-white relative transition-all duration-200 hover:border-[#526BEE]/50 hover:-translate-y-1">
-            {/* Top Badge */}
-            <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-indigo-50 text-[#526BEE] border border-[#526BEE]/30 text-[10px] font-extrabold tracking-wider uppercase flex items-center gap-1">
-              <Crown className="w-3 h-3 text-[#526BEE]" />
-              <span>{t('pricing.pro_badge')}</span>
-            </div>
-
+          {/* TIER 3: TEAM & ENTERPRISE PRO */}
+          <div className="flex flex-col justify-between p-6 rounded-2xl border border-slate-200/80 bg-slate-50/60 hover:bg-white hover:shadow-md transition-all duration-200">
             <div>
               <div className="flex items-center justify-between mb-2">
-                <h3 className="font-bold text-base text-[#151923]">{t('pricing.pro_title')}</h3>
+                <h3 className="font-bold text-base text-slate-900">{t('pricing.pro_title')}</h3>
                 {activePlan === 'pro' && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#526BEE]/10 text-[#526BEE] border border-[#526BEE]/30">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-[#526BEE] border border-indigo-200">
                     {t('pricing.current_plan_badge')}
                   </span>
                 )}
               </div>
-              <p className="text-xs text-[#8B929E] min-h-[36px]">{t('pricing.pro_desc')}</p>
+              <p className="text-xs text-slate-500 min-h-[36px]">{t('pricing.pro_desc')}</p>
 
               {/* Price */}
-              <div className="my-6">
-                <span className="text-3xl font-extrabold text-[#151923]">
+              <div className="my-5">
+                <span className="text-3xl font-extrabold text-slate-900">
                   {billingCycle === 'monthly' ? t('pricing.pro_price_monthly') : t('pricing.pro_price_annual')}
                 </span>
-                <span className="text-xs text-[#8B929E] ml-1.5 font-medium">{t('pricing.pro_period')}</span>
+                <span className="text-xs text-slate-400 ml-1.5 font-medium">{t('pricing.pro_period')}</span>
               </div>
 
-              {/* Feature Checklist */}
-              <div className="space-y-3 border-t border-[#E4E7E1] pt-5 text-xs text-[#151923]">
+              {/* Features */}
+              <div className="space-y-3 border-t border-slate-200/70 pt-5 text-xs text-slate-700">
                 <div className="flex items-start gap-2.5">
-                  <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div className="w-4 h-4 rounded-full bg-indigo-100 text-[#526BEE] flex items-center justify-center shrink-0 mt-0.5">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
                   <span>{t('pricing.feature_scans_pro')}</span>
                 </div>
                 <div className="flex items-start gap-2.5">
-                  <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div className="w-4 h-4 rounded-full bg-indigo-100 text-[#526BEE] flex items-center justify-center shrink-0 mt-0.5">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
                   <span>{t('pricing.feature_ai_pro')}</span>
                 </div>
                 <div className="flex items-start gap-2.5">
-                  <Shield className="w-4 h-4 text-[#526BEE] shrink-0 mt-0.5" />
+                  <div className="w-4 h-4 rounded-full bg-indigo-100 text-[#526BEE] flex items-center justify-center shrink-0 mt-0.5">
+                    <Shield className="w-2.5 h-2.5" />
+                  </div>
                   <span>{t('pricing.feature_models_pro')}</span>
                 </div>
                 <div className="flex items-start gap-2.5">
-                  <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div className="w-4 h-4 rounded-full bg-indigo-100 text-[#526BEE] flex items-center justify-center shrink-0 mt-0.5">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
                   <span>{t('pricing.feature_vision_pro')}</span>
                 </div>
                 <div className="flex items-start gap-2.5">
-                  <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div className="w-4 h-4 rounded-full bg-indigo-100 text-[#526BEE] flex items-center justify-center shrink-0 mt-0.5">
+                    <Crown className="w-2.5 h-2.5" />
+                  </div>
                   <span>{t('pricing.feature_voice_pro')}</span>
                 </div>
                 <div className="flex items-start gap-2.5">
-                  <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div className="w-4 h-4 rounded-full bg-indigo-100 text-[#526BEE] flex items-center justify-center shrink-0 mt-0.5">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
                   <span>{t('pricing.feature_support_pro')}</span>
                 </div>
               </div>
@@ -325,19 +360,14 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose }) =
             <button
               type="button"
               onClick={() => handleSelectPlan('pro')}
-              className="w-full mt-8 py-3 rounded-xl border-2 border-[#151923] bg-white text-[#151923] hover:bg-[#151923] hover:text-white transition-all text-xs font-bold flex items-center justify-center gap-2 cursor-pointer group"
+              className="w-full mt-7 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-800 hover:bg-slate-100 transition-all text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
             >
               <span>{t('pricing.pro_cta')}</span>
-              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-all" />
+              <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
 
-        {/* Footer Guarantee Note */}
-        <div className="mt-8 text-center text-xs text-[#8B929E] flex items-center justify-center gap-2">
-          <Shield className="w-4 h-4 text-emerald-600" />
-          <span>Meta Model API Hackathon Compliant • 100% Deterministic Code Grounding</span>
-        </div>
       </div>
     </dialog>
   );

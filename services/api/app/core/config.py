@@ -98,6 +98,14 @@ class Settings(BaseSettings):
         description="GitHub OAuth callback URL"
     )
 
+    # Google OAuth
+    GOOGLE_CLIENT_ID: str = Field(default="", description="Google OAuth Client ID")
+    GOOGLE_CLIENT_SECRET: str = Field(default="", description="Google OAuth Client Secret")
+    GOOGLE_REDIRECT_URI: str = Field(
+        default="https://scopegraph.vercel.app/auth/callback/google",
+        description="Google OAuth callback URL"
+    )
+
     model_config = SettingsConfigDict(
         env_file=_find_env_file(),
         env_file_encoding="utf-8",
