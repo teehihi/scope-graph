@@ -234,20 +234,39 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
-  const mcpConfig = `{
+  const [mcpTab, setMcpTab] = useState<'remote' | 'local'>('remote');
+
+  const rawApiUrl = import.meta.env.VITE_API_URL || '';
+  const effectiveApiUrl = rawApiUrl
+    ? rawApiUrl.replace(/\/$/, '')
+    : (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8000');
+  const mcpSseUrl = `${effectiveApiUrl}/mcp/sse`;
+
+  const mcpRemoteConfig = `{
+  "mcpServers": {
+    "scopegraph": {
+      "url": "${mcpSseUrl}"
+    }
+  }
+}`;
+
+  const mcpLocalConfig = `{
   "mcpServers": {
     "scopegraph": {
       "command": "python",
       "args": ["-m", "app.mcp.server"],
+      "cwd": "/path/to/scopegraph/services/api",
       "env": {
-        "API_BASE_URL": "http://localhost:8000"
+        "PYTHONPATH": "/path/to/scopegraph/services/api"
       }
     }
   }
 }`;
 
+  const activeMcpConfig = mcpTab === 'remote' ? mcpRemoteConfig : mcpLocalConfig;
+
   const handleCopyMcp = () => {
-    navigator.clipboard.writeText(mcpConfig);
+    navigator.clipboard.writeText(activeMcpConfig);
     setCopiedMcp(true);
     setTimeout(() => setCopiedMcp(false), 2000);
   };
@@ -546,7 +565,7 @@ export const SettingsPage: React.FC = () => {
 
         {/* 4. Model Context Protocol (MCP) */}
         <div className="p-6 rounded-2xl bg-white border border-[#E4E7E1] shadow-xs space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-slate-100 text-[#151923]">
                 <Terminal className="w-5 h-5 text-[#526BEE]" />
@@ -557,17 +576,45 @@ export const SettingsPage: React.FC = () => {
               </div>
             </div>
 
-            <button
-              onClick={handleCopyMcp}
-              className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-white border border-[#E4E7E1] text-[#151923] hover:bg-slate-50 transition-colors shadow-xs"
-            >
-              {copiedMcp ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copiedMcp ? t('settings.mcp.copied') : t('settings.mcp.copy_btn')}</span>
-            </button>
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <div className="flex items-center p-1 rounded-xl bg-slate-100 border border-[#E4E7E1]">
+                <button
+                  type="button"
+                  onClick={() => setMcpTab('remote')}
+                  className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    mcpTab === 'remote'
+                      ? 'bg-white text-[#151923] shadow-xs'
+                      : 'text-[#8B929E] hover:text-[#151923]'
+                  }`}
+                >
+                  {t('settings.mcp.tab_remote')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMcpTab('local')}
+                  className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    mcpTab === 'local'
+                      ? 'bg-white text-[#151923] shadow-xs'
+                      : 'text-[#8B929E] hover:text-[#151923]'
+                  }`}
+                >
+                  {t('settings.mcp.tab_local')}
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCopyMcp}
+                className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-white border border-[#E4E7E1] text-[#151923] hover:bg-slate-50 transition-colors shadow-xs cursor-pointer shrink-0"
+              >
+                {copiedMcp ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedMcp ? t('settings.mcp.copied') : t('settings.mcp.copy_btn')}</span>
+              </button>
+            </div>
           </div>
 
           <pre className="p-4 rounded-xl bg-[#151923] text-slate-100 font-mono text-xs overflow-x-auto border border-slate-800 shadow-inner">
-            {mcpConfig}
+            {activeMcpConfig}
           </pre>
         </div>
       </div>

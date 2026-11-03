@@ -268,6 +268,8 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
     'settings.mcp.desc': 'Connect Claude Desktop, Cursor, or CLI agents to query grounded AST facts',
     'settings.mcp.copied': 'Copied configuration to clipboard!',
     'settings.mcp.copy_btn': 'Copy Config',
+    'settings.mcp.tab_remote': 'Remote SSE (Cloud)',
+    'settings.mcp.tab_local': 'Local CLI (Python)',
 
     'common.save': 'Save Changes',
     'common.saved': 'Preferences Saved',
@@ -969,6 +971,8 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
     'settings.mcp.desc': 'Kết nối Claude Desktop, Cursor hoặc CLI agents để truy vấn sự thật mã nguồn',
     'settings.mcp.copied': 'Đã sao chép cấu hình vào clipboard!',
     'settings.mcp.copy_btn': 'Sao chép cấu hình',
+    'settings.mcp.tab_remote': 'Remote SSE (Đám mây)',
+    'settings.mcp.tab_local': 'Tiến trình nội bộ (Python)',
 
     'common.save': 'Lưu thay đổi',
     'common.saved': 'Đã lưu tùy chọn',
@@ -1670,6 +1674,8 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
     'settings.mcp.desc': 'Claude Desktop、Cursor、またはCLIエージェントを接続',
     'settings.mcp.copied': '設定をクリップボードにコピーしました！',
     'settings.mcp.copy_btn': '設定をコピー',
+    'settings.mcp.tab_remote': 'リモート SSE (クラウド)',
+    'settings.mcp.tab_local': 'ローカルサブプロセス (Python)',
 
     'common.save': '変更を保存',
     'common.saved': '設定を保存しました',
@@ -2371,6 +2377,8 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
     'settings.mcp.desc': '连接 Claude Desktop、Cursor 或命令行智能体',
     'settings.mcp.copied': '配置已复制到剪贴板！',
     'settings.mcp.copy_btn': '复制配置',
+    'settings.mcp.tab_remote': '远程 SSE (云端)',
+    'settings.mcp.tab_local': '本地子进程 (Python)',
 
     'common.save': '保存更改',
     'common.saved': '偏好已保存',
@@ -3072,6 +3080,8 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
     'settings.mcp.desc': 'Claude Desktop, Cursor 또는 CLI 에이전트 연결',
     'settings.mcp.copied': '구성이 클립보드에 복사되었습니다!',
     'settings.mcp.copy_btn': '구성 복사',
+    'settings.mcp.tab_remote': '원격 SSE (클라우드)',
+    'settings.mcp.tab_local': '로컬 서브프로세스 (Python)',
 
     'common.save': '변경 사항 저장',
     'common.saved': '환경설정이 저장되었습니다',
@@ -3773,6 +3783,8 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
     'settings.mcp.desc': 'Conecte Claude Desktop, Cursor o agentes de línea de comandos',
     'settings.mcp.copied': '¡Configuración copiada al portapapeles!',
     'settings.mcp.copy_btn': 'Copiar Configuración',
+    'settings.mcp.tab_remote': 'SSE Remoto (Nube)',
+    'settings.mcp.tab_local': 'Subproceso Local (Python)',
 
     'common.save': 'Guardar Cambios',
     'common.saved': 'Preferencias Guardadas',
@@ -4474,6 +4486,8 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
     'settings.mcp.desc': 'Connectez Claude Desktop, Cursor ou agents CLI',
     'settings.mcp.copied': 'Configuration copiée dans le presse-papiers !',
     'settings.mcp.copy_btn': 'Copier la config',
+    'settings.mcp.tab_remote': 'SSE Distant (Cloud)',
+    'settings.mcp.tab_local': 'Sous-processus Local (Python)',
 
     'common.save': 'Enregistrer les modifications',
     'common.saved': 'Préférences enregistrées',
@@ -5175,6 +5189,8 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
     'settings.mcp.desc': 'Verbinden Sie Claude Desktop, Cursor oder CLI-Agenten',
     'settings.mcp.copied': 'Konfiguration in die Zwischenablage kopiert!',
     'settings.mcp.copy_btn': 'Konfiguration kopieren',
+    'settings.mcp.tab_remote': 'Remote-SSE (Cloud)',
+    'settings.mcp.tab_local': 'Lokaler Subprozess (Python)',
 
     'common.save': 'Änderungen speichern',
     'common.saved': 'Einstellungen gespeichert',
@@ -5877,6 +5893,8 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
     'settings.mcp.desc': 'Claude Desktop, Cursor या CLI एजेंट कनेक्ट करें',
     'settings.mcp.copied': 'कॉन्फ़िगरेशन क्लिपबोर्ड पर कॉपी हो गया!',
     'settings.mcp.copy_btn': 'कॉपी करें',
+    'settings.mcp.tab_remote': 'रिमोट SSE (क्लाउड)',
+    'settings.mcp.tab_local': 'स्थानीय सबप्रोसेस (Python)',
 
     'common.save': 'परिवर्तन सहेजें',
     'common.saved': 'प्राथमिकताएं सहेजी गईं',
@@ -6577,6 +6595,8 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
     'settings.mcp.desc': 'เชื่อมต่อ Claude Desktop, Cursor หรือ CLI agents',
     'settings.mcp.copied': 'คัดลอกการตั้งค่าแล้ว!',
     'settings.mcp.copy_btn': 'คัดลอก',
+    'settings.mcp.tab_remote': 'Remote SSE (คลาวด์)',
+    'settings.mcp.tab_local': 'กระบวนการย่อยในเครื่อง (Python)',
 
     'common.save': 'บันทึกการเปลี่ยนแปลง',
     'common.saved': 'บันทึกการตั้งค่าแล้ว',
@@ -7278,6 +7298,8 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
     'settings.mcp.desc': 'Connetti Claude Desktop, Cursor o agenti CLI',
     'settings.mcp.copied': 'Configurazione copiata negli appunti!',
     'settings.mcp.copy_btn': 'Copia Config',
+    'settings.mcp.tab_remote': 'SSE Remoto (Cloud)',
+    'settings.mcp.tab_local': 'Sottoprocesso Locale (Python)',
 
     'common.save': 'Salva modifiche',
     'common.saved': 'Preferenze salvate',
@@ -7979,6 +8001,8 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
     'settings.mcp.desc': 'Подключение Claude Desktop, Cursor или CLI-агентов',
     'settings.mcp.copied': 'Конфигурация скопирована в буфер обмена!',
     'settings.mcp.copy_btn': 'Копировать',
+    'settings.mcp.tab_remote': 'Удаленный SSE (Облако)',
+    'settings.mcp.tab_local': 'Локальный подпроцесс (Python)',
 
     'common.save': 'Сохранить изменения',
     'common.saved': 'Настройки сохранены',

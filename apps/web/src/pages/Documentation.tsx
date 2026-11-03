@@ -162,14 +162,12 @@ export const Documentation: React.FC = () => {
           </p>
 
           <div className="bg-white p-6 rounded-2xl border border-[#E4E7E1] shadow-xs space-y-4">
-            <h3 className="font-bold text-sm text-[#151923]">// claude_desktop_config.json</h3>
+            <h3 className="font-bold text-sm text-[#151923]">// claude_desktop_config.json (Remote SSE)</h3>
             <pre className="bg-[#151923] text-[#C7F36B] p-4 rounded-xl text-xs font-mono overflow-x-auto leading-relaxed">
 {`{
   "mcpServers": {
     "scopegraph": {
-      "command": "python",
-      "args": ["-m", "app.mcp.server"],
-      "cwd": "/path/to/scopegraph/services/api"
+      "url": "https://scope-graph.onrender.com/mcp/sse"
     }
   }
 }`}
