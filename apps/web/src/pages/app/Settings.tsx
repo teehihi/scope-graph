@@ -236,39 +236,50 @@ export const SettingsPage: React.FC = () => {
   };
 
   const [mcpTab, setMcpTab] = useState<'remote' | 'local'>('remote');
-  const [selectedClient, setSelectedClient] = useState<'musecode' | 'claude' | 'antigravity'>('musecode');
+  const [selectedClient, setSelectedClient] = useState<'cursor' | 'claude' | 'antigravity'>('cursor');
+  const [localPlatform, setLocalPlatform] = useState<'windows' | 'macos'>(
+    typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform) ? 'macos' : 'windows',
+  );
+  const [localRepoPath, setLocalRepoPath] = useState('');
   const [showTour, setShowTour] = useState(false);
   const handleCloseTour = () => setShowTour(false);
 
   // Uses frontend reverse proxy to completely mask backend URL
-  const mcpSseUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/mcp/sse`
-    : 'https://scopegraph.vercel.app/mcp/sse';
+  const mcpRemoteUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}/mcp/`
+    : 'https://scopegraph.vercel.app/mcp/';
 
-  const mcpRemoteConfig = `{
-  "mcpServers": {
-    "scopegraph": {
-      "url": "${mcpSseUrl}"
-    }
-  }
-}`;
+  const mcpRemoteConfig = selectedClient === 'claude'
+    ? mcpRemoteUrl
+    : JSON.stringify({
+      mcpServers: {
+        scopegraph: selectedClient === 'antigravity'
+          ? { serverUrl: mcpRemoteUrl }
+          : { url: mcpRemoteUrl },
+      },
+    }, null, 2);
 
-  const mcpLocalConfig = `{
-  "mcpServers": {
-    "scopegraph": {
-      "command": "python",
-      "args": ["-m", "app.mcp.server"],
-      "cwd": "/path/to/scopegraph/services/api",
-      "env": {
-        "PYTHONPATH": "/path/to/scopegraph/services/api"
-      }
-    }
-  }
-}`;
+  const normalizedRepoPath = localRepoPath.trim().replace(/[\\/]+$/, '');
+  const localJoin = (part: string) => localPlatform === 'windows'
+    ? `${normalizedRepoPath}\\${part.replace(/\//g, '\\')}`
+    : `${normalizedRepoPath}/${part}`;
+  const mcpLocalConfig = normalizedRepoPath
+    ? JSON.stringify({
+      mcpServers: {
+        scopegraph: {
+          command: localJoin(localPlatform === 'windows' ? '.venv/Scripts/python.exe' : '.venv/bin/python'),
+          args: ['-m', 'app.mcp.server'],
+          cwd: localJoin('services/api'),
+          env: { PYTHONPATH: localJoin('services/api') },
+        },
+      },
+    }, null, 2)
+    : '';
 
   const activeMcpConfig = mcpTab === 'remote' ? mcpRemoteConfig : mcpLocalConfig;
 
   const handleCopyMcp = () => {
+    if (!activeMcpConfig) return;
     navigator.clipboard.writeText(activeMcpConfig);
     setCopiedMcp(true);
     setTimeout(() => setCopiedMcp(false), 2000);
@@ -628,7 +639,8 @@ export const SettingsPage: React.FC = () => {
 
               <button
                 type="button"
-                onClick={handleCopyMcp}
+                  onClick={handleCopyMcp}
+                  disabled={!activeMcpConfig}
                 className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-white border border-[#E4E7E1] text-[#151923] hover:bg-slate-50 transition-colors shadow-xs cursor-pointer shrink-0"
               >
                 {copiedMcp ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
@@ -637,8 +649,41 @@ export const SettingsPage: React.FC = () => {
             </div>
           </div>
 
+          {mcpTab === 'local' && (
+            <div className="rounded-xl border border-[#E4E7E1] bg-[#F7F8F5] p-4 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <label htmlFor="mcp-local-path" className="text-xs font-bold text-[#151923]">
+                  {t('settings.mcp.local_path_label')}
+                </label>
+                <div className="flex items-center gap-1.5 p-1 rounded-xl bg-white border border-[#E4E7E1]">
+                  <button type="button" onClick={() => setLocalPlatform('windows')} className={`px-3 py-1 text-xs font-bold rounded-lg ${localPlatform === 'windows' ? 'bg-[#151923] text-white' : 'text-[#8B929E]'}`}>
+                    {t('settings.mcp.platform_windows')}
+                  </button>
+                  <button type="button" onClick={() => setLocalPlatform('macos')} className={`px-3 py-1 text-xs font-bold rounded-lg ${localPlatform === 'macos' ? 'bg-[#151923] text-white' : 'text-[#8B929E]'}`}>
+                    {t('settings.mcp.platform_macos')}
+                  </button>
+                </div>
+              </div>
+              <input
+                id="mcp-local-path"
+                value={localRepoPath}
+                onChange={(event) => setLocalRepoPath(event.target.value)}
+                placeholder={t('settings.mcp.local_path_placeholder')}
+                className="w-full px-3 py-2 rounded-lg border border-[#E4E7E1] bg-white text-xs font-mono text-[#151923]"
+              />
+              <p className="text-[11px] text-[#687180] leading-relaxed">{t('settings.mcp.local_path_help')}</p>
+              <div className="space-y-2">
+                <p className="text-xs font-bold text-[#151923]">{t('settings.mcp.local_setup_title')}</p>
+                <p className="text-[11px] text-[#687180]">{t('settings.mcp.local_setup_desc')}</p>
+                <pre className="p-3 rounded-lg bg-[#151923] text-slate-100 font-mono text-[11px] overflow-x-auto">{localPlatform === 'windows'
+                  ? 'cd "C:\\path\\to\\ScopeGraph"\npy -3.13 -m venv .venv\n.\\.venv\\Scripts\\python.exe -m pip install -r services/api/requirements.txt\nPush-Location services/api\n..\\..\\.venv\\Scripts\\alembic.exe -c alembic.ini upgrade head\nPop-Location'
+                  : 'cd "/path/to/ScopeGraph"\npython3 -m venv .venv\n.venv/bin/python -m pip install -r services/api/requirements.txt\ncd services/api\n../../.venv/bin/alembic -c alembic.ini upgrade head'}</pre>
+              </div>
+            </div>
+          )}
+
           <pre className="p-4 rounded-xl bg-[#151923] text-slate-100 font-mono text-xs overflow-x-auto border border-slate-800 shadow-inner">
-            {activeMcpConfig}
+            {activeMcpConfig || t('settings.mcp.local_path_help')}
           </pre>
 
           {/* Client Setup Guide */}
@@ -651,9 +696,9 @@ export const SettingsPage: React.FC = () => {
               <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 border border-[#E4E7E1]">
                 <button
                   type="button"
-                  onClick={() => setSelectedClient('musecode')}
+                  onClick={() => setSelectedClient('cursor')}
                   className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                    selectedClient === 'musecode' ? 'bg-white text-[#151923] shadow-xs' : 'text-[#8B929E] hover:text-[#151923]'
+                    selectedClient === 'cursor' ? 'bg-white text-[#151923] shadow-xs' : 'text-[#8B929E] hover:text-[#151923]'
                   }`}
                 >
                   {t('settings.mcp.client_musecode')}
@@ -681,7 +726,7 @@ export const SettingsPage: React.FC = () => {
 
             {/* Steps Container */}
             <div className="rounded-xl border border-[#E4E7E1] bg-[#F7F8F5] p-4 space-y-3 text-xs text-[#151923]">
-              {selectedClient === 'musecode' && (
+              {selectedClient === 'cursor' && (
                 <div className="space-y-2.5">
                   <div className="flex items-start gap-2.5">
                     <span className="w-5 h-5 rounded-full bg-[#151923] text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">1</span>
@@ -696,11 +741,11 @@ export const SettingsPage: React.FC = () => {
                     <div className="space-y-1.5 flex-1">
                       <span className="leading-relaxed block">{t('settings.mcp.musecode_step_3')}</span>
                       <div className="flex items-center gap-2 bg-white px-2.5 py-1.5 rounded-lg border border-[#E4E7E1] font-mono text-[11px] text-[#526BEE]">
-                        <span className="truncate flex-1">{mcpSseUrl}</span>
+                      <span className="truncate flex-1">{mcpRemoteUrl}</span>
                         <button
                           type="button"
                           onClick={() => {
-                            navigator.clipboard.writeText(mcpSseUrl);
+                            navigator.clipboard.writeText(mcpRemoteUrl);
                             setCopiedMcp(true);
                             setTimeout(() => setCopiedMcp(false), 2000);
                           }}
@@ -719,20 +764,15 @@ export const SettingsPage: React.FC = () => {
                 <div className="space-y-2.5">
                   <div className="flex items-start gap-2.5">
                     <span className="w-5 h-5 rounded-full bg-[#151923] text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">1</span>
-                    <div className="space-y-1 flex-1">
-                      <span className="leading-relaxed block">{t('settings.mcp.claude_step_1')}</span>
-                      <span className="text-[11px] font-mono text-[#8B929E] block">
-                        macOS: ~/Library/Application Support/Claude/claude_desktop_config.json
-                      </span>
-                    </div>
+                    <span className="leading-relaxed">{mcpTab === 'local' ? t('settings.mcp.claude_local_step_1') : t('settings.mcp.claude_step_1')}</span>
                   </div>
                   <div className="flex items-start gap-2.5">
                     <span className="w-5 h-5 rounded-full bg-[#151923] text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">2</span>
-                    <span className="leading-relaxed">{t('settings.mcp.claude_step_2')}</span>
+                    <span className="leading-relaxed">{mcpTab === 'local' ? t('settings.mcp.claude_local_step_2') : t('settings.mcp.claude_step_2')}</span>
                   </div>
                   <div className="flex items-start gap-2.5">
                     <span className="w-5 h-5 rounded-full bg-[#151923] text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">3</span>
-                    <span className="leading-relaxed">{t('settings.mcp.claude_step_3')}</span>
+                    <span className="leading-relaxed">{mcpTab === 'local' ? t('settings.mcp.claude_local_step_3') : t('settings.mcp.claude_step_3')}</span>
                   </div>
                 </div>
               )}

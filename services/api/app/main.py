@@ -2,14 +2,37 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.applications import Starlette
 from app.core.config import settings
 from app.core.request_limits import ScreenshotRequestBodyLimit
 from app.core.logging import setup_logging
 from app.db.database import init_db
 from app.api.routes import health, repositories, analysis, auth, voice, billing, assistant
 from app.mcp.server import mcp
+from mcp.server.transport_security import TransportSecuritySettings
 
 logger = setup_logging(settings.LOG_LEVEL)
+
+_mcp_transport_security = TransportSecuritySettings(
+    allowed_hosts=[
+        "scopegraph-api.onrender.com",
+        "scopegraph.vercel.app",
+        "localhost",
+        "127.0.0.1",
+    ],
+    allowed_origins=[
+        "https://scopegraph.vercel.app",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+)
+_mcp_http_app = mcp.streamable_http_app(
+    streamable_http_path="/",
+    transport_security=_mcp_transport_security,
+)
+_mcp_sse_app = mcp.sse_app(transport_security=_mcp_transport_security)
+_mcp_session_manager = mcp.session_manager
+_mcp_transport_app = Starlette(routes=[*_mcp_http_app.routes, *_mcp_sse_app.routes])
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -33,7 +56,8 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Could not auto-seed sample repository: %s", e)
 
-    yield
+    async with _mcp_session_manager.run():
+        yield
     logger.info("Shutting down ScopeGraph API server...")
 
 app = FastAPI(
@@ -63,8 +87,8 @@ app.include_router(voice.router, prefix="/api/v1")
 app.include_router(billing.router, prefix="/api/v1")
 app.include_router(assistant.router, prefix="/api/v1")
 
-# Mount remote Model Context Protocol (MCP) Server-Sent Events (SSE) transport
-app.mount("/mcp", mcp.sse_app())
+# Expose Streamable HTTP at /mcp/ and retain SSE compatibility at /mcp/sse.
+app.mount("/mcp", _mcp_transport_app)
 
 @app.api_route("/", methods=["GET", "HEAD"])
 def root():

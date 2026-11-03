@@ -6,8 +6,12 @@
       "destination": "https://scopegraph-api.onrender.com/api/:match*"
     },
     {
+      "source": "/mcp",
+      "destination": "https://scopegraph-api.onrender.com/mcp/"
+    },
+    {
       "source": "/mcp/:match*",
-      "destination": "https://scope-graph.onrender.com/mcp/:match*"
+      "destination": "https://scopegraph-api.onrender.com/mcp/:match*"
     },
     {
       "source": "/(.*)",

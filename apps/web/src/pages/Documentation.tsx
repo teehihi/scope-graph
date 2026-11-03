@@ -6,6 +6,9 @@ import { BookOpen, Network, Cpu, ShieldCheck, Terminal, ArrowLeft, ArrowRight } 
 
 export const Documentation: React.FC = () => {
   const { t } = useLanguage();
+  const mcpEndpoint = typeof window !== 'undefined'
+    ? `${window.location.origin}/mcp/`
+    : 'https://scopegraph.vercel.app/mcp/';
 
   return (
     <MarketingLayout>
@@ -162,15 +165,9 @@ export const Documentation: React.FC = () => {
           </p>
 
           <div className="bg-white p-6 rounded-2xl border border-[#E4E7E1] shadow-xs space-y-4">
-            <h3 className="font-bold text-sm text-[#151923]">// claude_desktop_config.json (Remote SSE)</h3>
+            <h3 className="font-bold text-sm text-[#151923]">{t('settings.mcp.tab_remote')}</h3>
             <pre className="bg-[#151923] text-[#C7F36B] p-4 rounded-xl text-xs font-mono overflow-x-auto leading-relaxed">
-{`{
-  "mcpServers": {
-    "scopegraph": {
-      "url": "https://scopegraph.vercel.app/mcp/sse"
-    }
-  }
-}`}
+              {mcpEndpoint}
             </pre>
             <div className="text-xs text-slate-500 font-mono space-y-1">
               <p>• <span className="font-bold text-[#151923]">analyze_change</span>: Returns direct/indirect impact, risks & suggested tests</p>

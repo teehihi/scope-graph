@@ -1,76 +1,84 @@
-# ScopeGraph MCP Server Setup Guide
+# ScopeGraph MCP Server Setup
 
-ScopeGraph implements the official Model Context Protocol (MCP), enabling external coding agents (such as Claude Code, Cursor, Codex, and Windsurf) to query repository structure, analyze changes, and retrieve grounded context before editing code.
+ScopeGraph exposes three Model Context Protocol tools: `analyze_change`, `get_relevant_context`, and `suggest_tests`.
 
-## 1. Available Tools
+## Remote setup (Windows and macOS)
 
-### `analyze_change`
-Runs semantic impact analysis against an indexed repository.
-- **Inputs**: `repository_id` (string), `requirement` (string)
-- **Outputs**: Affected files (direct vs indirect), regression risks, suggested tests, and complete implementation brief.
+The hosted endpoint is `https://scopegraph.vercel.app/mcp/` and uses Streamable HTTP. The legacy SSE endpoint remains available at `https://scopegraph.vercel.app/mcp/sse` for clients that only support SSE. Both endpoints are routed through the ScopeGraph API service.
 
-### `get_relevant_context`
-Retrieves prioritized files, symbols, and code previews for a given task.
-- **Inputs**: `repository_id` (string), `query` (string), `limit` (int, default 5)
-- **Outputs**: Top relevant source files with line-level symbol summaries and previews.
+### Cursor
 
-### `suggest_tests`
-Identifies real existing tests from the repository and proposes new unit/integration tests for the requirement.
-- **Inputs**: `repository_id` (string), `requirement` (string)
-- **Outputs**: List of existing repository tests and recommended tests to implement.
+Create or edit `.cursor/mcp.json` in the project root (or `~/.cursor/mcp.json` for a global configuration):
 
----
-
-## 2. Configuration Examples
-
-### Claude Desktop (`claude_desktop_config.json`)
 ```json
 {
   "mcpServers": {
     "scopegraph": {
-      "command": "/Users/tee/UTE/ScopeGraph/.venv/bin/python",
-      "args": [
-        "-m",
-        "app.mcp.server"
-      ],
-      "cwd": "/Users/tee/UTE/ScopeGraph/services/api",
-      "env": {
-        "PYTHONPATH": "/Users/tee/UTE/ScopeGraph/services/api",
-        "DATABASE_URL": "sqlite:////Users/tee/UTE/ScopeGraph/data/scopegraph.db"
-      }
+      "url": "https://scopegraph.vercel.app/mcp/"
     }
   }
 }
 ```
 
-### Claude Code CLI
-```bash
-claude mcp add scopegraph -- /Users/tee/UTE/ScopeGraph/.venv/bin/python -m app.mcp.server
-```
+Save the file, restart Cursor, then open the MCP list and confirm the ScopeGraph tools are enabled.
 
-### Cursor IDE (`.cursor/mcp.json`)
+### Antigravity IDE / App
+
+Do not search the MCP Store for ScopeGraph. The Store lists published entries; this server is added as a custom MCP server.
+
+1. Open **Settings -> Customizations -> Installed MCP Servers**.
+2. Choose **Open MCP Config** or **View raw config**.
+3. Add this entry under `mcpServers`, save, then reload Antigravity:
+
 ```json
 {
   "mcpServers": {
     "scopegraph": {
-      "command": "/Users/tee/UTE/ScopeGraph/.venv/bin/python",
-      "args": ["-m", "app.mcp.server"],
-      "cwd": "/Users/tee/UTE/ScopeGraph/services/api",
-      "env": {
-        "PYTHONPATH": "/Users/tee/UTE/ScopeGraph/services/api"
-      }
+      "serverUrl": "https://scopegraph.vercel.app/mcp/"
     }
   }
 }
 ```
 
----
+Antigravity requires Streamable HTTP for remote servers; the `/mcp/sse` endpoint is not compatible with it.
 
-## 3. Testing the MCP Server Directly
+### Claude Desktop remote connector
 
-Run the MCP server manually:
+Remote servers are added in **Settings -> Connectors -> Add custom connector**. Paste `https://scopegraph.vercel.app/mcp/` as the connector URL and add it. Remote connectors are not configured in `claude_desktop_config.json`.
+
+## Local setup (Windows and macOS)
+
+Use local mode only when the repository is indexed in the local database on the same computer. Local mode does not read repositories stored in ScopeGraph Cloud.
+
+Requirements: Git and Python 3.13 or newer. Clone this repository, then run the commands from its root directory.
+
+### macOS
+
 ```bash
-source .venv/bin/activate
+python3 -m venv .venv
+.venv/bin/python -m pip install -r services/api/requirements.txt
 cd services/api
-python -m app.mcp.server
+../../.venv/bin/alembic -c alembic.ini upgrade head
 ```
+
+### Windows PowerShell
+
+```powershell
+py -3.13 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r services/api/requirements.txt
+Push-Location services/api
+..\..\.venv\Scripts\alembic.exe -c alembic.ini upgrade head
+Pop-Location
+```
+
+In ScopeGraph **Settings -> MCP Setup -> Local CLI**, select Windows or macOS and paste the absolute path to the cloned repository root. The displayed `stdio` configuration uses that path to locate the Python virtual environment and API package. Copy it into the selected client’s MCP configuration, save, and restart/reload the client.
+
+Client configuration locations:
+
+- Cursor: `.cursor/mcp.json` or `~/.cursor/mcp.json`
+- Antigravity: Settings -> Customizations -> Installed MCP Servers -> Open MCP Config
+- Claude Desktop local server: Settings -> Developer -> Edit Config
+
+## Verify the connection
+
+After reconnecting, confirm the server is enabled and the three tools appear in the client’s MCP tool list. To call a tool, use the `repository_id` shown by the ScopeGraph repository view. `get_relevant_context` is read-only; `analyze_change` runs an impact analysis and consumes the configured AI quota.
