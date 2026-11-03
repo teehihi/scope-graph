@@ -45,11 +45,14 @@ def _generate_otp() -> str:
     return "".join(random.choices(string.digits, k=6))
 
 def _send_otp_email(to_email: str, otp: str, name: str = "") -> bool:
-    """Send OTP email. Returns True on success, False if SMTP is not configured (dev mode: logs OTP)."""
+    """Send OTP email; only local development may fall back to a logged code."""
     if not settings.SMTP_HOST or not settings.SMTP_USER:
-        # Dev fallback — print OTP to server logs
-        logger.info("=== DEV OTP for %s: %s ===", to_email, otp)
-        return True
+        if settings.ENVIRONMENT.lower() != "production":
+            # Local-only fallback. Never write production verification codes to logs.
+            logger.info("=== DEV OTP for %s: %s ===", to_email, otp)
+            return True
+        logger.error("Registration email is unavailable because SMTP is not configured")
+        return False
 
     subject = "ScopeGraph – Your verification code"
     body_html = f"""
@@ -73,7 +76,7 @@ def _send_otp_email(to_email: str, otp: str, name: str = "") -> bool:
         msg["To"] = to_email
         msg.attach(MIMEText(body_html, "html"))
 
-        with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as smtp:
+        with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10) as smtp:
             if settings.SMTP_USE_TLS:
                 smtp.starttls()
             smtp.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
@@ -551,8 +554,14 @@ def register_send_otp(req: RegisterRequest, db: Session = Depends(get_db)):
     db.add(otp)
     db.commit()
 
-    _send_otp_email(normalized_email, otp_code, req.name)
-    logger.info("OTP sent for registration to %s", normalized_email)
+    if not _send_otp_email(normalized_email, otp_code, req.name):
+        db.delete(otp)
+        db.commit()
+        raise HTTPException(
+            status_code=503,
+            detail="Could not deliver the verification email. Please try again later.",
+        )
+    logger.info("Registration verification email delivered to %s", normalized_email)
     return {"message": "Verification code sent to your email.", "email": normalized_email}
 
 
@@ -690,7 +699,14 @@ def resend_otp(req: ResendOtpRequest, db: Session = Depends(get_db)):
     db.add(otp)
     db.commit()
 
-    _send_otp_email(normalized_email, otp_code, req.name)
+    if not _send_otp_email(normalized_email, otp_code, req.name):
+        db.delete(otp)
+        db.commit()
+        raise HTTPException(
+            status_code=503,
+            detail="Could not deliver the verification email. Please try again later.",
+        )
+    logger.info("Registration verification email resent to %s", normalized_email)
     return {"message": "New verification code sent.", "email": normalized_email}
 
 

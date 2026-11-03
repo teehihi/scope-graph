@@ -41,6 +41,11 @@ export interface CheckEmailResult {
   provider?: string;
 }
 
+export async function warmAuthApi(): Promise<void> {
+  const res = await fetch(`${API_BASE}/health`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('API health check failed');
+}
+
 export async function checkEmail(email: string): Promise<CheckEmailResult> {
   const res = await fetch(`${API_BASE}/auth/check-email?email=${encodeURIComponent(email)}`);
   if (!res.ok) throw new Error('Could not check email');

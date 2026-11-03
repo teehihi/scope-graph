@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from '../router';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { AuthLayout } from '../components/layouts/AuthLayout';
 import {
   UserCheck, ArrowRight, AlertCircle, HelpCircle, Info,
@@ -12,7 +13,7 @@ import {
   registerSendOtp,
   registerVerifyOtp,
   resendOtp,
-  checkEmail,
+  warmAuthApi,
 } from '../api/client';
 
 type Step = 'form' | 'otp' | 'success';
@@ -20,6 +21,7 @@ type Step = 'form' | 'otp' | 'success';
 export const Register: React.FC = () => {
   const { navigate } = useRouter();
   const { login, loginAsDemo } = useAuth();
+  const { t } = useLanguage();
 
   // Form state
   const [name, setName] = useState('');
@@ -49,6 +51,11 @@ export const Register: React.FC = () => {
     return () => clearInterval(t);
   }, [resendCooldown]);
 
+  // Wake a sleeping API while the user fills in the registration form.
+  useEffect(() => {
+    void warmAuthApi().catch(() => undefined);
+  }, []);
+
   // Auto-focus first OTP box when step changes
   useEffect(() => {
     if (step === 'otp') {
@@ -75,18 +82,6 @@ export const Register: React.FC = () => {
 
     setIsLoading(true);
     try {
-      // Check if email already exists first
-      const check = await checkEmail(email.trim());
-      if (check.exists) {
-        if (check.provider && check.provider !== 'email') {
-          setError(`This email is already linked to a ${check.provider.charAt(0).toUpperCase() + check.provider.slice(1)} account. Please sign in with ${check.provider.charAt(0).toUpperCase() + check.provider.slice(1)}.`);
-        } else {
-          setError('An account with this email already exists. Please log in instead.');
-        }
-        setIsLoading(false);
-        return;
-      }
-
       await registerSendOtp(email.trim(), name.trim(), password);
       setStep('otp');
       setResendCooldown(60);
@@ -247,6 +242,7 @@ export const Register: React.FC = () => {
                   Edit
                 </button>
               </div>
+              <p className="text-[11px] leading-relaxed text-[#8B929E]">{t('auth.register.check_email_hint')}</p>
 
               {/* Error */}
               {otpError && (
