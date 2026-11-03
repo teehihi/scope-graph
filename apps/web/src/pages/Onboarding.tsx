@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { ScopeGraphLogoMark, GitHubIcon } from '../components/BrandIcons';
 import { Check, ArrowRight, ShieldCheck, Building, Network, HelpCircle } from 'lucide-react';
 import { OnboardingTour, TourStep } from '../components/OnboardingTour';
+import { markOnboarded } from '../api/client';
 
 interface RoleOption {
   id: string;
@@ -126,15 +127,21 @@ export const Onboarding: React.FC = () => {
       onboarded: true,
     });
 
+    // Persist to backend (best-effort)
+    if (user?.email) {
+      markOnboarded(user.email).catch(() => undefined);
+    }
+
     setTimeout(() => {
       navigate('/app/dashboard');
     }, 400);
   };
 
   const handleSkip = () => {
-    updateUser({
-      onboarded: true,
-    });
+    updateUser({ onboarded: true });
+    if (user?.email) {
+      markOnboarded(user.email).catch(() => undefined);
+    }
     navigate('/app/dashboard');
   };
 

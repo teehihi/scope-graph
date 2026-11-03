@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { ScopeGraphLogoMark } from '../components/BrandIcons';
 import { Loader } from '../components/Loader';
 import { AlertCircle, ArrowLeft, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { oauthCompleteProfile } from '../api/client';
 
 export const AuthCallback: React.FC = () => {
   const { navigate, search, pathname } = useRouter();
@@ -13,6 +14,7 @@ export const AuthCallback: React.FC = () => {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
+  const [isNewUser, setIsNewUser] = useState(false);
 
   const isGoogle =
     pathname.includes('google') ||
@@ -64,14 +66,14 @@ export const AuthCallback: React.FC = () => {
         }
 
         const user = data.user;
-        setUserName(user.name || user.username || 'Developer');
-        setStatus('success');
+        const displayName = user.name || user.username || 'Developer';
+        setUserName(displayName);
 
         const oauthAction = sessionStorage.getItem('scopegraph_oauth_action');
         sessionStorage.removeItem('scopegraph_oauth_action');
         sessionStorage.removeItem('scopegraph_oauth_provider');
 
-        // Check if user was already in a session and simply linking GitHub/Google
+        // Linking flow — user already has a session and is just connecting their account
         if (oauthAction === 'link_account' && currentUser) {
           if (!isGoogle) {
             updateUser({
@@ -82,35 +84,59 @@ export const AuthCallback: React.FC = () => {
               localStorage.setItem(`scopegraph_gh_token_${currentUser.email}`, data.access_token);
             }
           }
-        } else {
-          // Regular "Login with OAuth" flow
-          const hasOnboarded =
-            localStorage.getItem(`scopegraph_onboarded_${user.email}`) === 'true';
-
-          login(
-            user.email,
-            user.name,
-            false,
-            user.avatar_url,
-            isGoogle ? 'google' : 'github',
-            user.username,
-            hasOnboarded,
-            data.access_token
-          );
+          setStatus('success');
+          const returnUrl = sessionStorage.getItem('scopegraph_auth_return_url');
+          sessionStorage.removeItem('scopegraph_auth_return_url');
+          setTimeout(() => navigate(returnUrl || '/app/dashboard'), 800);
+          return;
         }
 
-        // Check if there is a saved return URL from where the user started OAuth (e.g. /app/repositories)
+        // Regular login/register via OAuth — check backend for new vs returning user
+        let serverIsNew = false;
+        let serverOnboarded = false;
+        try {
+          const profile = await oauthCompleteProfile(
+            user.email,
+            isGoogle ? 'google' : 'github',
+            user.name || user.username || 'Developer',
+            user.avatar_url,
+            user.username,
+          );
+          serverIsNew = profile.is_new_user;
+          serverOnboarded = profile.onboarding_completed;
+        } catch {
+          // Backend unreachable — fall back to localStorage heuristic
+          serverIsNew = localStorage.getItem(`scopegraph_onboarded_${user.email}`) !== 'true';
+          serverOnboarded = !serverIsNew;
+        }
+
+        setIsNewUser(serverIsNew);
+
+        login(
+          user.email,
+          user.name || user.username || 'Developer',
+          false,
+          user.avatar_url,
+          isGoogle ? 'google' : 'github',
+          user.username,
+          serverOnboarded,  // onboarded flag drives where we land
+          data.access_token,
+        );
+
+        setStatus('success');
+
         const returnUrl = sessionStorage.getItem('scopegraph_auth_return_url');
         sessionStorage.removeItem('scopegraph_auth_return_url');
 
-        // Redirect to previous return URL if present, onboarding if new user, or dashboard if already onboarded
         setTimeout(() => {
-          if (returnUrl) {
+          // A saved return URL takes priority only for returning users
+          if (returnUrl && serverOnboarded) {
             navigate(returnUrl);
-          } else if (currentUser?.onboarded) {
-            navigate('/app/dashboard');
-          } else {
+          } else if (!serverOnboarded) {
+            // New OAuth user — always go to onboarding
             navigate('/onboarding');
+          } else {
+            navigate('/app/dashboard');
           }
         }, 800);
       } catch (err: any) {
@@ -158,10 +184,12 @@ export const AuthCallback: React.FC = () => {
             </div>
             <div className="space-y-1">
               <p className="text-sm font-bold text-[#151923]">
-                Welcome back, {userName}!
+                {isNewUser ? `Welcome, ${userName}!` : `Welcome back, ${userName}!`}
               </p>
               <p className="text-[11px] text-[#8B929E]">
-                Redirecting to your dependency graph...
+                {isNewUser
+                  ? 'Setting up your workspace…'
+                  : 'Redirecting to your dependency graph…'}
               </p>
             </div>
           </div>

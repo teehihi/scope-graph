@@ -696,25 +696,29 @@ def resend_otp(req: ResendOtpRequest, db: Session = Depends(get_db)):
 
 @router.post("/oauth/complete-profile")
 def oauth_complete_onboarding(
-    email: str,
-    provider: str,
-    name: str,
-    avatar_url: str | None = None,
-    username: str | None = None,
+    payload: dict,
     db: Session = Depends(get_db),
 ):
     """
     Called by OAuth callback to upsert a user record and return whether
     they are a new user (need onboarding) or returning (go to dashboard).
     """
-    normalized_email = _normalize_email(email)
-    user = db.query(User).filter(User.email == normalized_email).first()
+    email = _normalize_email(payload.get("email", ""))
+    provider = payload.get("provider", "")
+    name = payload.get("name") or ""
+    avatar_url = payload.get("avatar_url")
+    username = payload.get("username")
+
+    if not email or not provider:
+        raise HTTPException(status_code=422, detail="email and provider are required")
+
+    user = db.query(User).filter(User.email == email).first()
 
     is_new = False
     if not user:
         user = User(
-            email=normalized_email,
-            name=name or normalized_email.split("@")[0],
+            email=email,
+            name=name or email.split("@")[0],
             is_verified=True,
             provider=provider,
             avatar_url=avatar_url,
@@ -724,7 +728,7 @@ def oauth_complete_onboarding(
         db.add(user)
         is_new = True
     else:
-        # Update profile data from provider
+        # Update profile data from provider if not already set
         if not user.avatar_url and avatar_url:
             user.avatar_url = avatar_url
         if not user.username and username:

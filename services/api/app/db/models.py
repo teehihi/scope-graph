@@ -142,3 +142,14 @@ class UserSubscription(Base):
     subscription_status = Column(String(50), nullable=True)
     created_at = Column(DateTime, nullable=False, default=utc_now)
     updated_at = Column(DateTime, nullable=False, default=utc_now, onupdate=utc_now)
+
+
+class FeatureUsage(Base):
+    """Daily metered feature usage keyed to an account or unowned repository."""
+
+    __tablename__ = "feature_usage"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    owner_key = Column(String(255), nullable=False, index=True)
+    feature = Column(String(30), nullable=False, index=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now, index=True)

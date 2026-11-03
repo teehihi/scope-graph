@@ -5,6 +5,14 @@ import { fetchRepositories, loadSampleRepository, fetchGraph, runAnalysis, analy
 import { useLanguage } from './LanguageContext';
 import { useAuth } from './AuthContext';
 
+// Sentinel error class to signal plan limit
+export class PlanLimitError extends Error {
+  constructor(public readonly statusCode: number, message: string) {
+    super(message);
+    this.name = 'PlanLimitError';
+  }
+}
+
 interface RepoContextType {
   repositories: Repository[];
   activeRepo: Repository | null;
@@ -22,6 +30,8 @@ interface RepoContextType {
   setFocusSubgraph: (val: boolean) => void;
   analysisReport: AnalysisReport | null;
   analysisError: string | null;
+  planLimitError: { status: number; message: string } | null;
+  clearPlanLimitError: () => void;
   briefMarkdown: string;
   isAnalyzing: boolean;
   requirement: string;
@@ -53,6 +63,7 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisReport, setAnalysisReport] = useState<AnalysisReport | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [planLimitError, setPlanLimitError] = useState<{ status: number; message: string } | null>(null);
   const [briefMarkdown, setBriefMarkdown] = useState<string>('');
   const [requirement, setRequirement] = useState<string>(
     'Require email verification before users can change their email address.'
@@ -100,8 +111,27 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setBriefMarkdown('');
       setSelectedNodeData(null);
       setSelectedImpactItem(null);
-      setAnalysisError(t(err instanceof ScreenshotAnalysisFailedError
-        ? 'impact.error_provider' : 'impact.error_request'));
+
+      // Detect plan quota/feature errors → trigger upgrade modal instead of inline error
+      const errMsg = err instanceof Error ? err.message : String(err);
+      const isLimitErr =
+        errMsg.toLowerCase().includes('limit') ||
+        errMsg.toLowerCase().includes('quota') ||
+        errMsg.toLowerCase().includes('requires a') ||
+        errMsg.toLowerCase().includes('429') ||
+        errMsg.toLowerCase().includes('403') ||
+        (err as any)?.status === 429 ||
+        (err as any)?.status === 403;
+
+      if (isLimitErr) {
+        setPlanLimitError({
+          status: (err as any)?.status || 429,
+          message: errMsg,
+        });
+      } else {
+        setAnalysisError(t(err instanceof ScreenshotAnalysisFailedError
+          ? 'impact.error_provider' : 'impact.error_request'));
+      }
     } finally {
       setIsAnalyzing(false);
     }
@@ -240,6 +270,8 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setFocusSubgraph(false);
   };
 
+  const clearPlanLimitError = () => setPlanLimitError(null);
+
   return (
     <RepoContext.Provider
       value={{
@@ -259,6 +291,8 @@ export const RepoProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setFocusSubgraph,
         analysisReport,
         analysisError,
+        planLimitError,
+        clearPlanLimitError,
         briefMarkdown,
         isAnalyzing,
         requirement,

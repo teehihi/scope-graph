@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter, Link } from '../../router';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { useRepo } from '../../context/RepoContext';
 import { FloatingAssistant } from '../FloatingAssistant';
+import { UpgradeModal } from '../UpgradeModal';
 import { ScopeGraphLogoMark } from '../BrandIcons';
 import {
   LayoutDashboard,
@@ -33,7 +35,21 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   const { pathname, navigate } = useRouter();
   const { user, logout, billingConfirmation, dismissBillingConfirmation } = useAuth();
   const { t } = useLanguage();
+  const { planLimitError, clearPlanLimitError } = useRepo();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+
+  // Auto-open upgrade modal when a plan limit error is detected
+  useEffect(() => {
+    if (planLimitError) {
+      setUpgradeOpen(true);
+    }
+  }, [planLimitError]);
+
+  const handleCloseUpgrade = () => {
+    setUpgradeOpen(false);
+    clearPlanLimitError();
+  };
 
   const handleLogout = () => {
     logout();
@@ -50,6 +66,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
 
   return (
     <div className="flex h-screen w-screen bg-[#F7F8F5] text-[#151923] overflow-hidden font-sans selection:bg-[#C7F36B] selection:text-[#151923]">
+      {/* Plan limit → Upgrade Modal */}
+      <UpgradeModal isOpen={upgradeOpen} onClose={handleCloseUpgrade} />
+
       {billingConfirmation && (
         <div role="status" className="fixed right-4 top-4 z-[100] flex max-w-md items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-800 shadow-lg">
           <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />

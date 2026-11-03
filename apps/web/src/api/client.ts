@@ -483,7 +483,10 @@ export async function runAnalysis(
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: 'Analysis failed' }));
-    throw new Error(err.detail || 'Analysis failed');
+    const msg = err.detail || 'Analysis failed';
+    const e = new Error(msg) as any;
+    e.status = res.status;
+    throw e;
   }
   const data = await res.json();
   if (data.status === 'failed') {
@@ -509,7 +512,13 @@ export async function analyzeScreenshot(
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: 'Screenshot analysis failed' }));
-    throw new Error(err.detail || 'Screenshot analysis failed');
+    const msg = err.detail || 'Screenshot analysis failed';
+    if (res.status === 403 || res.status === 429) {
+      const e = new Error(msg) as any;
+      e.status = res.status;
+      throw e;
+    }
+    throw new ScreenshotAnalysisFailedError();
   }
   const body = await res.json();
   if (body.status === 'failed') throw new ScreenshotAnalysisFailedError();

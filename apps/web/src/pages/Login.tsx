@@ -5,6 +5,7 @@ import { AuthLayout } from '../components/layouts/AuthLayout';
 import { UserCheck, ArrowRight, AlertCircle, HelpCircle, Info, Eye, EyeOff } from 'lucide-react';
 import { GitHubIcon, GoogleIcon } from '../components/BrandIcons';
 import { DemoInfoModal } from '../components/DemoInfoModal';
+import { emailLogin } from '../api/client';
 
 export const Login: React.FC = () => {
   const { navigate, search } = useRouter();
@@ -18,10 +19,9 @@ export const Login: React.FC = () => {
   const [showDemoModal, setShowDemoModal] = useState(false);
   const [oauthNotice, setOauthNotice] = useState<string | null>(null);
 
-  // Parse redirect destination
   const redirectTarget = new URLSearchParams(search).get('redirect') || '/app/dashboard';
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -31,11 +31,23 @@ export const Login: React.FC = () => {
     }
 
     setIsLoading(true);
-    setTimeout(() => {
-      login(email.trim());
+    try {
+      const result = await emailLogin(email.trim(), password);
+      login(
+        result.user.email,
+        result.user.name,
+        false,
+        result.user.avatar_url,
+        'email',
+        result.user.username,
+        result.onboarding_completed,
+      );
+      navigate(result.onboarding_completed ? redirectTarget : '/onboarding');
+    } catch (err: any) {
+      setError(err.message || 'Login failed. Please check your credentials.');
+    } finally {
       setIsLoading(false);
-      navigate(redirectTarget);
-    }, 400);
+    }
   };
 
   const handleDemoLogin = () => {
@@ -100,7 +112,7 @@ export const Login: React.FC = () => {
           </div>
         )}
 
-        {/* OAuth Notice Modal / Alert */}
+        {/* OAuth Notice */}
         {oauthNotice && (
           <div className="p-3.5 rounded-xl bg-[#EDF0F7] border border-[#151923]/15 text-xs space-y-2 animate-in fade-in duration-150">
             <div className="flex items-start gap-2 text-[#151923]">
@@ -128,7 +140,7 @@ export const Login: React.FC = () => {
           </div>
         )}
 
-        {/* Social OAuth Buttons */}
+        {/* OAuth Buttons */}
         <div className="grid grid-cols-2 gap-2.5">
           <button
             type="button"
@@ -139,7 +151,6 @@ export const Login: React.FC = () => {
             <GitHubIcon className="w-4 h-4 text-inherit transition-colors" />
             <span>GitHub</span>
           </button>
-
           <button
             type="button"
             onClick={() => handleOAuthLogin('Google')}
@@ -151,7 +162,7 @@ export const Login: React.FC = () => {
           </button>
         </div>
 
-        {/* Divider: OR EMAIL */}
+        {/* Divider */}
         <div className="relative py-1">
           <div className="absolute inset-0 flex items-center">
             <div className="w-full border-t border-[#E4E7E1]" />
@@ -161,16 +172,17 @@ export const Login: React.FC = () => {
           </div>
         </div>
 
-        {/* Traditional Email / Password Form */}
-        <form onSubmit={handleSubmit} className="space-y-3.5">
+        {/* Login Form */}
+        <form onSubmit={handleSubmit} className="space-y-3">
           <div className="space-y-1">
             <label className="text-xs font-semibold text-[#151923]">Email</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="thiennn@vng.com"
+              placeholder="developer@company.com"
               required
+              autoComplete="email"
               className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-[#E4E7E1] bg-[#F7F8F5] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#151923] text-[#151923] transition-all placeholder:text-[#8B929E]"
             />
           </div>
@@ -184,6 +196,7 @@ export const Login: React.FC = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
+                autoComplete="current-password"
                 className="w-full text-xs px-3.5 py-2.5 pr-10 rounded-xl border border-[#E4E7E1] bg-[#F7F8F5] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#151923] text-[#151923] transition-all placeholder:text-[#8B929E]"
               />
               <button
@@ -207,7 +220,7 @@ export const Login: React.FC = () => {
               <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             ) : (
               <>
-                <span>Log in with Email</span>
+                <span>Sign In</span>
                 <ArrowRight className="w-3.5 h-3.5 text-[#C7F36B] group-hover:text-[#151923] group-hover:translate-x-0.5 transition-all" />
               </>
             )}
@@ -224,7 +237,6 @@ export const Login: React.FC = () => {
           </div>
         </div>
 
-        {/* Demo Mode Button: Icon and Text change color together seamlessly with Electric Lime */}
         <button
           type="button"
           onClick={handleDemoLogin}
@@ -232,10 +244,9 @@ export const Login: React.FC = () => {
           className="group w-full flex items-center justify-center gap-2 text-xs font-semibold px-4 py-2.5 rounded-xl bg-white text-[#151923] border border-[#E4E7E1] hover:bg-[#C7F36B] hover:text-[#151923] hover:border-[#C7F36B] hover:shadow-md hover:shadow-[#C7F36B]/25 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 shadow-xs cursor-pointer disabled:opacity-50"
         >
           <UserCheck className="w-4 h-4 text-inherit transition-colors" />
-          <span>Continue with demo account</span>
+          <span>Continue with demo account (demo@scopegraph.dev)</span>
         </button>
 
-        {/* Interactive Lead Link to Modal: Soft Lime hover highlight, matching buttons */}
         <div className="text-center pt-0.5">
           <button
             type="button"
@@ -250,7 +261,6 @@ export const Login: React.FC = () => {
         </div>
       </div>
 
-      {/* Demo Information Modal */}
       <DemoInfoModal
         isOpen={showDemoModal}
         onClose={() => setShowDemoModal(false)}
