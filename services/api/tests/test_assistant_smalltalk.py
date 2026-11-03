@@ -76,5 +76,5 @@ def test_truncated_chat_completion_retries_with_latest_message_only():
 
     assert len(calls) == 2
     assert calls[1][1] == [{"role": "user", "content": "Can you answer in Vietnamese?"}]
-    assert calls[1][2]["max_tokens"] == 700
+    assert calls[1][2]["max_tokens"] == 1600
     assert result.data["grounded"] is True

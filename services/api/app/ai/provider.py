@@ -295,7 +295,7 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
             )
             latest_message = safe_messages[-1:] if safe_messages else []
             data, latency, model, usage = self._call_model(
-                compact_prompt, latest_message, schema=AssistantAnswer, max_tokens=700,
+                compact_prompt, latest_message, schema=AssistantAnswer, max_tokens=1600,
             )
         answer = AssistantAnswer.model_validate(data)
         return AIProviderResponse(
