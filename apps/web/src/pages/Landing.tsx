@@ -77,33 +77,33 @@ export const Landing: React.FC = () => {
           </div>
 
           {/* Desktop Center: Navigation Links (Mathematically Centered in Header) */}
-          <nav className="hidden md:flex items-center justify-center gap-6 lg:gap-8 xl:gap-9 md:absolute md:left-1/2 md:-translate-x-1/2">
+          <nav className="hidden md:flex items-center justify-center gap-1.5 lg:gap-2.5 md:absolute md:left-1/2 md:-translate-x-1/2">
             <a
               href="#"
-              className="text-sm font-semibold text-[#151923] hover:text-[#C7F36B] transition-colors cursor-pointer py-1"
+              className="text-sm font-bold text-[#151923] hover:bg-[#C7F36B] hover:text-[#151923] px-3.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer"
             >
               {t('landing.nav_home')}
             </a>
             <button
               type="button"
               onClick={() => scrollToSection('features')}
-              className="text-sm font-semibold text-[#151923] hover:text-[#C7F36B] transition-colors cursor-pointer text-left py-1"
+              className="text-sm font-bold text-[#151923] hover:bg-[#C7F36B] hover:text-[#151923] px-3.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer text-left"
             >
               {t('landing.nav_features')}
             </button>
             <button
               type="button"
               onClick={() => scrollToSection('mcp-section')}
-              className="text-sm font-semibold text-[#151923] hover:text-[#C7F36B] transition-colors cursor-pointer text-left py-1"
+              className="text-sm font-bold text-[#151923] hover:bg-[#C7F36B] hover:text-[#151923] px-3.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer text-left"
             >
               {t('landing.nav_mcp')}
             </button>
             <button
               type="button"
               onClick={() => setIsUpgradeModalOpen(true)}
-              className="group text-sm font-semibold text-[#151923] hover:text-[#C7F36B] flex items-center gap-1.5 transition-colors cursor-pointer text-left py-1"
+              className="group text-sm font-bold text-[#151923] hover:bg-[#C7F36B] hover:text-[#151923] px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 transition-all duration-200 cursor-pointer text-left"
             >
-              <Sparkles className="w-3.5 h-3.5 text-[#151923] group-hover:text-[#C7F36B] transition-colors" />
+              <Sparkles className="w-3.5 h-3.5 text-[#151923] transition-colors" />
               <span>{t('landing.nav_pricing')}</span>
             </button>
           </nav>
@@ -179,11 +179,11 @@ export const Landing: React.FC = () => {
 
         {/* Mobile Dropdown Menu */}
         {isMobileMenuOpen && (
-          <nav className="md:hidden px-6 pt-2 pb-6 border-t border-[#E4E7E1]/60 flex flex-col gap-3 bg-[#F7F8F5]">
+          <nav className="md:hidden px-6 pt-2 pb-6 border-t border-[#E4E7E1]/60 flex flex-col gap-2 bg-[#F7F8F5]">
             <a
               href="#"
               onClick={() => setIsMobileMenuOpen(false)}
-              className="text-sm font-semibold text-[#151923] hover:text-[#C7F36B] transition-colors cursor-pointer py-1.5"
+              className="text-sm font-bold text-[#151923] hover:bg-[#C7F36B] hover:text-[#151923] px-3.5 py-2 rounded-xl transition-all duration-200 cursor-pointer"
             >
               {t('landing.nav_home')}
             </a>
@@ -193,7 +193,7 @@ export const Landing: React.FC = () => {
                 scrollToSection('features');
                 setIsMobileMenuOpen(false);
               }}
-              className="text-sm font-semibold text-[#151923] hover:text-[#C7F36B] transition-colors cursor-pointer text-left py-1.5"
+              className="text-sm font-bold text-[#151923] hover:bg-[#C7F36B] hover:text-[#151923] px-3.5 py-2 rounded-xl transition-all duration-200 cursor-pointer text-left"
             >
               {t('landing.nav_features')}
             </button>
@@ -203,7 +203,7 @@ export const Landing: React.FC = () => {
                 scrollToSection('mcp-section');
                 setIsMobileMenuOpen(false);
               }}
-              className="text-sm font-semibold text-[#151923] hover:text-[#C7F36B] transition-colors cursor-pointer text-left py-1.5"
+              className="text-sm font-bold text-[#151923] hover:bg-[#C7F36B] hover:text-[#151923] px-3.5 py-2 rounded-xl transition-all duration-200 cursor-pointer text-left"
             >
               {t('landing.nav_mcp')}
             </button>
@@ -213,9 +213,9 @@ export const Landing: React.FC = () => {
                 setIsUpgradeModalOpen(true);
                 setIsMobileMenuOpen(false);
               }}
-              className="group text-sm font-semibold text-[#151923] hover:text-[#C7F36B] flex items-center gap-1.5 transition-colors cursor-pointer text-left py-1.5"
+              className="group text-sm font-bold text-[#151923] hover:bg-[#C7F36B] hover:text-[#151923] px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition-all duration-200 cursor-pointer text-left"
             >
-              <Sparkles className="w-3.5 h-3.5 text-[#151923] group-hover:text-[#C7F36B] transition-colors" />
+              <Sparkles className="w-3.5 h-3.5 text-[#151923] transition-colors" />
               <span>{t('landing.nav_pricing')}</span>
             </button>
 

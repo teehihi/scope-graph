@@ -462,3 +462,290 @@ async def list_user_github_repos(token: str | None = None, refresh: bool = False
 
         logger.error("Error fetching repositories from GitHub after retries: %r", last_exc)
         raise HTTPException(status_code=502, detail=f"Error connecting to GitHub: {str(last_exc or 'Timeout')}")
+
+
+# ---------------------------------------------------------------------------
+# Email / Password Authentication Endpoints
+# ---------------------------------------------------------------------------
+
+class RegisterRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+    name: str = Field(min_length=1, max_length=255)
+    password: str = Field(min_length=8, max_length=128)
+
+class VerifyOtpRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+    otp: str = Field(min_length=6, max_length=6)
+    name: str = Field(default="", max_length=255)
+    password: str = Field(default="", max_length=128)
+
+class LoginRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+    password: str = Field(min_length=1, max_length=128)
+
+class EmailAuthResponse(BaseModel):
+    user: UserResponse
+    access_token: str
+    token_type: str = "bearer"
+    is_new_user: bool = False
+    onboarding_completed: bool = False
+
+class CheckEmailResponse(BaseModel):
+    exists: bool
+    provider: str | None = None
+
+class ResendOtpRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+    name: str = Field(default="", max_length=255)
+
+
+@router.get("/check-email", response_model=CheckEmailResponse)
+def check_email(email: str, db: Session = Depends(get_db)):
+    """Check if an email already has an account."""
+    normalized = _normalize_email(email)
+    user = db.query(User).filter(User.email == normalized).first()
+    if not user:
+        return CheckEmailResponse(exists=False)
+    return CheckEmailResponse(exists=True, provider=user.provider)
+
+
+@router.post("/register/send-otp")
+def register_send_otp(req: RegisterRequest, db: Session = Depends(get_db)):
+    """
+    Step 1 of registration: validate inputs and send OTP to email.
+    Does NOT create the user yet — user is created only after OTP is verified.
+    """
+    normalized_email = _normalize_email(req.email)
+
+    existing = db.query(User).filter(User.email == normalized_email).first()
+    if existing:
+        if existing.provider != "email":
+            raise HTTPException(
+                status_code=409,
+                detail=f"This email is already linked to a {existing.provider.title()} account. Please sign in with {existing.provider.title()}."
+            )
+        if existing.is_verified:
+            raise HTTPException(status_code=409, detail="An account with this email already exists. Please log in.")
+
+    # Rate-limit: max 3 OTPs per email per 10 minutes
+    from app.db.models import utc_now as _utc_now
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=10)
+    recent_count = (
+        db.query(OtpCode)
+        .filter(OtpCode.email == normalized_email, OtpCode.created_at >= cutoff, OtpCode.purpose == "registration")
+        .count()
+    )
+    if recent_count >= 3:
+        raise HTTPException(status_code=429, detail="Too many verification attempts. Please wait a few minutes and try again.")
+
+    # Invalidate previous unused OTPs for this email
+    db.query(OtpCode).filter(
+        OtpCode.email == normalized_email,
+        OtpCode.purpose == "registration",
+        OtpCode.used == False,
+    ).delete()
+
+    otp_code = _generate_otp()
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    otp = OtpCode(email=normalized_email, code=otp_code, purpose="registration", expires_at=expires_at)
+    db.add(otp)
+    db.commit()
+
+    _send_otp_email(normalized_email, otp_code, req.name)
+    logger.info("OTP sent for registration to %s", normalized_email)
+    return {"message": "Verification code sent to your email.", "email": normalized_email}
+
+
+@router.post("/register/verify-otp", response_model=EmailAuthResponse)
+def register_verify_otp(req: VerifyOtpRequest, db: Session = Depends(get_db)):
+    """
+    Step 2 of registration: verify OTP, then create the user account.
+    """
+    normalized_email = _normalize_email(req.email)
+
+    otp_record = (
+        db.query(OtpCode)
+        .filter(
+            OtpCode.email == normalized_email,
+            OtpCode.purpose == "registration",
+            OtpCode.used == False,
+        )
+        .order_by(OtpCode.created_at.desc())
+        .first()
+    )
+
+    if not otp_record:
+        raise HTTPException(status_code=400, detail="No pending verification found for this email. Please request a new code.")
+
+    if datetime.now(timezone.utc) > otp_record.expires_at.replace(tzinfo=timezone.utc) if otp_record.expires_at.tzinfo is None else otp_record.expires_at:
+        raise HTTPException(status_code=400, detail="Verification code has expired. Please request a new one.")
+
+    if otp_record.code != req.otp.strip():
+        raise HTTPException(status_code=400, detail="Invalid verification code. Please check and try again.")
+
+    # Mark OTP as used
+    otp_record.used = True
+
+    # Check if user was already created (partial retry)
+    user = db.query(User).filter(User.email == normalized_email).first()
+    if user and user.is_verified:
+        db.commit()
+        token = secrets.token_urlsafe(32)
+        return EmailAuthResponse(
+            user=UserResponse(id=user.id, email=user.email, name=user.name, provider=user.provider),
+            access_token=token,
+            is_new_user=False,
+            onboarding_completed=user.onboarding_completed,
+        )
+
+    if user:
+        # Unverified partial record — update it
+        user.is_verified = True
+        if req.name:
+            user.name = req.name
+        if req.password:
+            user.password_hash = _hash_password(req.password)
+    else:
+        if not req.password:
+            raise HTTPException(status_code=400, detail="Password is required to create your account.")
+        user = User(
+            email=normalized_email,
+            name=req.name or normalized_email.split("@")[0],
+            password_hash=_hash_password(req.password),
+            is_verified=True,
+            provider="email",
+            onboarding_completed=False,
+        )
+        db.add(user)
+
+    db.commit()
+    db.refresh(user)
+
+    token = secrets.token_urlsafe(32)
+    logger.info("User registered successfully: %s", normalized_email)
+    return EmailAuthResponse(
+        user=UserResponse(id=user.id, email=user.email, name=user.name, provider=user.provider),
+        access_token=token,
+        is_new_user=True,
+        onboarding_completed=False,
+    )
+
+
+@router.post("/login", response_model=EmailAuthResponse)
+def email_login(req: LoginRequest, db: Session = Depends(get_db)):
+    """Login with email and password."""
+    normalized_email = _normalize_email(req.email)
+    user = db.query(User).filter(User.email == normalized_email).first()
+
+    if not user:
+        raise HTTPException(status_code=401, detail="No account found with this email. Please register first.")
+
+    if user.provider != "email":
+        raise HTTPException(
+            status_code=409,
+            detail=f"This account uses {user.provider.title()} sign-in. Please use the {user.provider.title()} button to log in."
+        )
+
+    if not user.is_verified:
+        raise HTTPException(status_code=403, detail="Please verify your email before logging in. Check your inbox for a verification code.")
+
+    if not user.password_hash or not _verify_password(req.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Incorrect password. Please try again.")
+
+    token = secrets.token_urlsafe(32)
+    logger.info("User logged in: %s", normalized_email)
+    return EmailAuthResponse(
+        user=UserResponse(id=user.id, email=user.email, name=user.name, provider=user.provider),
+        access_token=token,
+        is_new_user=False,
+        onboarding_completed=user.onboarding_completed,
+    )
+
+
+@router.post("/resend-otp")
+def resend_otp(req: ResendOtpRequest, db: Session = Depends(get_db)):
+    """Resend OTP verification code."""
+    normalized_email = _normalize_email(req.email)
+
+    # Rate-limit
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=10)
+    recent_count = (
+        db.query(OtpCode)
+        .filter(OtpCode.email == normalized_email, OtpCode.created_at >= cutoff, OtpCode.purpose == "registration")
+        .count()
+    )
+    if recent_count >= 3:
+        raise HTTPException(status_code=429, detail="Too many attempts. Please wait a few minutes before trying again.")
+
+    # Invalidate old OTPs
+    db.query(OtpCode).filter(
+        OtpCode.email == normalized_email,
+        OtpCode.purpose == "registration",
+        OtpCode.used == False,
+    ).delete()
+
+    otp_code = _generate_otp()
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    otp = OtpCode(email=normalized_email, code=otp_code, purpose="registration", expires_at=expires_at)
+    db.add(otp)
+    db.commit()
+
+    _send_otp_email(normalized_email, otp_code, req.name)
+    return {"message": "New verification code sent.", "email": normalized_email}
+
+
+@router.post("/oauth/complete-profile")
+def oauth_complete_onboarding(
+    email: str,
+    provider: str,
+    name: str,
+    avatar_url: str | None = None,
+    username: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Called by OAuth callback to upsert a user record and return whether
+    they are a new user (need onboarding) or returning (go to dashboard).
+    """
+    normalized_email = _normalize_email(email)
+    user = db.query(User).filter(User.email == normalized_email).first()
+
+    is_new = False
+    if not user:
+        user = User(
+            email=normalized_email,
+            name=name or normalized_email.split("@")[0],
+            is_verified=True,
+            provider=provider,
+            avatar_url=avatar_url,
+            username=username,
+            onboarding_completed=False,
+        )
+        db.add(user)
+        is_new = True
+    else:
+        # Update profile data from provider
+        if not user.avatar_url and avatar_url:
+            user.avatar_url = avatar_url
+        if not user.username and username:
+            user.username = username
+
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "is_new_user": is_new,
+        "onboarding_completed": user.onboarding_completed,
+        "user_id": user.id,
+    }
+
+
+@router.post("/mark-onboarded")
+def mark_onboarded(email: str, db: Session = Depends(get_db)):
+    """Mark a user's onboarding as complete."""
+    normalized_email = _normalize_email(email)
+    user = db.query(User).filter(User.email == normalized_email).first()
+    if user:
+        user.onboarding_completed = True
+        db.commit()
+    return {"ok": True}

@@ -16,6 +16,114 @@ const API_BASE = RAW_API_URL ? `${RAW_API_URL.replace(/\/$/, '')}/api/v1` : '/ap
 
 export type SubscriptionPlan = 'free' | 'plus' | 'pro';
 
+// ---------------------------------------------------------------------------
+// Auth API
+// ---------------------------------------------------------------------------
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+  username?: string;
+  avatar_url?: string;
+  provider: string;
+}
+
+export interface EmailAuthResult {
+  user: AuthUser;
+  access_token: string;
+  is_new_user: boolean;
+  onboarding_completed: boolean;
+}
+
+export interface CheckEmailResult {
+  exists: boolean;
+  provider?: string;
+}
+
+export async function checkEmail(email: string): Promise<CheckEmailResult> {
+  const res = await fetch(`${API_BASE}/auth/check-email?email=${encodeURIComponent(email)}`);
+  if (!res.ok) throw new Error('Could not check email');
+  return res.json();
+}
+
+export async function registerSendOtp(email: string, name: string, password: string): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE}/auth/register/send-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, name, password }),
+  });
+  const data = await res.json().catch(() => ({ detail: 'Request failed' }));
+  if (!res.ok) throw new Error(data.detail || 'Failed to send verification code');
+  return data;
+}
+
+export async function registerVerifyOtp(
+  email: string,
+  otp: string,
+  name: string,
+  password: string
+): Promise<EmailAuthResult> {
+  const res = await fetch(`${API_BASE}/auth/register/verify-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, otp, name, password }),
+  });
+  const data = await res.json().catch(() => ({ detail: 'Request failed' }));
+  if (!res.ok) throw new Error(data.detail || 'Verification failed');
+  return data;
+}
+
+export async function resendOtp(email: string, name?: string): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE}/auth/resend-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, name: name || '' }),
+  });
+  const data = await res.json().catch(() => ({ detail: 'Request failed' }));
+  if (!res.ok) throw new Error(data.detail || 'Failed to resend code');
+  return data;
+}
+
+export async function emailLogin(email: string, password: string): Promise<EmailAuthResult> {
+  const res = await fetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  const data = await res.json().catch(() => ({ detail: 'Request failed' }));
+  if (!res.ok) throw new Error(data.detail || 'Login failed');
+  return data;
+}
+
+export async function oauthCompleteProfile(
+  email: string,
+  provider: string,
+  name: string,
+  avatarUrl?: string,
+  username?: string
+): Promise<{ is_new_user: boolean; onboarding_completed: boolean; user_id: string }> {
+  const params = new URLSearchParams({ email, provider, name });
+  if (avatarUrl) params.set('avatar_url', avatarUrl);
+  if (username) params.set('username', username);
+  const res = await fetch(`${API_BASE}/auth/oauth/complete-profile`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, provider, name, avatar_url: avatarUrl, username }),
+  });
+  if (!res.ok) {
+    // Non-critical — proceed as new user if this fails
+    return { is_new_user: true, onboarding_completed: false, user_id: '' };
+  }
+  return res.json();
+}
+
+export async function markOnboarded(email: string): Promise<void> {
+  await fetch(`${API_BASE}/auth/mark-onboarded?email=${encodeURIComponent(email)}`, {
+    method: 'POST',
+  });
+}
+
 export interface AssistantMessage {
   role: 'user' | 'assistant';
   content: string;

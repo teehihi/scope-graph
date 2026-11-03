@@ -39,25 +39,25 @@ export const MarketingLayout: React.FC<MarketingLayoutProps> = ({ children, onOp
         </Link>
 
         {/* Center / Right Links */}
-        <nav className="hidden md:flex items-center gap-7 text-xs font-semibold text-[#8B929E]">
-          <Link to="/" className="hover:text-[#151923] transition-colors">
+        <nav className="hidden md:flex items-center gap-1.5 text-xs font-bold text-[#151923]">
+          <Link to="/" className="px-3 py-1.5 rounded-xl hover:bg-[#C7F36B] hover:text-[#151923] transition-all">
             {t('landing.nav_home')}
           </Link>
-          <Link to="/?section=features" className="hover:text-[#151923] transition-colors">
+          <Link to="/?section=features" className="px-3 py-1.5 rounded-xl hover:bg-[#C7F36B] hover:text-[#151923] transition-all">
             {t('landing.nav_features')}
           </Link>
-          <Link to="/?section=mcp-section" className="hover:text-[#151923] transition-colors">
+          <Link to="/?section=mcp-section" className="px-3 py-1.5 rounded-xl hover:bg-[#C7F36B] hover:text-[#151923] transition-all">
             {t('landing.nav_mcp')}
           </Link>
-          <Link to="/docs" className="hover:text-[#151923] transition-colors">
+          <Link to="/docs" className="px-3 py-1.5 rounded-xl hover:bg-[#C7F36B] hover:text-[#151923] transition-all">
             {t('docs.title')}
           </Link>
           <button
             type="button"
             onClick={handleOpenPricing}
-            className="group text-[#8B929E] hover:text-[#526BEE] font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+            className="group px-3 py-1.5 rounded-xl hover:bg-[#C7F36B] hover:text-[#151923] flex items-center gap-1.5 transition-all cursor-pointer"
           >
-            <Sparkles className="w-3.5 h-3.5 text-[#8B929E] group-hover:text-[#526BEE] transition-colors" />
+            <Sparkles className="w-3.5 h-3.5 text-[#151923] transition-colors" />
             <span>{t('landing.nav_pricing')}</span>
           </button>
         </nav>
