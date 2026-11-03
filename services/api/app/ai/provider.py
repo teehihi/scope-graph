@@ -19,6 +19,11 @@ class AssistantAnswer(BaseModel):
     answer: str = Field(min_length=1, max_length=4000)
     grounded: bool
 
+
+class CompletionTokenLimitError(ValueError):
+    """Raised when the provider truncates a completion at its requested output cap."""
+
+
 class AIProviderResponse:
     def __init__(
         self,
@@ -193,7 +198,9 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
         if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
             raise ValueError("Meta AI response is missing choices")
         if choices[0].get("finish_reason") == "length":
-            raise ValueError(f"Meta AI response exceeded completion token limit ({self.max_tokens}) on {self.provider_name}")
+            raise CompletionTokenLimitError(
+                f"Meta AI response exceeded completion token limit ({effective_max_tokens}) on {self.provider_name}"
+            )
         message = choices[0].get("message")
         content = message.get("content") if isinstance(message, dict) else None
         if not isinstance(content, str) or not content.strip():
@@ -274,9 +281,22 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
             for item in messages
             if item.get("role") in {"user", "assistant"} and isinstance(item.get("content"), str)
         ]
-        data, latency, model, usage = self._call_model(
-            system_prompt, safe_messages, schema=AssistantAnswer, max_tokens=700,
-        )
+        try:
+            data, latency, model, usage = self._call_model(
+                system_prompt, safe_messages, schema=AssistantAnswer, max_tokens=700,
+            )
+        except CompletionTokenLimitError:
+            # A long conversation can consume the output budget on a needlessly verbose reply.
+            # Retry with only the latest question and a concise instruction, without increasing the cap.
+            compact_prompt = (
+                system_prompt
+                + "\nRETRY: Reply directly in " + language_names.get(language, "English")
+                + " using at most two short sentences. Return only the required JSON."
+            )
+            latest_message = safe_messages[-1:] if safe_messages else []
+            data, latency, model, usage = self._call_model(
+                compact_prompt, latest_message, schema=AssistantAnswer, max_tokens=700,
+            )
         answer = AssistantAnswer.model_validate(data)
         return AIProviderResponse(
             data=answer.model_dump(), provider=self.provider_name, model=model,

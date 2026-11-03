@@ -72,10 +72,26 @@ _LOCAL_SMALLTALK = {
     "ru": {"greeting": "Здравствуйте! Я Scout, помощник ScopeGraph. Я помогу разобраться в графах зависимостей, анализе влияния и MCP.", "thanks": "Пожалуйста! Спрашивайте, если нужна помощь со ScopeGraph.", "farewell": "До встречи! Обращайтесь, если понадобится помощь со ScopeGraph."},
 }
 
+_LOCAL_VIETNAMESE_REPLY = {
+    "en": "Yes! Ask me in Vietnamese and I’ll reply in Vietnamese.",
+    "vi": "Được chứ! Bạn cứ hỏi bằng tiếng Việt, mình sẽ trả lời bằng tiếng Việt nha.",
+    "ja": "はい！ベトナム語で質問していただければ、ベトナム語でお答えします。",
+    "ko": "네! 베트남어로 질문하시면 베트남어로 답변할게요.",
+    "zh": "当然可以！你可以用越南语提问，我会用越南语回答。",
+    "es": "¡Sí! Pregúntame en vietnamita y te responderé en vietnamita.",
+    "fr": "Oui ! Posez votre question en vietnamien et je vous répondrai en vietnamien.",
+    "de": "Ja! Frag mich auf Vietnamesisch und ich antworte auf Vietnamesisch.",
+    "hi": "हाँ! आप वियतनामी में पूछें, मैं वियतनामी में जवाब दूँगा।",
+    "th": "ได้เลย! ถามเป็นภาษาเวียดนามได้ แล้วฉันจะตอบเป็นภาษาเวียดนาม",
+    "it": "Sì! Chiedimi in vietnamita e ti risponderò in vietnamita.",
+    "ru": "Да! Задавайте вопросы на вьетнамском, и я отвечу на вьетнамском.",
+}
+
 
 def _smalltalk_intent(message: str) -> str | None:
     """Match only standalone pleasantries so real questions still reach the assistant."""
     normalized = unicodedata.normalize("NFKD", message.casefold())
+    normalized = normalized.replace("đ", "d")
     normalized = "".join(char for char in normalized if not unicodedata.combining(char))
     normalized = re.sub(r"[^\w\s]", " ", normalized, flags=re.UNICODE)
     normalized = " ".join(normalized.split())
@@ -83,6 +99,7 @@ def _smalltalk_intent(message: str) -> str | None:
         "greeting": {"hi", "hello", "hey", "hiya", "howdy", "yo", "alo", "xin chao", "chao", "chao ban", "chao scout", "hello ba nha", "hi scout", "hey scout", "good morning", "good afternoon", "good evening"},
         "thanks": {"thanks", "thank you", "thx", "cam on", "cam on nha", "cam on ban", "merci", "gracias", "danke", "arigato", "cảm ơn"},
         "farewell": {"bye", "goodbye", "see you", "see ya", "tam biet", "hen gap lai", "good night"},
+        "vietnamese": {"noi tieng viet duoc khong", "ban noi tieng viet khong", "do you speak vietnamese", "can you speak vietnamese", "speak vietnamese"},
     }
     for intent, candidates in phrases.items():
         if normalized in candidates:
@@ -99,9 +116,13 @@ def chat(payload: ChatRequest, request: Request):
 
     intent = _smalltalk_intent(message)
     if intent:
-        language_replies = _LOCAL_SMALLTALK.get(payload.language, _LOCAL_SMALLTALK["en"])
+        if intent == "vietnamese":
+            answer = _LOCAL_VIETNAMESE_REPLY.get(payload.language, _LOCAL_VIETNAMESE_REPLY["en"])
+        else:
+            language_replies = _LOCAL_SMALLTALK.get(payload.language, _LOCAL_SMALLTALK["en"])
+            answer = language_replies[intent]
         return {
-            "answer": language_replies[intent],
+            "answer": answer,
             "grounded": True,
             "model": "local-smalltalk",
         }
