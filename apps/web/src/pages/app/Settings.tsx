@@ -673,21 +673,26 @@ export const SettingsPage: React.FC = () => {
             </div>
           )}
 
-          <div className="relative">
-            <pre className="p-4 pr-12 rounded-xl bg-[#151923] text-slate-100 font-mono text-xs overflow-x-auto border border-slate-800 shadow-inner">
-              {activeMcpConfig || t('settings.mcp.local_path_help')}
-            </pre>
-            <button
-              type="button"
-              onClick={handleCopyMcp}
-              disabled={!activeMcpConfig}
-              className="absolute top-2.5 right-2.5 p-2 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              title={copiedMcp ? t('settings.mcp.copied') : t('settings.mcp.copy_btn')}
-              aria-label={copiedMcp ? t('settings.mcp.copied') : t('settings.mcp.copy_btn')}
-            >
-              {copiedMcp ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-            </button>
-          </div>
+          {activeMcpConfig ? (
+            <div className="relative">
+              <pre className="p-4 pr-12 rounded-xl bg-[#151923] text-slate-100 font-mono text-xs overflow-x-auto border border-slate-800 shadow-inner">
+                {activeMcpConfig}
+              </pre>
+              <button
+                type="button"
+                onClick={handleCopyMcp}
+                className="absolute top-2.5 right-2.5 p-2 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
+                title={copiedMcp ? t('settings.mcp.copied') : t('settings.mcp.copy_btn')}
+                aria-label={copiedMcp ? t('settings.mcp.copied') : t('settings.mcp.copy_btn')}
+              >
+                {copiedMcp ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+              </button>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-[#E4E7E1] bg-[#F7F8F5] px-4 py-3 text-sm leading-relaxed text-[#687180]">
+              {t('settings.mcp.local_path_help')}
+            </div>
+          )}
 
           {/* Client Setup Guide */}
           <div className="pt-2 border-t border-[#E4E7E1] space-y-3">
