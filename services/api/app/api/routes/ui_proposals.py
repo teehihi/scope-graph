@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.ai.provider import AIProviderResponse, MetaAIHttpProvider, OfflineDemoProvider
 from app.ai.routing import AIStage, BasetenVisionProvider, ProviderCapabilities, ProviderConfig, ProviderRegistry, StageExecutionError, StageProviderRouter, _approved_endpoint
 from app.ai.ui_spec import StructuredUISpecV1, UIComponentV1
-from app.ai.ui_proposal_v2 import UIChangesV2, UIIntentV2, UIPatchV2, apply_ui_patch, interpret_ui_intent, resolve_ui_targets
+from app.ai.ui_proposal_v2 import UIChangesV2, UIIntentV2, UIPatchV2, apply_ui_patch, find_related_ui_targets, interpret_ui_intent, resolve_ui_targets
 from app.analysis.retriever import HybridRetriever
 from app.core.config import settings
 from app.core.sessions import optional_session_user
@@ -112,6 +112,26 @@ def _ui_router(live: bool) -> StageProviderRouter:
                                 ProviderCapabilities(frozenset({AIStage.UI_GENERATION})), 5, 0, 2500, 1)
     registry.register(config, provider)
     return StageProviderRouter(registry, {AIStage.UI_GENERATION: config.provider_id}, "meta_only")
+
+
+class UITargetsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    requirement: str = Field(min_length=1, max_length=2000)
+
+
+def _spec_from_confirmed_target(requirement: str, candidate: Any) -> StructuredUISpecV1:
+    """Before-spec built from a user-confirmed real button, not an invented page.
+
+    Only the confirmed button's real label is used; the surrounding layout
+    is not claimed to be captured, so the preview stays a minimal button
+    edit instead of a full invented screen.
+    """
+    label = candidate.label or candidate.evidence.strip()[:160] or "Button"
+    return StructuredUISpecV1(version=1, requirement=requirement, title=f"Edit {label}",
+        description=f"Confirmed target in {candidate.path}:{candidate.line_start}. Only this button is edited.",
+        root=UIComponentV1(type="Container", semantic_role="main", children=[
+            UIComponentV1(type="Button", text=label, interaction="local_submit", button_variant="lime", button_shape="soft"),
+        ]), uncertainties=["The original repository screen and click behavior are not captured in this preview."])
 
 
 def _conceptual_button(requirement: str, label: str) -> StructuredUISpecV1:
@@ -234,6 +254,34 @@ def ui_proposal_status(repository_id: str, db: Session = Depends(get_db),
             "reason": None if live_available else "Live AI requires an owned repository, live opt-in, and an approved Meta or Baseten configuration"}
 
 
+@router.post("/repositories/{repository_id}/ui-proposals/targets")
+def find_ui_proposal_targets(
+    repository_id: str, payload: UITargetsRequest,
+    db: Session = Depends(get_db), current_user: User | None = Depends(optional_session_user),
+) -> dict[str, Any]:
+    """Confirm-before-AI step: deterministic related buttons, no AI call.
+
+    The frontend shows these candidates and the user picks one; only
+    after that pick is the candidate's structure sent to AI for
+    generation. When nothing matches, the caller falls back to a
+    conceptual preview instead of blocking the user.
+    """
+    repo = db.query(Repository).filter(Repository.id == repository_id).first()
+    if not repo:
+        raise HTTPException(404, "Repository not found")
+    sample_demo = _is_sample_demo(repo)
+    owns_repo = bool(current_user and repo.owner_email and current_user.email.lower() == repo.owner_email.lower())
+    if not owns_repo and not sample_demo:
+        raise HTTPException(403, "A repository owner session is required")
+    if repo.status != "ready":
+        raise HTTPException(400, "Repository must finish indexing before target lookup")
+    if not payload.requirement.strip():
+        raise HTTPException(400, "Requirement must contain text")
+    intent, candidates = find_related_ui_targets(db, repository_id, payload.requirement.strip())
+    return {"intent": intent.model_dump(), "target_label": intent.target_label,
+            "candidates": [c.model_dump() for c in candidates]}
+
+
 @router.post("/repositories/{repository_id}/ui-proposals/generate")
 def generate_ui_proposal(
     repository_id: str, payload: UIProposalRequest,
@@ -299,12 +347,33 @@ def generate_ui_proposal(
                     or _spec_node_count(payload.previous_spec, ai_intent.target_label) != 1):
                 raise HTTPException(502, "Live AI could not identify a unique UI target in the current proposal")
             intent, target_label = ai_intent, ai_intent.target_label
-    candidates = resolve_ui_targets(db, repository_id, target_label) if target_label else []
+    # Candidates come from both lookups so a target confirmed through the
+    # pre-AI targets endpoint (keyword-scored) is accepted here too, not
+    # only exact-label matches. The confirmed candidate's structure is
+    # what gets sent to AI below, never an invented target.
+    candidates_by_ref: dict[str, Any] = {}
+    if target_label:
+        for candidate in resolve_ui_targets(db, repository_id, target_label):
+            candidates_by_ref[candidate.ref] = candidate
+    _, related = find_related_ui_targets(db, repository_id, instruction)
+    for candidate in related:
+        # The scored version carries the real label and surrounding
+        # context snippet, so it wins over the bare exact-label version
+        # for the same source line; exact-only candidates stay as-is.
+        if candidate.ref not in candidates_by_ref or candidate.label or candidate.context_snippet:
+            candidates_by_ref[candidate.ref] = candidate
+    candidates = sorted(candidates_by_ref.values(), key=lambda c: (-getattr(c, "score", 0), c.path, c.line_start))
     if len(candidates) > 1 and not payload.selected_target_path:
         raise HTTPException(409, {"message": "Multiple UI targets match; select a source path", "candidates": [c.model_dump() for c in candidates]})
     if payload.selected_target_path and payload.selected_target_path not in {c.ref for c in candidates}:
         raise HTTPException(422, "Selected UI target is not grounded in the indexed repository")
     selected_candidate = next((c for c in candidates if c.ref == payload.selected_target_path), None) if payload.selected_target_path else candidates[0] if candidates else None
+    # The patch must target the real label the user confirmed (e.g.
+    # "Login"), not the keyword classifier's approximation (e.g.
+    # "dang nhap"), otherwise apply_ui_patch cannot find the node in
+    # the confirmed-target before-spec. The confirmed label is the one
+    # shown in the preview; the intent label stays in the response.
+    effective_target_label = (selected_candidate.label if selected_candidate and selected_candidate.label else None) or target_label
     target_resolution = {"status": "source_backed" if selected_candidate else "conceptual",
                          "selected": selected_candidate.model_dump() if selected_candidate else None,
                          "candidates": [c.model_dump() for c in candidates]}
@@ -320,16 +389,31 @@ def generate_ui_proposal(
             if before is None:
                 if intent.operation == "REMOVE_COMPONENT":
                     raise HTTPException(422, "Removal requires an existing proposal version")
-                before = (_empty_concept(payload.requirement) if intent.operation == "CREATE_COMPONENT" else
-                          _conceptual_layout(payload.requirement, target_label) if intent.operation == "MODIFY_LAYOUT" else
-                          _conceptual_button(payload.requirement, target_label))
+                if selected_candidate is not None and intent.operation in {"MODIFY_COMPONENT", "MODIFY_STYLE"}:
+                    before = _spec_from_confirmed_target(payload.requirement, selected_candidate)
+                else:
+                    before = (_empty_concept(payload.requirement) if intent.operation == "CREATE_COMPONENT" else
+                              _conceptual_layout(payload.requirement, target_label) if intent.operation == "MODIFY_LAYOUT" else
+                              _conceptual_button(payload.requirement, target_label))
             if live:
+                # The confirmed target's structure, not just its label, is
+                # what AI edits; without this it would invent a new page.
+                patch_instruction = instruction
+                if selected_candidate is not None:
+                    patch_instruction = (
+                        instruction
+                        + f"\nConfirmed UI target to edit only: {selected_candidate.path}:{selected_candidate.line_start} "
+                        + f"component={selected_candidate.component} label={selected_candidate.label or target_label} "
+                        + f"evidence={selected_candidate.evidence} "
+                        + (f"context={selected_candidate.context_snippet} " if getattr(selected_candidate, "context_snippet", None) else "")
+                        + "Do not change its label or any unrelated element."
+                    )
                 response: AIProviderResponse = stage_router.execute(
-                    AIStage.UI_GENERATION, "generate_ui_patch", instruction, target_label,
+                    AIStage.UI_GENERATION, "generate_ui_patch", patch_instruction, effective_target_label,
                     before.model_dump(), [c.model_dump() for c in candidates[:5]],
                 )
                 patch = UIPatchV2.model_validate(response.data)
-                if patch.target_label.casefold() != target_label.casefold():
+                if patch.target_label.casefold() != effective_target_label.casefold():
                     raise HTTPException(502, "Provider changed the selected UI target")
             else:
                 if intent.operation == "CREATE_COMPONENT":
@@ -342,7 +426,7 @@ def generate_ui_proposal(
                 if changes is None:
                     raise HTTPException(422, "Offline mode cannot interpret this edit; specify a supported color, shape, icon or layout change")
                 patch = UIPatchV2(operation=intent.operation,
-                                  target_label=target_label, changes=changes)
+                                  target_label=effective_target_label, changes=changes)
                 response = AIProviderResponse(patch.model_dump(), "offline_demo", "deterministic-semantic-matcher", 0.0, is_mock_or_demo=True)
             spec = apply_ui_patch(before, patch, payload.version)
         else:

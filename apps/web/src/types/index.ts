@@ -39,7 +39,7 @@ export interface UIProposalResult {
   preview_provenance?: 'proposal_version' | 'conceptual_approximation' | 'new_proposal';
   change_summary?: string;
 }
-export interface UITargetCandidate { ref: string; path: string; component: string | null; line_start: number; evidence: string; match_reasons: string[] }
+export interface UITargetCandidate { ref: string; path: string; component: string | null; line_start: number; evidence: string; match_reasons: string[]; label?: string | null; context_snippet?: string | null; score?: number }
 export interface UIProposalProviderStatus { offline_available: boolean; live_available: boolean; provider: string | null; reason: string | null }
 
 export interface RepositoryStats {

@@ -49,6 +49,27 @@ export async function generateUIProposal(
   return data as UIProposalResult;
 }
 
+export interface UIProposalTargetsResponse {
+  intent: { operation: string; target_label: string | null };
+  target_label: string | null;
+  candidates: UITargetCandidate[];
+}
+
+export async function findUIProposalTargets(
+  repositoryId: string,
+  requirement: string,
+  sessionToken?: string,
+): Promise<UIProposalTargetsResponse> {
+  const res = await fetch(`${API_BASE}/repositories/${encodeURIComponent(repositoryId)}/ui-proposals/targets`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}) },
+    body: JSON.stringify({ requirement }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : `HTTP ${res.status}`);
+  return data as UIProposalTargetsResponse;
+}
+
 export async function getUIProposalStatus(repositoryId: string, sessionToken?: string): Promise<UIProposalProviderStatus> {
   const res = await fetch(`${API_BASE}/repositories/${encodeURIComponent(repositoryId)}/ui-proposals/status`, {
     headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
