@@ -213,6 +213,7 @@ def test_partner_request_keeps_its_compatible_json_mode(provider_with_transport)
     assert requests[0]["messages"][0]["role"] == "system"
     assert requests[0]["response_format"] == {"type": "json_object"}
     assert requests[0]["temperature"] == settings.META_AI_TEMPERATURE
+    assert "JSON SCHEMA TO FOLLOW EXACTLY" not in requests[0]["messages"][0]["content"]
 
 
 def test_baseten_spark_open_omits_json_mode_and_raises_output_budget(provider_with_transport):
@@ -231,6 +232,10 @@ def test_baseten_spark_open_omits_json_mode_and_raises_output_budget(provider_wi
     provider.interpret_requirement("Verify email")
     assert "response_format" not in requests[0]
     assert requests[0]["max_tokens"] >= 6000
+    # Without JSON mode the model never saw the schema before, so it is
+    # embedded in the system prompt instead of being guessed from a name.
+    assert "JSON SCHEMA TO FOLLOW EXACTLY" in requests[0]["messages"][0]["content"]
+    assert "business_intent" in requests[0]["messages"][0]["content"]
 
 
 def test_baseten_spark_open_repairs_invalid_schema_once(provider_with_transport):
