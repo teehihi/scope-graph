@@ -189,7 +189,7 @@ export const UIProposalPage: React.FC = () => {
           )}
         </div>
         <button type="button" onClick={() => void loadSample()} disabled={isLoadingSample} className="rounded-lg border border-[#DDE1DB] px-3 py-2 font-semibold hover:bg-[#F7F8F5]">{t('proposal.load_sample')}</button>
-        <span className="ml-auto rounded-lg bg-[#EDF0F7] px-3 py-2 font-mono text-[10px] uppercase tracking-widest text-[#526BEE]">{t('proposal.local_only')}</span>
+        {providerStatus?.offline_available && <span className="ml-auto rounded-lg bg-[#EDF0F7] px-3 py-2 font-mono text-[10px] uppercase tracking-widest text-[#526BEE]">{t('proposal.local_only')}</span>}
       </div>
       <div className="mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-[#DDE1DB] bg-white p-3 text-xs" aria-label={t('proposal.mode')}>
         <strong className="mr-2">{t('proposal.mode')}</strong>
