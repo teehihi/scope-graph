@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { ArrowDownToLine, ArrowRight, CheckCircle2, Clock3, Code2, Monitor, RotateCcw, Smartphone, Sparkles } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { ArrowDownToLine, ArrowRight, Check, CheckCircle2, ChevronDown, Clock3, Code2, Monitor, RotateCcw, Smartphone, Sparkles, X } from 'lucide-react';
 import { AppLayout } from '../../components/layouts/AppLayout';
 import { UIProposalRenderer } from '../../components/UIProposalRenderer';
 import { useAuth } from '../../context/AuthContext';
@@ -34,8 +34,17 @@ export const UIProposalPage: React.FC = () => {
   const [providerStatus, setProviderStatus] = useState<UIProposalProviderStatus | null>(null);
   const [targetChoices, setTargetChoices] = useState<UITargetCandidate[]>([]);
   const [selectedTargetPath, setSelectedTargetPath] = useState('');
+  const [isRepoModalOpen, setIsRepoModalOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const entry = history[selected];
   const storageKey = `scopegraph_ui_proposals_${user?.email || 'demo'}_${activeRepo?.id || 'none'}`;
+  // The backend reports live/offline availability per repository. Live is
+  // only offered when it is confirmed available; offline generation is
+  // only offered when the backend says it is available, otherwise the
+  // user would click Generate straight into a 503 (see ui_proposals.py:
+  // generation is gated to local development).
+  const liveAvailable = providerStatus?.live_available === true;
+  const offlineUnavailable = providerStatus !== null && !providerStatus.offline_available;
 
   useEffect(() => {
     setHistory([]);
@@ -67,6 +76,20 @@ export const UIProposalPage: React.FC = () => {
       .catch(() => { if (alive) setProviderStatus(null); });
     return () => { alive = false; };
   }, [activeRepo?.id, user?.sessionToken]);
+
+  // If live was selected and the backend then reports it unavailable, fall
+  // back to offline instead of leaving a hidden live mode selected.
+  useEffect(() => {
+    if (providerStatus && !providerStatus.live_available && providerMode === 'live') setProviderMode('offline');
+  }, [providerStatus, providerMode]);
+
+  // Escape closes the custom repository modal.
+  useEffect(() => {
+    if (!isRepoModalOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') setIsRepoModalOpen(false); };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isRepoModalOpen]);
 
   const persist = (items: ProposalEntry[]) => {
     setHistory(items);
@@ -127,16 +150,42 @@ export const UIProposalPage: React.FC = () => {
     <div className="h-full overflow-y-auto p-4 lg:p-6" data-testid="proposal-workspace">
       <div className="mb-5 flex flex-wrap items-center gap-2 rounded-2xl border border-[#DDE1DB] bg-white p-3 text-xs">
         <span className="font-bold text-[#56606E]">{t('proposal.repository')}</span>
-        <select aria-label={t('proposal.repository')} value={activeRepo?.id || ''} onChange={(event) => setActiveRepo(repositories.find((repo) => repo.id === event.target.value) || null)} className="min-w-44 rounded-lg border border-[#DDE1DB] bg-white px-3 py-2 font-semibold">
-          <option value="">{t('proposal.select_repo')}</option>
-          {repositories.map((repo) => <option key={repo.id} value={repo.id}>{repo.name}</option>)}
-        </select>
+        <button type="button" aria-haspopup="dialog" aria-expanded={isRepoModalOpen} onClick={() => setIsRepoModalOpen(true)} className="flex min-w-44 items-center justify-between gap-2 rounded-lg border border-[#DDE1DB] bg-white px-3 py-2 font-semibold hover:bg-[#F7F8F5]">
+          <span className="truncate">{activeRepo?.name || t('proposal.select_repo')}</span>
+          <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${isRepoModalOpen ? 'rotate-180' : ''}`} />
+        </button>
         <button type="button" onClick={() => void loadSample()} disabled={isLoadingSample} className="rounded-lg border border-[#DDE1DB] px-3 py-2 font-semibold hover:bg-[#F7F8F5]">{t('proposal.load_sample')}</button>
         <span className="ml-auto rounded-lg bg-[#EDF0F7] px-3 py-2 font-mono text-[10px] uppercase tracking-widest text-[#526BEE]">{t('proposal.local_only')}</span>
       </div>
+      {isRepoModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#151923]/50 backdrop-blur-xs" onClick={() => setIsRepoModalOpen(false)} role="presentation">
+          <div role="dialog" aria-modal="true" aria-label={t('proposal.select_repo')} className="w-full max-w-md rounded-2xl border border-[#E4E7E1] bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="text-sm font-bold">{t('proposal.select_repo')}</h2>
+              <button type="button" onClick={() => setIsRepoModalOpen(false)} aria-label={t('common.close')} className="rounded-lg p-1.5 text-[#697380] hover:bg-[#F7F8F5] hover:text-[#151923]"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="max-h-72 space-y-1 overflow-y-auto">
+              {repositories.map((repo) => {
+                const isSelected = activeRepo?.id === repo.id;
+                return (
+                  <button key={repo.id} type="button" onClick={() => { setActiveRepo(repo); setIsRepoModalOpen(false); }} className={`flex w-full items-center justify-between gap-2 rounded-xl p-3 text-left text-sm ${isSelected ? 'bg-[#151923] font-bold text-white' : 'hover:bg-[#F7F8F5]'}`}>
+                    <span className="min-w-0">
+                      <span className="block truncate font-semibold">{repo.name}</span>
+                      {typeof repo.stats?.file_count === 'number' && <span className="block text-xs opacity-75">{repo.stats.file_count} {t('repo.files')}</span>}
+                    </span>
+                    {isSelected && <Check className="h-4 w-4 shrink-0 text-[#C7F36B]" />}
+                  </button>
+                );
+              })}
+              {repositories.length === 0 && <p className="p-3 text-sm text-[#697380]">{t('proposal.select_repo')}</p>}
+            </div>
+          </div>
+        </div>
+      )}
       <div className="mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-[#DDE1DB] bg-white p-3 text-xs" aria-label={t('proposal.mode')}>
         <strong className="mr-2">{t('proposal.mode')}</strong>
-        {(['offline', 'live'] as const).map((choice) => <button key={choice} type="button" aria-pressed={providerMode === choice} onClick={() => setProviderMode(choice)} className={`rounded-lg border px-3 py-2 font-bold ${providerMode === choice ? 'border-[#151923] bg-[#151923] text-white' : 'border-[#DDE1DB]'}`}>{t(`proposal.${choice}`)}</button>)}
+        <button type="button" aria-pressed={providerMode === 'offline'} onClick={() => setProviderMode('offline')} className={`rounded-lg border px-3 py-2 font-bold ${providerMode === 'offline' ? 'border-[#151923] bg-[#151923] text-white' : 'border-[#DDE1DB]'}`}>{t('proposal.offline')}</button>
+        {liveAvailable && <button type="button" aria-pressed={providerMode === 'live'} onClick={() => setProviderMode('live')} className={`rounded-lg border px-3 py-2 font-bold ${providerMode === 'live' ? 'border-[#151923] bg-[#151923] text-white' : 'border-[#DDE1DB]'}`}>{t('proposal.live')}</button>}
         <span role="status" className={`ml-auto ${providerStatus?.live_available ? 'text-green-700' : 'text-[#697380]'}`}>{providerStatus?.live_available ? t('proposal.provider_ready') : t('proposal.provider_unavailable')}</span>
       </div>
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(260px,0.9fr)_minmax(420px,1.6fr)_minmax(290px,1fr)]">
@@ -144,12 +193,13 @@ export const UIProposalPage: React.FC = () => {
           <div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-[#526BEE]" /><h2 className="text-sm font-bold">{t('proposal.requirement')}</h2></div>
           <textarea aria-label={t('proposal.requirement')} value={requirement} onChange={(event) => { setRequirement(event.target.value); setTargetChoices([]); setSelectedTargetPath(''); }} maxLength={2000} rows={6} placeholder={t('proposal.requirement_placeholder')} className="w-full resize-y rounded-xl border border-[#DDE1DB] p-3 text-sm outline-none focus:border-[#526BEE]" />
           {providerMode === 'live' && !providerStatus?.live_available && <p className="rounded-lg bg-amber-50 p-2 text-xs text-amber-900">{t('proposal.live_unavailable')}</p>}
+          {providerMode === 'offline' && offlineUnavailable && <p role="status" className="rounded-lg bg-amber-50 p-2 text-xs text-amber-900">{t('proposal.offline_unavailable')}</p>}
           {targetChoices.length > 0 && <label className="block text-xs font-bold">{t('proposal.target_select')}<select value={selectedTargetPath} onChange={(event) => setSelectedTargetPath(event.target.value)} className="mt-2 w-full rounded-lg border border-[#DDE1DB] p-2"><option value="">{t('proposal.target_select')}</option>{targetChoices.map((candidate) => <option key={candidate.ref} value={candidate.ref}>{candidate.ref}</option>)}</select></label>}
-          <button type="button" onClick={() => void generate('new')} disabled={!activeRepo || !requirement.trim() || generating || (providerMode === 'live' && !providerStatus?.live_available) || (targetChoices.length > 0 && !selectedTargetPath)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#151923] px-4 py-3 text-sm font-bold text-white hover:bg-[#303744] disabled:opacity-50">{generating ? t('proposal.generating') : entry ? t('proposal.regenerate') : t('proposal.generate')}<ArrowRight className="h-4 w-4" /></button>
-          <div className="border-t border-[#DDE1DB] pt-4"><label className="mb-2 block text-sm font-bold" htmlFor="proposal-refine">{t('proposal.refine')}</label><textarea id="proposal-refine" value={refinement} onChange={(event) => setRefinement(event.target.value)} disabled={!entry} maxLength={1000} rows={3} placeholder={t('proposal.refine_placeholder')} className="w-full resize-y rounded-xl border border-[#DDE1DB] p-3 text-sm outline-none focus:border-[#526BEE] disabled:opacity-50" /><button type="button" onClick={() => void generate('refine')} disabled={!entry || !refinement.trim() || generating || entry.result.spec.version >= 20 || (providerMode === 'live' && !providerStatus?.live_available)} className="mt-2 w-full rounded-xl border border-[#151923] px-4 py-2.5 text-sm font-bold hover:bg-[#F7F8F5] disabled:opacity-50">{t('proposal.refine_action')}</button></div>
+          <button type="button" onClick={() => void generate('new')} disabled={!activeRepo || !requirement.trim() || generating || (providerMode === 'live' && !providerStatus?.live_available) || (providerMode === 'offline' && offlineUnavailable) || (targetChoices.length > 0 && !selectedTargetPath)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#151923] px-4 py-3 text-sm font-bold text-white hover:bg-[#303744] disabled:opacity-50">{generating ? t('proposal.generating') : entry ? t('proposal.regenerate') : t('proposal.generate')}<ArrowRight className="h-4 w-4" /></button>
+          <div className="border-t border-[#DDE1DB] pt-4"><label className="mb-2 block text-sm font-bold" htmlFor="proposal-refine">{t('proposal.refine')}</label><textarea id="proposal-refine" value={refinement} onChange={(event) => setRefinement(event.target.value)} disabled={!entry} maxLength={1000} rows={3} placeholder={t('proposal.refine_placeholder')} className="w-full resize-y rounded-xl border border-[#DDE1DB] p-3 text-sm outline-none focus:border-[#526BEE] disabled:opacity-50" /><button type="button" onClick={() => void generate('refine')} disabled={!entry || !refinement.trim() || generating || entry.result.spec.version >= 20 || (providerMode === 'live' && !providerStatus?.live_available) || (providerMode === 'offline' && offlineUnavailable)} className="mt-2 w-full rounded-xl border border-[#151923] px-4 py-2.5 text-sm font-bold hover:bg-[#F7F8F5] disabled:opacity-50">{t('proposal.refine_action')}</button></div>
           {history.length > 0 && <div className="border-t border-[#DDE1DB] pt-4"><h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wider"><Clock3 className="h-4 w-4" />{t('proposal.history')}</h3><div className="flex flex-wrap gap-2">{history.map((item, index) => <button key={index} type="button" onClick={() => { setSelected(index); setError(''); }} aria-current={selected === index ? 'step' : undefined} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${selected === index ? 'bg-[#C7F36B]' : 'bg-[#F0F2EF] hover:bg-[#E4E7E1]'}`}>v{item.result.spec.version}{item.report ? ' ✓' : ''}</button>)}</div></div>}
           {selected > 0 && <button type="button" onClick={() => { setSelected(selected - 1); setError(''); }} className="flex items-center gap-2 rounded-lg border border-[#DDE1DB] px-3 py-2 text-xs font-bold"><RotateCcw className="h-3 w-3" />{t('proposal.revert')}</button>}
-          <div className="border-t border-[#DDE1DB] pt-4"><label htmlFor="proposal-screenshot" className="mb-2 block text-xs font-bold">{t('proposal.screenshot')}</label><input id="proposal-screenshot" type="file" accept="image/png,image/jpeg" onChange={(event) => setScreenshot(event.target.files?.[0] || null)} className="w-full text-xs file:mr-2 file:rounded-lg file:border-0 file:bg-[#EDF0F7] file:px-2 file:py-1.5" /><p className="mt-2 text-xs text-[#697380]">{t('proposal.screenshot_note')}</p></div>
+          <div className="border-t border-[#DDE1DB] pt-4"><span className="mb-2 block text-xs font-bold">{t('proposal.screenshot')}</span><input ref={fileInputRef} id="proposal-screenshot" type="file" accept="image/png,image/jpeg" onChange={(event) => setScreenshot(event.target.files?.[0] || null)} className="sr-only" /><div className="flex items-center gap-2"><button type="button" onClick={() => fileInputRef.current?.click()} className="shrink-0 rounded-lg bg-[#EDF0F7] px-3 py-1.5 text-xs font-bold hover:bg-[#E4E7E1]">{t('proposal.choose_file')}</button><span className="min-w-0 flex-1 truncate text-xs text-[#697380]">{screenshot ? screenshot.name : t('proposal.no_file')}</span>{screenshot && <button type="button" onClick={() => { setScreenshot(null); if (fileInputRef.current) fileInputRef.current.value = ''; }} aria-label={t('common.close')} className="shrink-0 rounded-lg p-1 text-[#697380] hover:bg-[#F7F8F5] hover:text-[#151923]"><X className="h-4 w-4" /></button>}</div><p className="mt-2 text-xs text-[#697380]">{t('proposal.screenshot_note')}</p></div>
         </section>
         <section className="min-w-0 rounded-2xl border border-[#DDE1DB] bg-[#EEF0EC] p-4 lg:p-6" aria-label={t('proposal.preview')}>
           <div className="mb-4 flex flex-wrap items-center gap-2"><h2 className="mr-auto text-sm font-bold">{t('proposal.preview')}</h2><button type="button" aria-pressed={viewport === 'desktop'} onClick={() => setViewport('desktop')} className={`rounded-lg p-2 ${viewport === 'desktop' ? 'bg-[#151923] text-white' : 'bg-white'}`} title={t('proposal.desktop')}><Monitor className="h-4 w-4" /></button><button type="button" aria-pressed={viewport === 'mobile'} onClick={() => setViewport('mobile')} className={`rounded-lg p-2 ${viewport === 'mobile' ? 'bg-[#151923] text-white' : 'bg-white'}`} title={t('proposal.mobile')}><Smartphone className="h-4 w-4" /></button><button type="button" onClick={() => setShowSpec((value) => !value)} disabled={!entry} className="rounded-lg bg-white p-2 disabled:opacity-50" title={t('proposal.spec')}><Code2 className="h-4 w-4" /></button></div>
