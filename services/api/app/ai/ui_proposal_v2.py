@@ -259,7 +259,7 @@ def _extract_button_label(line: str, localized: dict[str, str]) -> str | None:
     return None
 
 
-def find_related_ui_targets(db: Session, repository_id: str, requirement: str) -> tuple[UIIntentV2, list[UITargetCandidateV2]]:
+def find_related_ui_targets(db: Session, repository_id: str, requirement: str) -> tuple[UIIntentV2, list[UITargetCandidateV2], dict[str, object]]:
     """Confirm-before-AI lookup: deterministic candidates for a request.
 
     Exact-label matches come first, then keyword-scored button lines, so
@@ -267,11 +267,19 @@ def find_related_ui_targets(db: Session, repository_id: str, requirement: str) -
     button even when the keyword classifier cannot name it exactly. No
     AI call happens here; the user picks one candidate and only then is
     that candidate's structure sent to AI for generation.
+
+    The third return value is diagnostics: how many UI files are indexed
+    versus how many were actually readable on disk. IndexedFile rows only
+    store paths, not content, so when the workspace directory is gone
+    (for example after a redeploy wipes an ephemeral disk) every UI file
+    is missing and an empty candidate list does NOT mean "no such
+    button" — it means the repo must be re-imported. Callers must surface
+    needs_reindex instead of silently reporting "no matching button".
     """
     intent = interpret_ui_intent(requirement)
     repo = db.query(Repository).filter(Repository.id == repository_id).first()
     if not repo or not repo.workspace_path:
-        return intent, []
+        return intent, [], {"ui_files_total": 0, "files_scanned": 0, "needs_reindex": False}
     root = Path(repo.workspace_path).resolve()
     exact = resolve_ui_targets(db, repository_id, intent.target_label) if intent.target_label else []
     by_ref: dict[str, UITargetCandidateV2] = {}
@@ -281,13 +289,16 @@ def find_related_ui_targets(db: Session, repository_id: str, requirement: str) -
         by_ref[candidate.ref] = candidate
     keywords = _requirement_keywords(requirement)
     if not keywords:
-        return intent, list(by_ref.values())
+        return intent, list(by_ref.values()), {"ui_files_total": 0, "files_scanned": 0, "needs_reindex": False}
     localized = _localized_values(db, repository_id, root)
     files = db.query(IndexedFile).filter(IndexedFile.repository_id == repository_id).all()
+    # Filter to UI files BEFORE capping: capping the full file list first
+    # (files[:500]) could cut a UI file off in a large repo — scope-graph
+    # itself has 817 tracked files, 61 of them UI files.
+    ui_files = [f for f in files if f.path.lower().endswith((".tsx", ".jsx", ".vue", ".html"))]
+    files_scanned = 0
     scored: list[UITargetCandidateV2] = []
-    for file in files[:500]:
-        if not file.path.lower().endswith((".tsx", ".jsx", ".vue", ".html")):
-            continue
+    for file in ui_files[:500]:
         source = (root / file.path).resolve()
         if not source.is_relative_to(root) or not source.is_file() or source.stat().st_size > 256_000:
             continue
@@ -295,6 +306,7 @@ def find_related_ui_targets(db: Session, repository_id: str, requirement: str) -
             lines = source.read_text(encoding="utf-8").splitlines()
         except (OSError, UnicodeError):
             continue
+        files_scanned += 1
         path_lower = file.path.lower()
         for number, line in enumerate(lines, 1):
             if _SECRET_LINE.search(line):
@@ -321,11 +333,20 @@ def find_related_ui_targets(db: Session, repository_id: str, requirement: str) -
             if score < 4:
                 continue
             tags = re.findall(r"<([A-Za-z][\w.]*)\b", line)
-            if not tags:
-                tags = re.findall(r"<([A-Za-z][\w.]*)\b", "\n".join(lines[max(0, number - 4):number - 1]))
+            component = tags[-1] if tags else None
+            if component != "button":
+                # Multi-line buttons put <button on one line and the
+                # label on a later line (e.g. <span>Sign In</span>).
+                # Look back up to 10 lines for an unclosed <button
+                # opener so the candidate is a button, not a span.
+                for back in lines[max(0, number - 11):number - 1]:
+                    if "<button" in back.lower():
+                        component = "button"
+                    if "</button>" in back.lower():
+                        component = tags[-1] if tags else None
             snippet = "\n".join(lines[max(0, number - 3):number + 2])[:600]
             scored.append(UITargetCandidateV2(path=file.path.replace("\\", "/"),
-                component=tags[-1] if tags else None, line_start=number, evidence=line.strip()[:300],
+                component=component, line_start=number, evidence=line.strip()[:300],
                 match_reasons=reasons[:4], label=label, context_snippet=snippet, score=score))
     scored.sort(key=lambda c: (-c.score, c.path, c.line_start))
     for candidate in scored:
@@ -334,7 +355,9 @@ def find_related_ui_targets(db: Session, repository_id: str, requirement: str) -
         if candidate.ref not in by_ref or candidate.label or candidate.context_snippet:
             by_ref[candidate.ref] = candidate
     merged = sorted(by_ref.values(), key=lambda c: (-c.score, c.path, c.line_start))
-    return intent, merged[:8]
+    diagnostics = {"ui_files_total": len(ui_files), "files_scanned": files_scanned,
+                   "needs_reindex": len(ui_files) > 0 and files_scanned == 0}
+    return intent, merged[:8], diagnostics
 
 
 def apply_ui_patch(before: StructuredUISpecV1, patch: UIPatchV2, version: int) -> StructuredUISpecV1:

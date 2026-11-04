@@ -277,9 +277,12 @@ def find_ui_proposal_targets(
         raise HTTPException(400, "Repository must finish indexing before target lookup")
     if not payload.requirement.strip():
         raise HTTPException(400, "Requirement must contain text")
-    intent, candidates = find_related_ui_targets(db, repository_id, payload.requirement.strip())
+    intent, candidates, diagnostics = find_related_ui_targets(db, repository_id, payload.requirement.strip())
     return {"intent": intent.model_dump(), "target_label": intent.target_label,
-            "candidates": [c.model_dump() for c in candidates]}
+            "candidates": [c.model_dump() for c in candidates],
+            "needs_reindex": diagnostics["needs_reindex"],
+            "files_scanned": diagnostics["files_scanned"],
+            "ui_files_total": diagnostics["ui_files_total"]}
 
 
 @router.post("/repositories/{repository_id}/ui-proposals/generate")
@@ -355,7 +358,7 @@ def generate_ui_proposal(
     if target_label:
         for candidate in resolve_ui_targets(db, repository_id, target_label):
             candidates_by_ref[candidate.ref] = candidate
-    _, related = find_related_ui_targets(db, repository_id, instruction)
+    _, related, _ = find_related_ui_targets(db, repository_id, instruction)
     for candidate in related:
         # The scored version carries the real label and surrounding
         # context snippet, so it wins over the bare exact-label version
