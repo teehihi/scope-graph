@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.ai.provider import AIProviderResponse, MetaAIHttpProvider, OfflineDemoProvider
 from app.ai.routing import AIStage, BasetenVisionProvider, ProviderCapabilities, ProviderConfig, ProviderRegistry, StageExecutionError, StageProviderRouter, _approved_endpoint
 from app.ai.ui_spec import StructuredUISpecV1, UIComponentV1
-from app.ai.ui_proposal_v2 import UIChangesV2, UIPatchV2, apply_ui_patch, interpret_ui_intent, resolve_ui_targets
+from app.ai.ui_proposal_v2 import UIChangesV2, UIIntentV2, UIPatchV2, apply_ui_patch, interpret_ui_intent, resolve_ui_targets
 from app.analysis.retriever import HybridRetriever
 from app.core.config import settings
 from app.core.sessions import optional_session_user
@@ -167,6 +167,52 @@ def _is_sample_demo(repo: Repository) -> bool:
     )
 
 
+def _spec_labels(spec: StructuredUISpecV1) -> list[str]:
+    """Node labels of a proposal, in tree order, deduplicated case-insensitively."""
+    labels: list[str] = []
+    seen: set[str] = set()
+    stack = [spec.root]
+    while stack:
+        node = stack.pop()
+        label = node.text or node.label or node.type
+        if label and label.casefold() not in seen:
+            seen.add(label.casefold())
+            labels.append(label)
+        stack.extend(reversed(node.children))
+    return labels
+
+
+def _spec_node_count(spec: StructuredUISpecV1, label: str) -> int:
+    """How many proposal nodes apply_ui_patch would match for this label."""
+    count = 0
+    stack = [spec.root]
+    while stack:
+        node = stack.pop()
+        if (node.text or node.label or node.type).casefold() == label.casefold():
+            count += 1
+        stack.extend(node.children)
+    return count
+
+
+def _live_ai_intent(instruction: str, allowed_target_labels: list[str],
+                    previous_spec: dict[str, Any] | None) -> UIIntentV2 | None:
+    """Ask the live provider to classify a request the keyword classifier missed.
+
+    This is live-only and uses a separate short-lived router, so the main
+    generation router's request budget is untouched. Any failure returns
+    None and the caller turns it into a 502 instead of inventing a target.
+    """
+    router = _ui_router(True)
+    try:
+        _config, provider = router.registry.get(_live_provider_id() or "meta_model_api")
+        response = provider.interpret_ui_intent(instruction, allowed_target_labels, previous_spec)
+        return UIIntentV2.model_validate(response.data)
+    except Exception:
+        return None
+    finally:
+        router.close()
+
+
 @router.get("/repositories/{repository_id}/ui-proposals/status")
 def ui_proposal_status(repository_id: str, db: Session = Depends(get_db),
                        current_user: User | None = Depends(optional_session_user)) -> dict[str, Any]:
@@ -214,8 +260,43 @@ def generate_ui_proposal(
     target_label = payload.target_label or intent.target_label or _single_button_label(payload.previous_spec)
     if intent.operation == "CREATE_COMPONENT":
         target_label = "root"
-    if intent.operation in {"MODIFY_COMPONENT", "MODIFY_STYLE", "MODIFY_LAYOUT", "REMOVE_COMPONENT", "REFINE_PROPOSAL"} and not target_label:
-        raise HTTPException(422, "Specify an existing UI target or select a proposal version with one button")
+    edit_operations = {"MODIFY_COMPONENT", "MODIFY_STYLE", "MODIFY_LAYOUT", "REMOVE_COMPONENT", "REFINE_PROPOSAL"}
+    if intent.operation in edit_operations and not target_label:
+        if not live:
+            raise HTTPException(422, "Specify an existing UI target or select a proposal version with one button")
+        # Live, no previous proposal to edit: fall through to a fresh AI
+        # spec generation below instead of failing on a missing target.
+        # Live, with a previous proposal: ask the AI which node in that
+        # proposal the request means, and only accept a label that matches
+        # exactly one node, so a patch can never land on the wrong element.
+        if payload.previous_spec is not None:
+            ai_intent = _live_ai_intent(instruction, _spec_labels(payload.previous_spec),
+                                        payload.previous_spec.model_dump())
+            if ai_intent is None:
+                raise HTTPException(502, "Live AI could not identify a UI target in the current proposal")
+            if ai_intent.operation == "CREATE_PAGE":
+                # The AI read it as a new page, not an edit: fall through to
+                # fresh spec generation below.
+                intent, target_label = ai_intent, None
+            elif ai_intent.operation == "CREATE_COMPONENT" and ai_intent.target_label == "root":
+                intent, target_label = ai_intent, "root"
+            elif (ai_intent.operation in edit_operations and ai_intent.target_label
+                    and _spec_node_count(payload.previous_spec, ai_intent.target_label) == 1):
+                intent, target_label = ai_intent, ai_intent.target_label
+            else:
+                raise HTTPException(502, "Live AI could not identify a unique UI target in the current proposal")
+    elif live and payload.previous_spec is not None and intent.operation in edit_operations and target_label:
+        # The keyword classifier named a target, but it is not a node in the
+        # current proposal: let the live AI remap it instead of failing the
+        # patch later. Offline keeps the original deterministic behaviour.
+        if _spec_node_count(payload.previous_spec, target_label) != 1:
+            ai_intent = _live_ai_intent(instruction, _spec_labels(payload.previous_spec),
+                                        payload.previous_spec.model_dump())
+            if (ai_intent is None or ai_intent.operation not in edit_operations
+                    or not ai_intent.target_label
+                    or _spec_node_count(payload.previous_spec, ai_intent.target_label) != 1):
+                raise HTTPException(502, "Live AI could not identify a unique UI target in the current proposal")
+            intent, target_label = ai_intent, ai_intent.target_label
     candidates = resolve_ui_targets(db, repository_id, target_label) if target_label else []
     if len(candidates) > 1 and not payload.selected_target_path:
         raise HTTPException(409, {"message": "Multiple UI targets match; select a source path", "candidates": [c.model_dump() for c in candidates]})
