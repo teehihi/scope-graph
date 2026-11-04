@@ -62,6 +62,11 @@ class UITargetCandidateV2(BaseModel):
     line_start: int = Field(ge=1)
     evidence: str = Field(max_length=300)
     match_reasons: list[str]
+    # Filled by the confirm-before-AI lookup; absent for the older
+    # exact-label lookup, which only carried path/line/evidence.
+    label: str | None = None
+    context_snippet: str | None = Field(default=None, max_length=600)
+    score: int = 0
 
     @computed_field
     @property
@@ -178,6 +183,158 @@ def resolve_ui_targets(db: Session, repository_id: str, label: str) -> list[UITa
             if len(candidates) >= 12:
                 return candidates
     return candidates
+
+
+_STOPWORDS = {
+    "doi", "đổi", "thay", "thanh", "thành", "mau", "màu", "sac", "sắc", "do", "đỏ",
+    "xanh", "vang", "vàng", "den", "đen", "trang", "trắng", "vuong", "vuông",
+    "tron", "tròn", "bo", "goc", "góc", "canh", "cạnh", "nut", "nút", "button",
+    "change", "modify", "edit", "to", "red", "blue", "green", "black", "white",
+    "square", "rounded", "color", "colour", "shape", "cho", "cai", "cái", "nay",
+    "này", "va", "và", "voi", "với", "trong", "trang", "man", "màn", "hinh",
+    "hình", "page", "screen", "ui", "giao", "dien", "diện", "the", "a", "an",
+    "muon", "muốn", "toi", "tôi", "want", "please", "hay", "giup", "giúp",
+}
+_PHRASE_SYNONYMS = {
+    "dang nhap": ["login", "signin", "sign in"],
+    "dang ky": ["register", "signup", "sign up"],
+    "login": ["dang", "nhap", "signin"],
+    "signin": ["login", "dang", "nhap"],
+    "register": ["dang", "ky", "signup"],
+    "signup": ["register", "dang", "ky"],
+    "luu": ["save"],
+    "save": ["luu"],
+}
+
+
+def _requirement_keywords(requirement: str) -> set[str]:
+    """Content words of a request, expanded with login/register synonyms.
+
+    Deterministic only: no AI is involved, so a target the user confirms
+    is always grounded in the indexed repository, never invented.
+    """
+    lower = requirement.casefold()
+    keywords = set()
+    for phrase, synonyms in _PHRASE_SYNONYMS.items():
+        if phrase in lower:
+            keywords.update(synonyms)
+    for word in re.findall(r"[^\W_]+", lower, flags=re.UNICODE):
+        if len(word) >= 2 and word not in _STOPWORDS:
+            keywords.add(word)
+    return keywords
+
+
+def _localized_values(db: Session, repository_id: str, root: Path) -> dict[str, str]:
+    """i18n key -> displayed text, from indexed translation files only."""
+    values: dict[str, str] = {}
+    files = db.query(IndexedFile).filter(IndexedFile.repository_id == repository_id).all()
+    for file in files[:500]:
+        if not file.path.lower().endswith(("languagecontext.tsx", "translations.ts", "i18n.ts")):
+            continue
+        source = (root / file.path).resolve()
+        if not source.is_relative_to(root) or not source.is_file() or source.stat().st_size > 1_000_000:
+            continue
+        try:
+            source_text = source.read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            continue
+        for match in re.finditer(r"['\"]([^'\"]{1,100})['\"]\s*:\s*['\"]([^'\"]{1,200})['\"]", source_text):
+            values.setdefault(match.group(1), match.group(2))
+            if len(values) >= 200:
+                return values
+    return values
+
+
+def _extract_button_label(line: str, localized: dict[str, str]) -> str | None:
+    """Best-effort visible label of one UI line, from text or an i18n key."""
+    key_match = re.search(r"t\(['\"]([^'\"]+)['\"]\)", line)
+    if key_match and key_match.group(1) in localized:
+        return localized[key_match.group(1)]
+    for pattern in (r">([^<>]{1,80})<", r"text\s*=\s*['\"{]([^'\"}]{1,80})",
+                    r"aria-label\s*=\s*['\"]([^'\"]{1,80})['\"]",
+                    r"children\s*=\s*['\"]([^'\"]{1,80})['\"]"):
+        match = re.search(pattern, line)
+        if match and match.group(1).strip() and "{" not in match.group(1):
+            return match.group(1).strip()
+    return None
+
+
+def find_related_ui_targets(db: Session, repository_id: str, requirement: str) -> tuple[UIIntentV2, list[UITargetCandidateV2]]:
+    """Confirm-before-AI lookup: deterministic candidates for a request.
+
+    Exact-label matches come first, then keyword-scored button lines, so
+    a request like 'doi nut dang nhap thanh mau do' finds the real login
+    button even when the keyword classifier cannot name it exactly. No
+    AI call happens here; the user picks one candidate and only then is
+    that candidate's structure sent to AI for generation.
+    """
+    intent = interpret_ui_intent(requirement)
+    repo = db.query(Repository).filter(Repository.id == repository_id).first()
+    if not repo or not repo.workspace_path:
+        return intent, []
+    root = Path(repo.workspace_path).resolve()
+    exact = resolve_ui_targets(db, repository_id, intent.target_label) if intent.target_label else []
+    by_ref: dict[str, UITargetCandidateV2] = {}
+    for candidate in exact:
+        candidate.score = 10
+        candidate.label = candidate.label or intent.target_label
+        by_ref[candidate.ref] = candidate
+    keywords = _requirement_keywords(requirement)
+    if not keywords:
+        return intent, list(by_ref.values())
+    localized = _localized_values(db, repository_id, root)
+    files = db.query(IndexedFile).filter(IndexedFile.repository_id == repository_id).all()
+    scored: list[UITargetCandidateV2] = []
+    for file in files[:500]:
+        if not file.path.lower().endswith((".tsx", ".jsx", ".vue", ".html")):
+            continue
+        source = (root / file.path).resolve()
+        if not source.is_relative_to(root) or not source.is_file() or source.stat().st_size > 256_000:
+            continue
+        try:
+            lines = source.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeError):
+            continue
+        path_lower = file.path.lower()
+        for number, line in enumerate(lines, 1):
+            if _SECRET_LINE.search(line):
+                continue
+            if not any(marker in line.lower() for marker in ("button", "aria-label", "<", "t('")):
+                continue
+            line_lower = line.lower()
+            label = _extract_button_label(line, localized)
+            label_lower = (label or "").casefold()
+            score = 0
+            reasons: list[str] = []
+            for keyword in keywords:
+                if keyword in label_lower:
+                    score += 5
+                    reasons.append(f"label contains '{keyword}'")
+                elif keyword in line_lower:
+                    score += 3
+                    reasons.append(f"source contains '{keyword}'")
+                if keyword in path_lower:
+                    score += 2
+                    reasons.append(f"file path contains '{keyword}'")
+            if "button" in line_lower:
+                score += 1
+            if score < 4:
+                continue
+            tags = re.findall(r"<([A-Za-z][\w.]*)\b", line)
+            if not tags:
+                tags = re.findall(r"<([A-Za-z][\w.]*)\b", "\n".join(lines[max(0, number - 4):number - 1]))
+            snippet = "\n".join(lines[max(0, number - 3):number + 2])[:600]
+            scored.append(UITargetCandidateV2(path=file.path.replace("\\", "/"),
+                component=tags[-1] if tags else None, line_start=number, evidence=line.strip()[:300],
+                match_reasons=reasons[:4], label=label, context_snippet=snippet, score=score))
+    scored.sort(key=lambda c: (-c.score, c.path, c.line_start))
+    for candidate in scored:
+        # The scored version carries the real label and surrounding
+        # context, so it wins over the bare exact-label version.
+        if candidate.ref not in by_ref or candidate.label or candidate.context_snippet:
+            by_ref[candidate.ref] = candidate
+    merged = sorted(by_ref.values(), key=lambda c: (-c.score, c.path, c.line_start))
+    return intent, merged[:8]
 
 
 def apply_ui_patch(before: StructuredUISpecV1, patch: UIPatchV2, version: int) -> StructuredUISpecV1:

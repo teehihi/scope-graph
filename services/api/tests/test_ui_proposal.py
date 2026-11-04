@@ -423,3 +423,83 @@ def test_live_ai_fallback_failure_returns_502_not_422(client, monkeypatch):
         assert "spec" not in response.json()
     finally:
         app.dependency_overrides.pop(optional_session_user, None)
+
+
+@pytest.fixture
+def target_client(tmp_path, monkeypatch):
+    """Sample-demo repo whose workspace actually contains UI buttons on disk."""
+    monkeypatch.setattr(settings, "WORKSPACE_DIR", str(tmp_path))
+    engine = create_engine(f"sqlite:///{tmp_path / 'targets.db'}", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine)
+    workspace = tmp_path / "sample"
+    (workspace / "src" / "pages").mkdir(parents=True)
+    (workspace / "src" / "pages" / "Login.tsx").write_text(
+        'export function LoginPage() {\n'
+        '  return <form><button className="rounded-xl bg-lime">Đăng nhập</button></form>;\n'
+        '}\n', encoding="utf-8")
+    (workspace / "src" / "pages" / "Register.tsx").write_text(
+        'export function RegisterPage() {\n'
+        '  return <button>Đăng ký</button>;\n'
+        '}\n', encoding="utf-8")
+    with factory() as db:
+        db.add_all([
+            Repository(id="sample", name="Sample Auth & User Service", description="Multi-tier microservice with API routers, UserService, VerificationService, and automated tests.", status="ready", workspace_path=str(workspace)),
+            IndexedFile(id="login", repository_id="sample", path="src/pages/Login.tsx"),
+            IndexedFile(id="register", repository_id="sample", path="src/pages/Register.tsx"),
+        ])
+        db.commit()
+
+    def local_db():
+        with factory() as db:
+            yield db
+
+    app.dependency_overrides[get_db] = local_db
+    monkeypatch.setattr(settings, "ENVIRONMENT", "development")
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+        engine.dispose()
+
+
+def test_targets_endpoint_finds_real_login_button_before_any_ai_call(target_client):
+    response = target_client.post("/api/v1/repositories/sample/ui-proposals/targets",
+                                  json={"requirement": "Tôi muốn đổi nút đăng nhập thành màu đỏ"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["candidates"], "Expected the real login button to be found deterministically"
+    first = data["candidates"][0]
+    assert first["path"] == "src/pages/Login.tsx"
+    assert first["label"] == "Đăng nhập"
+    assert "Đăng nhập" in first["evidence"]
+    assert first["context_snippet"]
+
+
+def test_targets_endpoint_returns_empty_when_no_button_matches(target_client):
+    response = target_client.post("/api/v1/repositories/sample/ui-proposals/targets",
+                                  json={"requirement": "Tôi muốn đổi nút thanh toán thành màu đỏ"})
+    assert response.status_code == 200
+    assert response.json()["candidates"] == []
+
+
+def test_confirmed_target_generates_offline_edit_of_real_button(target_client):
+    targets = target_client.post("/api/v1/repositories/sample/ui-proposals/targets",
+                                 json={"requirement": "Tôi muốn đổi nút đăng nhập thành màu đỏ"}).json()
+    ref = targets["candidates"][0]["ref"]
+    response = generate(target_client, requirement="Tôi muốn đổi nút đăng nhập thành màu đỏ",
+                        version=1, selected_target_path=ref)
+    assert response.status_code == 200
+    spec = response.json()["spec"]
+    buttons = []
+
+    def walk(node):
+        if node["type"] == "Button":
+            buttons.append(node)
+        for child in node.get("children", []):
+            walk(child)
+
+    walk(spec["root"])
+    assert len(buttons) == 1
+    assert buttons[0]["text"] == "Đăng nhập"
+    assert buttons[0]["button_variant"] == "red"
