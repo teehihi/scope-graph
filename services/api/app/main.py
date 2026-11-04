@@ -7,7 +7,7 @@ from app.core.config import settings
 from app.core.request_limits import ScreenshotRequestBodyLimit
 from app.core.logging import setup_logging
 from app.db.database import init_db
-from app.api.routes import health, repositories, analysis, auth, voice, billing, assistant
+from app.api.routes import health, repositories, analysis, auth, voice, billing, assistant, ui_proposals
 from app.mcp.server import mcp
 from mcp.server.transport_security import TransportSecuritySettings
 
@@ -90,6 +90,7 @@ app.include_router(analysis.router, prefix="/api/v1")
 app.include_router(voice.router, prefix="/api/v1")
 app.include_router(billing.router, prefix="/api/v1")
 app.include_router(assistant.router, prefix="/api/v1")
+app.include_router(ui_proposals.router, prefix="/api/v1")
 
 # Expose Streamable HTTP at /mcp/ and retain SSE compatibility at /mcp/sse.
 app.mount("/mcp", _mcp_transport_app)

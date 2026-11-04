@@ -11,22 +11,23 @@ class ScreenshotRequestBodyLimit:
 
     async def __call__(self, scope, receive, send):
         path = scope.get("path", "")
+        proposal_request = path.endswith("/ui-proposals/generate")
         if (
             scope["type"] != "http"
             or scope.get("method") != "POST"
             or not path.startswith("/api/v1/repositories/")
-            or not path.endswith("/analyze-screenshot")
+            or not (path.endswith("/analyze-screenshot") or proposal_request)
         ):
             await self.app(scope, receive, send)
             return
 
         # Allow bounded multipart framing and a short requirement alongside the image.
-        limit = settings.MAX_SCREENSHOT_BYTES + 1_000_000
+        limit = 100_000 if proposal_request else settings.MAX_SCREENSHOT_BYTES + 1_000_000
         for name, value in scope.get("headers", []):
             if name.lower() == b"content-length":
                 try:
                     if int(value) > limit:
-                        await self._reject(scope, receive, send)
+                        await self._reject(scope, receive, send, proposal_request)
                         return
                 except ValueError:
                     pass
@@ -41,7 +42,7 @@ class ScreenshotRequestBodyLimit:
                 return
             consumed += len(message.get("body", b""))
             if consumed > limit:
-                await self._reject(scope, receive, send)
+                await self._reject(scope, receive, send, proposal_request)
                 return
             messages.append(message)
             if not message.get("more_body", False):
@@ -55,8 +56,8 @@ class ScreenshotRequestBodyLimit:
         await self.app(scope, replay_receive, send)
 
     @staticmethod
-    async def _reject(scope, receive, send):
+    async def _reject(scope, receive, send, proposal_request=False):
         response = JSONResponse(
-            {"detail": "Screenshot request body exceeds allowed size"}, status_code=413,
+            {"detail": "UI proposal request body exceeds allowed size" if proposal_request else "Screenshot request body exceeds allowed size"}, status_code=413,
         )
         await response(scope, receive, send)

@@ -2,6 +2,46 @@ export type LayerType = 'api' | 'service' | 'model' | 'core' | 'test' | 'module'
 export type ImpactType = 'direct' | 'indirect' | 'none';
 export type LayoutMode = 'hierarchical' | 'stream' | 'compact';
 
+export type UIComponentType = 'Container' | 'Stack' | 'Grid' | 'Heading' | 'Text' | 'Button' | 'Input' | 'Form' | 'Card' | 'ImagePlaceholder' | 'Divider' | 'Tabs';
+export interface UIComponentSpec {
+  type: UIComponentType;
+  text?: string | null;
+  label?: string | null;
+  placeholder?: string | null;
+  semantic_role?: 'main' | 'section' | 'navigation' | 'complementary' | 'none';
+  interaction?: 'none' | 'local_toggle' | 'local_tab' | 'local_input' | 'local_submit';
+  button_variant?: 'lime' | 'red' | 'dark_red' | 'ink' | null;
+  button_shape?: 'soft' | 'square' | null;
+  button_icon?: 'none' | 'plus' | 'arrow_right' | null;
+  layout_columns?: number | null;
+  children?: UIComponentSpec[];
+}
+export interface StructuredUISpec {
+  schema_version: '1';
+  version: number;
+  requirement: string;
+  title: string;
+  description: string;
+  root: UIComponentSpec;
+  design_tokens: { tone: 'neutral' | 'ink' | 'lime'; spacing: 'compact' | 'comfortable' | 'spacious'; radius: 'square' | 'soft'; alignment: 'start' | 'center' };
+  responsive: { desktop_columns: number; mobile_columns: number };
+  accessibility_notes: string[];
+  assumptions: string[];
+  uncertainties: string[];
+}
+export interface UIProposalResult {
+  spec: StructuredUISpec;
+  generation: { mode: 'offline' | 'live'; provider: string; model: string; latency_seconds: number; token_usage: Record<string, number> | null; cost_usd: number | null; cost_status: 'unavailable'; request_count: number; context_paths: string[] };
+  intent?: { operation: string; target_description: string; target_label: string | null; constraints: string[]; ambiguities: string[]; uncertainty: string };
+  patch?: { schema_version: '2'; operation: string; target_label: string; changes: { background_color?: string | null; border_radius?: string | null; icon_left?: string | null; desktop_columns?: number | null }; preserve: string[] } | null;
+  target_resolution?: { status: 'source_backed' | 'conceptual'; selected: UITargetCandidate | null; candidates: UITargetCandidate[] };
+  before_spec?: StructuredUISpec | null;
+  preview_provenance?: 'proposal_version' | 'conceptual_approximation' | 'new_proposal';
+  change_summary?: string;
+}
+export interface UITargetCandidate { ref: string; path: string; component: string | null; line_start: number; evidence: string; match_reasons: string[] }
+export interface UIProposalProviderStatus { offline_available: boolean; live_available: boolean; provider: string | null; reason: string | null }
+
 export interface RepositoryStats {
   file_count: number;
   symbol_count: number;

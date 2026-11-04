@@ -180,6 +180,7 @@ def test_multi_ai_profile_resolves_explicit_partner_stages_without_request(monke
     router = build_stage_router(StageStub("meta_model_api"))
     try:
         assert router.routes == {
+            AIStage.UI_GENERATION: "meta_model_api",
             AIStage.VISION: "baseten_vision",
             AIStage.REQUIREMENT_INTERPRETATION: "meta_model_api",
             AIStage.IMPACT_REASONING: "modal_reasoning",

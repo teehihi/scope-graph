@@ -16,6 +16,7 @@ import { ImpactPage } from './pages/app/Impact';
 import { RepositoriesPage } from './pages/app/Repositories';
 import { SettingsPage } from './pages/app/Settings';
 import { AnalysisHistoryPage } from './pages/app/AnalysisHistory';
+import { UIProposalPage } from './pages/app/UIProposal';
 
 export const App: React.FC = () => {
   const { pathname, navigate } = useRouter();
@@ -113,6 +114,9 @@ export const App: React.FC = () => {
     }
     if (pathname === '/app/impact') {
       return <ImpactPage />;
+    }
+    if (pathname === '/app/ui-proposal') {
+      return <UIProposalPage />;
     }
     if (pathname === '/app/repositories') {
       return <RepositoriesPage />;

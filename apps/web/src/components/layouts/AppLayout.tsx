@@ -18,6 +18,7 @@ import {
   Menu,
   X,
   CheckCircle2,
+  PanelsTopLeft,
 } from 'lucide-react';
 
 interface AppLayoutProps {
@@ -61,6 +62,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
     { to: '/app/dashboard', label: t('nav.dashboard'), icon: LayoutDashboard },
     { to: '/app/graph', label: t('nav.graph'), icon: Network },
     { to: '/app/impact', label: t('nav.impact'), icon: Zap },
+    { to: '/app/ui-proposal', label: t('proposal.nav'), icon: PanelsTopLeft },
     { to: '/app/repositories', label: t('nav.repositories'), icon: FolderGit2 },
     { to: '/app/history', label: t('nav.history'), icon: History },
     { to: '/app/settings', label: t('nav.settings'), icon: Settings },
