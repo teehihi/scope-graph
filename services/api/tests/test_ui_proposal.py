@@ -176,6 +176,112 @@ def test_production_fails_closed(client, monkeypatch):
     assert generate(client).status_code == 503
 
 
+def _owner_session():
+    app.dependency_overrides[optional_session_user] = lambda: User(email="owner@example.com", is_verified=True)
+
+
+def test_baseten_live_status_reports_baseten_and_hides_key(client, monkeypatch):
+    _owner_session()
+    monkeypatch.setattr(settings, "UI_PROPOSAL_LIVE_ENABLED", True)
+    monkeypatch.setattr(settings, "UI_PROPOSAL_LIVE_PROVIDER", "baseten")
+    monkeypatch.setattr(settings, "BASETEN_UI_API_KEY", "baseten-test-key-never-sent")
+    monkeypatch.setattr(settings, "BASETEN_UI_BASE_URL", "https://inference.baseten.co/v1")
+    monkeypatch.setattr(settings, "BASETEN_UI_MODEL", "meta-models/muse-spark-open-1026")
+    try:
+        response = client.get("/api/v1/repositories/private/ui-proposals/status")
+        assert response.status_code == 200
+        assert response.json()["live_available"] is True
+        assert response.json()["provider"] == "baseten"
+        assert "baseten-test-key-never-sent" not in response.text
+    finally:
+        app.dependency_overrides.pop(optional_session_user, None)
+
+
+def test_baseten_live_uses_vision_key_fallback(client, monkeypatch):
+    _owner_session()
+    monkeypatch.setattr(settings, "UI_PROPOSAL_LIVE_ENABLED", True)
+    monkeypatch.setattr(settings, "UI_PROPOSAL_LIVE_PROVIDER", "baseten")
+    monkeypatch.setattr(settings, "BASETEN_UI_API_KEY", "")
+    monkeypatch.setattr(settings, "BASETEN_VISION_API_KEY", "vision-test-key-never-sent")
+    monkeypatch.setattr(settings, "BASETEN_UI_BASE_URL", "https://inference.baseten.co/v1")
+    try:
+        response = client.get("/api/v1/repositories/private/ui-proposals/status")
+        assert response.json()["live_available"] is True
+        assert response.json()["provider"] == "baseten"
+        assert "vision-test-key-never-sent" not in response.text
+    finally:
+        app.dependency_overrides.pop(optional_session_user, None)
+
+
+def test_baseten_live_fails_closed_without_key(client, monkeypatch):
+    _owner_session()
+    monkeypatch.setattr(settings, "UI_PROPOSAL_LIVE_ENABLED", True)
+    monkeypatch.setattr(settings, "UI_PROPOSAL_LIVE_PROVIDER", "baseten")
+    monkeypatch.setattr(settings, "BASETEN_UI_API_KEY", "")
+    monkeypatch.setattr(settings, "BASETEN_VISION_API_KEY", "")
+    try:
+        assert generate(client, repo="private", mode="live").status_code == 503
+    finally:
+        app.dependency_overrides.pop(optional_session_user, None)
+
+
+def test_meta_live_status_unchanged(client, monkeypatch):
+    _owner_session()
+    monkeypatch.setattr(settings, "UI_PROPOSAL_LIVE_ENABLED", True)
+    monkeypatch.setattr(settings, "UI_PROPOSAL_LIVE_PROVIDER", "meta_model_api")
+    monkeypatch.setattr(settings, "META_AI_PROVIDER", "meta_model_api")
+    monkeypatch.setattr(settings, "META_AI_API_KEY", "meta-test-key-never-sent")
+    monkeypatch.setattr(settings, "META_AI_BASE_URL", "https://api.meta.ai/v1")
+    try:
+        response = client.get("/api/v1/repositories/private/ui-proposals/status")
+        assert response.json()["live_available"] is True
+        assert response.json()["provider"] == "meta_model_api"
+    finally:
+        app.dependency_overrides.pop(optional_session_user, None)
+
+
+def test_production_live_baseten_passes_environment_gate_with_mocked_router(client, monkeypatch):
+    _owner_session()
+    monkeypatch.setattr(settings, "ENVIRONMENT", "production")
+    monkeypatch.setattr(settings, "UI_PROPOSAL_LIVE_ENABLED", True)
+    monkeypatch.setattr(settings, "UI_PROPOSAL_LIVE_PROVIDER", "baseten")
+    monkeypatch.setattr(settings, "BASETEN_UI_API_KEY", "baseten-test-key-never-sent")
+    monkeypatch.setattr(settings, "BASETEN_UI_BASE_URL", "https://inference.baseten.co/v1")
+
+    valid_spec = {"schema_version": "1", "version": 1,
+                  "requirement": "Redesign the account login page with clear errors",
+                  "title": "Login", "description": "Preview", "root": {"type": "Container"}}
+
+    class FakeProvider(BaseMetaAIProvider):
+        def generate_ui_spec(self, *args, **kwargs):
+            return AIProviderResponse(valid_spec, "baseten", "meta-models/muse-spark-open-1026", 0.01)
+
+    def mocked_router(_live):
+        registry = ProviderRegistry()
+        registry.register(ProviderConfig("baseten", "meta-models/muse-spark-open-1026", "", "NONE",
+            ProviderCapabilities(frozenset({AIStage.UI_GENERATION})), 1, 0, 100, 1), FakeProvider())
+        return StageProviderRouter(registry, {AIStage.UI_GENERATION: "baseten"})
+
+    monkeypatch.setattr(ui_proposals, "_ui_router", mocked_router)
+    try:
+        response = generate(client, repo="private", mode="live")
+        assert response.status_code == 200
+        assert response.json()["generation"]["mode"] == "live"
+        assert response.json()["generation"]["provider"] == "baseten"
+    finally:
+        app.dependency_overrides.pop(optional_session_user, None)
+
+
+def test_production_live_without_configuration_still_fails_closed(client, monkeypatch):
+    _owner_session()
+    monkeypatch.setattr(settings, "ENVIRONMENT", "production")
+    monkeypatch.setattr(settings, "UI_PROPOSAL_LIVE_ENABLED", False)
+    try:
+        assert generate(client, repo="private", mode="live").status_code == 503
+    finally:
+        app.dependency_overrides.pop(optional_session_user, None)
+
+
 def test_request_body_limit(client):
     response = client.post("/api/v1/repositories/sample/ui-proposals/generate", content=b"x" * 100_001,
                            headers={"content-type": "application/json"})

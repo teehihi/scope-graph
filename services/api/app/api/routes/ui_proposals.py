@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy.orm import Session
 
 from app.ai.provider import AIProviderResponse, MetaAIHttpProvider, OfflineDemoProvider
-from app.ai.routing import AIStage, ProviderCapabilities, ProviderConfig, ProviderRegistry, StageExecutionError, StageProviderRouter, _approved_endpoint
+from app.ai.routing import AIStage, BasetenVisionProvider, ProviderCapabilities, ProviderConfig, ProviderRegistry, StageExecutionError, StageProviderRouter, _approved_endpoint
 from app.ai.ui_spec import StructuredUISpecV1, UIComponentV1
 from app.ai.ui_proposal_v2 import UIChangesV2, UIPatchV2, apply_ui_patch, interpret_ui_intent, resolve_ui_targets
 from app.analysis.retriever import HybridRetriever
@@ -42,9 +42,60 @@ class UIProposalRequest(BaseModel):
         return self
 
 
+def _live_provider_name() -> str:
+    return settings.UI_PROPOSAL_LIVE_PROVIDER.strip().lower() or "meta_model_api"
+
+
+def _baseten_ui_key() -> tuple[str, str]:
+    """Baseten UI key, falling back to the vision key already set on Render.
+
+    The hackathon key is a single Baseten credential that only works with the
+    hackathon model, so a separate BASETEN_UI_API_KEY is optional; when it is
+    empty, the already-configured BASETEN_VISION_API_KEY is reused for UI
+    generation. Only the credential reference (never the value) is recorded.
+    """
+    if settings.BASETEN_UI_API_KEY.strip():
+        return settings.BASETEN_UI_API_KEY.strip(), "BASETEN_UI_API_KEY"
+    return settings.BASETEN_VISION_API_KEY.strip(), "BASETEN_VISION_API_KEY"
+
+
+def _baseten_ui_configured() -> bool:
+    key, _ref = _baseten_ui_key()
+    return bool(key and _approved_endpoint(settings.BASETEN_UI_BASE_URL, "baseten"))
+
+
+def _meta_live_configured() -> bool:
+    return bool(settings.META_AI_PROVIDER == "meta_model_api" and settings.META_AI_API_KEY.strip()
+                and _approved_endpoint(settings.META_AI_BASE_URL, "meta"))
+
+
+def _live_provider_id() -> str | None:
+    """The live provider that is actually usable, or None when live is closed."""
+    if not settings.UI_PROPOSAL_LIVE_ENABLED:
+        return None
+    if _live_provider_name() == "baseten" and _baseten_ui_configured():
+        return "baseten"
+    if _live_provider_name() == "meta_model_api" and _meta_live_configured():
+        return "meta_model_api"
+    return None
+
+
 def _ui_router(live: bool) -> StageProviderRouter:
     registry = ProviderRegistry()
-    if live:
+    if live and _live_provider_id() == "baseten":
+        # BasetenVisionProvider is only a Baseten endpoint validator on top of
+        # the generic OpenAI-compatible MetaAIHttpProvider transport: it
+        # already implements generate_ui_spec / generate_ui_patch, with
+        # json_object responses validated against the UI schemas.
+        key, credential_ref = _baseten_ui_key()
+        provider = BasetenVisionProvider(
+            api_key=key, base_url=settings.BASETEN_UI_BASE_URL, model=settings.BASETEN_UI_MODEL,
+            timeout_seconds=60, max_retries=0, max_tokens=2500, request_budget=1,
+        )
+        config = ProviderConfig("baseten", settings.BASETEN_UI_MODEL, settings.BASETEN_UI_BASE_URL,
+                                credential_ref, ProviderCapabilities(frozenset({AIStage.UI_GENERATION})),
+                                60, 0, 2500, 1)
+    elif live:
         provider = MetaAIHttpProvider(
             settings.META_AI_API_KEY, settings.META_AI_BASE_URL, settings.META_AI_MODEL,
             provider_name="meta_model_api", timeout_seconds=30, max_retries=0,
@@ -125,12 +176,14 @@ def ui_proposal_status(repository_id: str, db: Session = Depends(get_db),
     owned = bool(current_user and repo.owner_email and current_user.email.lower() == repo.owner_email.lower())
     if not owned and not _is_sample_demo(repo):
         raise HTTPException(403, "A repository owner session is required")
-    live_available = bool(settings.ENVIRONMENT.lower() == "development" and repo.status == "ready" and owned and
-        settings.UI_PROPOSAL_LIVE_ENABLED and settings.META_AI_PROVIDER == "meta_model_api" and
-        settings.META_AI_API_KEY.strip() and _approved_endpoint(settings.META_AI_BASE_URL, "meta"))
+    # Live is deliberately not gated on ENVIRONMENT: it is a paid, opt-in,
+    # owned-repository-only feature with an approved endpoint, so it may run
+    # in production once configured. Offline stays development-only.
+    live_provider = _live_provider_id()
+    live_available = bool(repo.status == "ready" and owned and live_provider)
     return {"offline_available": settings.ENVIRONMENT.lower() == "development" and repo.status == "ready",
-            "live_available": live_available, "provider": "meta_model_api" if live_available else None,
-            "reason": None if live_available else "Live AI is restricted to an owned repository in configured local development"}
+            "live_available": live_available, "provider": live_provider,
+            "reason": None if live_available else "Live AI requires an owned repository, live opt-in, and an approved Meta or Baseten configuration"}
 
 
 @router.post("/repositories/{repository_id}/ui-proposals/generate")
@@ -138,7 +191,8 @@ def generate_ui_proposal(
     repository_id: str, payload: UIProposalRequest,
     db: Session = Depends(get_db), current_user: User | None = Depends(optional_session_user),
 ) -> dict[str, Any]:
-    if settings.ENVIRONMENT.lower() != "development":
+    live = payload.mode == "live"
+    if not live and settings.ENVIRONMENT.lower() != "development":
         raise HTTPException(503, "UI proposals are available only in restricted local development")
     repo = db.query(Repository).filter(Repository.id == repository_id).first()
     if not repo:
@@ -152,11 +206,8 @@ def generate_ui_proposal(
     if not payload.requirement.strip() or (payload.refinement is not None and not payload.refinement.strip()):
         raise HTTPException(400, "Requirement and refinement must contain text")
 
-    live = payload.mode == "live"
-    if live and (not settings.UI_PROPOSAL_LIVE_ENABLED or not owns_repo or settings.META_AI_PROVIDER != "meta_model_api" or
-                 not settings.META_AI_API_KEY.strip() or
-                 not _approved_endpoint(settings.META_AI_BASE_URL, "meta")):
-        raise HTTPException(503, "Live UI generation requires an owned repository and approved Meta configuration")
+    if live and (not owns_repo or _live_provider_id() is None):
+        raise HTTPException(503, "Live UI generation requires an owned repository and an approved Meta or Baseten configuration")
 
     instruction = payload.refinement or payload.requirement
     intent = interpret_ui_intent(instruction, refining=payload.refinement is not None)

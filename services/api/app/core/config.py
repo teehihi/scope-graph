@@ -70,6 +70,10 @@ class Settings(BaseSettings):
     META_AI_MAX_RETRIES: int = Field(default=2, ge=0, le=5, description="Retries after transient inference failures")
     META_AI_RETRY_BACKOFF_SECONDS: float = Field(default=0.5, ge=0, le=10, description="Initial retry delay")
     UI_PROPOSAL_LIVE_ENABLED: bool = Field(default=False, description="Explicit local opt-in for paid UI proposal inference")
+    UI_PROPOSAL_LIVE_PROVIDER: str = Field(default="meta_model_api", description="Live UI provider: meta_model_api or baseten")
+    BASETEN_UI_BASE_URL: str = "https://inference.baseten.co/v1"
+    BASETEN_UI_MODEL: str = "meta-models/muse-spark-open-1026"
+    BASETEN_UI_API_KEY: str = ""
 
     # Meta Voice / Speech-to-Text
     META_AI_ASR_MODEL: str = Field(default="muse-voice-transcribe-1.0", description="Meta ASR model for voice transcription")
