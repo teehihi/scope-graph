@@ -13,6 +13,7 @@ from app.ai.ui_spec import StructuredUISpecV1
 from app.ai.provider import AIProviderResponse, BaseMetaAIProvider
 from app.ai.routing import AIStage, ProviderCapabilities, ProviderConfig, ProviderRegistry, StageProviderRouter
 from app.api.routes import ui_proposals
+from app.ai.ui_proposal_v2 import UIChangesV2, UIIntentV2
 from app.core.sessions import optional_session_user
 from app.db.models import User
 from pydantic import ValidationError
@@ -333,5 +334,92 @@ def test_mocked_live_invalid_patch_fails_without_offline_fallback(client, monkey
         assert response.status_code == 502
         assert "spec" not in response.json()
         assert "test-key-never-sent" not in response.text
+    finally:
+        app.dependency_overrides.pop(optional_session_user, None)
+
+
+def _live_baseten_settings(monkeypatch):
+    monkeypatch.setattr(settings, "UI_PROPOSAL_LIVE_ENABLED", True)
+    monkeypatch.setattr(settings, "UI_PROPOSAL_LIVE_PROVIDER", "baseten")
+    monkeypatch.setattr(settings, "BASETEN_UI_API_KEY", "baseten-test-key-never-sent")
+    monkeypatch.setattr(settings, "BASETEN_UI_BASE_URL", "https://inference.baseten.co/v1")
+    monkeypatch.setattr(settings, "BASETEN_UI_MODEL", "meta-models/muse-spark-open-1026")
+
+
+def test_live_missing_target_generates_new_spec_instead_of_422(client, monkeypatch):
+    app.dependency_overrides[optional_session_user] = lambda: User(email="owner@example.com", is_verified=True)
+    _live_baseten_settings(monkeypatch)
+    valid_spec = {"schema_version": "1", "version": 1, "requirement": "Change the button to red",
+                  "title": "Login", "description": "Preview",
+                  "root": {"type": "Container", "children": [{"type": "Button", "text": "Continue", "button_variant": "red"}]}}
+
+    class FakeProvider(BaseMetaAIProvider):
+        def generate_ui_spec(self, *args, **kwargs):
+            return AIProviderResponse(valid_spec, "baseten", "meta-models/muse-spark-open-1026", 0.01)
+
+    def mocked_router(_live):
+        registry = ProviderRegistry()
+        registry.register(ProviderConfig("baseten", "meta-models/muse-spark-open-1026", "", "NONE",
+            ProviderCapabilities(frozenset({AIStage.UI_GENERATION})), 1, 0, 100, 1), FakeProvider())
+        return StageProviderRouter(registry, {AIStage.UI_GENERATION: "baseten"})
+
+    monkeypatch.setattr(ui_proposals, "_ui_router", mocked_router)
+    try:
+        response = generate(client, repo="private", requirement="Change the button to red", mode="live")
+        assert response.status_code == 200
+        assert response.json()["generation"]["mode"] == "live"
+        assert response.json()["generation"]["provider"] == "baseten"
+    finally:
+        app.dependency_overrides.pop(optional_session_user, None)
+
+
+def _two_button_spec():
+    return {"schema_version": "1", "version": 1, "requirement": "Redesign the account login page with clear errors",
+            "title": "Login", "description": "Preview",
+            "root": {"type": "Container", "children": [{"type": "Button", "text": "Continue"}, {"type": "Button", "text": "Cancel"}]}}
+
+
+def test_live_ai_fallback_remaps_target_to_a_proposal_node(client, monkeypatch):
+    app.dependency_overrides[optional_session_user] = lambda: User(email="owner@example.com", is_verified=True)
+    _live_baseten_settings(monkeypatch)
+    monkeypatch.setattr(ui_proposals, "_live_ai_intent", lambda *args, **kwargs: UIIntentV2(
+        operation="MODIFY_STYLE", target_description="Continue button", target_label="Continue",
+        changes=UIChangesV2(background_color="red")))
+
+    class FakeProvider(BaseMetaAIProvider):
+        def generate_ui_patch(self, *args, **kwargs):
+            return AIProviderResponse({"operation": "MODIFY_STYLE", "target_label": "Continue",
+                "changes": {"background_color": "red"}}, "baseten", "meta-models/muse-spark-open-1026", 0.01)
+
+    def mocked_router(_live):
+        registry = ProviderRegistry()
+        registry.register(ProviderConfig("baseten", "meta-models/muse-spark-open-1026", "", "NONE",
+            ProviderCapabilities(frozenset({AIStage.UI_GENERATION})), 1, 0, 700, 1), FakeProvider())
+        return StageProviderRouter(registry, {AIStage.UI_GENERATION: "baseten"})
+
+    monkeypatch.setattr(ui_proposals, "_ui_router", mocked_router)
+    try:
+        response = generate(client, repo="private", requirement="Redesign the account login page with clear errors",
+                            version=2, refinement="Change the Save button to red",
+                            previous_spec=_two_button_spec(), mode="live")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["spec"]["version"] == 2
+        assert body["patch"]["target_label"] == "Continue"
+        assert body["spec"]["root"]["children"][0]["button_variant"] == "red"
+    finally:
+        app.dependency_overrides.pop(optional_session_user, None)
+
+
+def test_live_ai_fallback_failure_returns_502_not_422(client, monkeypatch):
+    app.dependency_overrides[optional_session_user] = lambda: User(email="owner@example.com", is_verified=True)
+    _live_baseten_settings(monkeypatch)
+    monkeypatch.setattr(ui_proposals, "_live_ai_intent", lambda *args, **kwargs: None)
+    try:
+        response = generate(client, repo="private", requirement="Redesign the account login page with clear errors",
+                            version=2, refinement="Change the Save button to red",
+                            previous_spec=_two_button_spec(), mode="live")
+        assert response.status_code == 502
+        assert "spec" not in response.json()
     finally:
         app.dependency_overrides.pop(optional_session_user, None)
