@@ -46,6 +46,11 @@ export const UIProposalPage: React.FC = () => {
   // generation is gated to local development).
   const liveAvailable = providerStatus?.live_available === true;
   const offlineUnavailable = providerStatus !== null && !providerStatus.offline_available;
+  // Only show the Mode chooser when both modes actually work. On
+  // production only live works, so the chooser is pointless there and
+  // its offline default left Generate dead (see the screenshot: offline
+  // selected, "only in local development", Generate disabled).
+  const showModeSelector = liveAvailable && providerStatus?.offline_available === true;
 
   useEffect(() => {
     setHistory([]);
@@ -80,8 +85,12 @@ export const UIProposalPage: React.FC = () => {
 
   // If live was selected and the backend then reports it unavailable, fall
   // back to offline instead of leaving a hidden live mode selected.
+  // Symmetrically, if offline is unavailable but live is available
+  // (production), switch to live instead of staying on a dead offline
+  // default that disables Generate.
   useEffect(() => {
     if (providerStatus && !providerStatus.live_available && providerMode === 'live') setProviderMode('offline');
+    if (providerStatus && providerStatus.live_available && !providerStatus.offline_available && providerMode === 'offline') setProviderMode('live');
   }, [providerStatus, providerMode]);
 
   // Click outside or Escape closes the custom repository dropdown,
@@ -191,12 +200,12 @@ export const UIProposalPage: React.FC = () => {
         <button type="button" onClick={() => void loadSample()} disabled={isLoadingSample} className="rounded-lg border border-[#DDE1DB] px-3 py-2 font-semibold hover:bg-[#F7F8F5]">{t('proposal.load_sample')}</button>
         {providerStatus?.offline_available && <span className="ml-auto rounded-lg bg-[#EDF0F7] px-3 py-2 font-mono text-[10px] uppercase tracking-widest text-[#526BEE]">{t('proposal.local_only')}</span>}
       </div>
-      <div className="mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-[#DDE1DB] bg-white p-3 text-xs" aria-label={t('proposal.mode')}>
+      {showModeSelector && <div className="mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-[#DDE1DB] bg-white p-3 text-xs" aria-label={t('proposal.mode')}>
         <strong className="mr-2">{t('proposal.mode')}</strong>
         <button type="button" aria-pressed={providerMode === 'offline'} onClick={() => setProviderMode('offline')} className={`rounded-lg border px-3 py-2 font-bold ${providerMode === 'offline' ? 'border-[#151923] bg-[#151923] text-white' : 'border-[#DDE1DB]'}`}>{t('proposal.offline')}</button>
         {liveAvailable && <button type="button" aria-pressed={providerMode === 'live'} onClick={() => setProviderMode('live')} className={`rounded-lg border px-3 py-2 font-bold ${providerMode === 'live' ? 'border-[#151923] bg-[#151923] text-white' : 'border-[#DDE1DB]'}`}>{t('proposal.live')}</button>}
         <span role="status" className={`ml-auto ${providerStatus?.live_available ? 'text-green-700' : 'text-[#697380]'}`}>{providerStatus?.live_available ? t('proposal.provider_ready') : t('proposal.provider_unavailable')}</span>
-      </div>
+      </div>}
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(260px,0.9fr)_minmax(420px,1.6fr)_minmax(290px,1fr)]">
         <section className="space-y-4 rounded-2xl border border-[#DDE1DB] bg-white p-5" aria-label={t('proposal.requirement')}>
           <div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-[#526BEE]" /><h2 className="text-sm font-bold">{t('proposal.requirement')}</h2></div>
