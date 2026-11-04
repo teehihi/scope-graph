@@ -176,6 +176,12 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
         self.last_request_attempts = 0
         url = f"{self.base_url}/chat/completions"
         effective_max_tokens = max_tokens or self.max_tokens
+        # Baseten Muse Spark Open always reasons, and its reasoning tokens
+        # count against the output budget, so a 700/2500-token cap can be
+        # consumed by reasoning alone and truncate the JSON answer.
+        is_baseten_spark_open = self.provider_name == "baseten" and "muse-spark-open" in self.model.lower()
+        if is_baseten_spark_open:
+            effective_max_tokens = max(effective_max_tokens, 6000)
         system_message = {
             "role": "developer" if self.provider_name == "meta_model_api" else "system",
             "content": system_prompt,
@@ -206,8 +212,14 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
                     "type": "json_schema",
                     "json_schema": {"name": schema.__name__, "schema": schema.model_json_schema()},
                 }
-            else:
+            elif not is_baseten_spark_open:
                 payload["response_format"] = {"type": "json_object"}
+            # Baseten Muse Spark Open is the one Baseten model that does NOT
+            # support structured outputs / JSON mode (Baseten model-APIs
+            # docs), so sending response_format makes Baseten return 400,
+            # which this codebase maps to provider_error -> HTTP 502.
+            # Without it, the system prompt ("return only JSON") plus the
+            # JSON parsing and schema validation below still enforce JSON.
 
         for attempt in range(self.max_retries + 1):
             if self.request_budget is not None and self.request_count >= self.request_budget:

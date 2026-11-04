@@ -215,6 +215,24 @@ def test_partner_request_keeps_its_compatible_json_mode(provider_with_transport)
     assert requests[0]["temperature"] == settings.META_AI_TEMPERATURE
 
 
+def test_baseten_spark_open_omits_json_mode_and_raises_output_budget(provider_with_transport):
+    # Baseten docs: Muse Spark Open is the one Baseten model that does not
+    # support structured outputs / JSON mode, so sending response_format
+    # makes Baseten return 400, which the UI route maps to provider_error.
+    requests = []
+
+    def handler(request):
+        requests.append(json.loads(request.content))
+        return model_response(json.dumps(INTERPRETATION))
+
+    provider = provider_with_transport(handler)
+    provider.provider_name = "baseten"
+    provider.model = "meta-models/muse-spark-open-1026"
+    provider.interpret_requirement("Verify email")
+    assert "response_format" not in requests[0]
+    assert requests[0]["max_tokens"] >= 6000
+
+
 @pytest.mark.parametrize("stage,payload", [
     ("interpret", INTERPRETATION),
     ("impact", IMPACT),
