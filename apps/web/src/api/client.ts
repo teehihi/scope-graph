@@ -53,6 +53,9 @@ export interface UIProposalTargetsResponse {
   intent: { operation: string; target_label: string | null };
   target_label: string | null;
   candidates: UITargetCandidate[];
+  needs_reindex?: boolean;
+  files_scanned?: number;
+  ui_files_total?: number;
 }
 
 export async function findUIProposalTargets(

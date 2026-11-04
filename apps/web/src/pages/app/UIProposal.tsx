@@ -39,6 +39,7 @@ export const UIProposalPage: React.FC = () => {
   const [targetSuggestions, setTargetSuggestions] = useState<UITargetCandidate[]>([]);
   const [findingTargets, setFindingTargets] = useState(false);
   const [noTargetFound, setNoTargetFound] = useState(false);
+  const [needsReindex, setNeedsReindex] = useState(false);
   const [isRepoDropdownOpen, setIsRepoDropdownOpen] = useState(false);
   const repoDropdownRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -123,7 +124,8 @@ export const UIProposalPage: React.FC = () => {
     try {
       const result = await findUIProposalTargets(activeRepo.id, requirement.trim(), user?.sessionToken);
       setTargetSuggestions(result.candidates);
-      setNoTargetFound(result.candidates.length === 0);
+      setNoTargetFound(result.candidates.length === 0 && !result.needs_reindex);
+      setNeedsReindex(Boolean(result.needs_reindex));
       setSelectedTargetPath('');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t('proposal.error'));
@@ -145,7 +147,7 @@ export const UIProposalPage: React.FC = () => {
       const next: ProposalEntry = { result, refinement: mode === 'refine' ? refinement.trim() : undefined };
       const items = mode === 'refine' ? [...history.slice(0, selected + 1).map((item) => ({ ...item, stale: Boolean(item.report) })), next] : [next];
       persist(items); setSelected(items.length - 1); setRefinement(''); setShowSpec(false);
-      setTargetChoices([]); setSelectedTargetPath(''); setTargetSuggestions([]); setNoTargetFound(false);
+      setTargetChoices([]); setSelectedTargetPath(''); setTargetSuggestions([]); setNoTargetFound(false); setNeedsReindex(false);
     } catch (cause) {
       if (cause instanceof UIProposalTargetConflict) setTargetChoices(cause.candidates);
       setError(cause instanceof Error ? cause.message : t('proposal.error'));
@@ -228,7 +230,7 @@ export const UIProposalPage: React.FC = () => {
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(260px,0.9fr)_minmax(420px,1.6fr)_minmax(290px,1fr)]">
         <section className="space-y-4 rounded-2xl border border-[#DDE1DB] bg-white p-5" aria-label={t('proposal.requirement')}>
           <div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-[#526BEE]" /><h2 className="text-sm font-bold">{t('proposal.requirement')}</h2></div>
-          <textarea aria-label={t('proposal.requirement')} value={requirement} onChange={(event) => { setRequirement(event.target.value); setTargetChoices([]); setSelectedTargetPath(''); setTargetSuggestions([]); setNoTargetFound(false); }} maxLength={2000} rows={6} placeholder={t('proposal.requirement_placeholder')} className="w-full resize-y rounded-xl border border-[#DDE1DB] p-3 text-sm outline-none focus:border-[#526BEE]" />
+          <textarea aria-label={t('proposal.requirement')} value={requirement} onChange={(event) => { setRequirement(event.target.value); setTargetChoices([]); setSelectedTargetPath(''); setTargetSuggestions([]); setNoTargetFound(false); setNeedsReindex(false); }} maxLength={2000} rows={6} placeholder={t('proposal.requirement_placeholder')} className="w-full resize-y rounded-xl border border-[#DDE1DB] p-3 text-sm outline-none focus:border-[#526BEE]" />
           {providerMode === 'live' && !providerStatus?.live_available && <p className="rounded-lg bg-amber-50 p-2 text-xs text-amber-900">{t('proposal.live_unavailable')}</p>}
           {providerMode === 'offline' && offlineUnavailable && <p role="status" className="rounded-lg bg-amber-50 p-2 text-xs text-amber-900">{t('proposal.offline_unavailable')}</p>}
           {targetChoices.length > 0 && <label className="block text-xs font-bold">{t('proposal.target_select')}<select value={selectedTargetPath} onChange={(event) => setSelectedTargetPath(event.target.value)} className="mt-2 w-full rounded-lg border border-[#DDE1DB] p-2"><option value="">{t('proposal.target_select')}</option>{targetChoices.map((candidate) => <option key={candidate.ref} value={candidate.ref}>{candidate.ref}</option>)}</select></label>}
@@ -248,8 +250,8 @@ export const UIProposalPage: React.FC = () => {
               </div>
             </div>
             <button type="button" onClick={() => void generate('new')} disabled={!activeRepo || !requirement.trim() || generating || !selectedTargetPath || (providerMode === 'live' && !providerStatus?.live_available) || (providerMode === 'offline' && offlineUnavailable)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#151923] px-4 py-3 text-sm font-bold text-white hover:bg-[#303744] disabled:opacity-50">{generating ? t('proposal.generating') : t('proposal.generate_with_target')}<ArrowRight className="h-4 w-4" /></button>
-          </> : noTargetFound ? <>
-            <p role="status" className="rounded-lg bg-amber-50 p-2 text-xs text-amber-900">{t('proposal.no_target_found')}</p>
+          </> : (noTargetFound || needsReindex) ? <>
+            <p role="status" className="rounded-lg bg-amber-50 p-2 text-xs text-amber-900">{needsReindex ? t('proposal.reindex_needed') : t('proposal.no_target_found')}</p>
             <button type="button" onClick={() => void generate('new')} disabled={!activeRepo || !requirement.trim() || generating || (providerMode === 'live' && !providerStatus?.live_available) || (providerMode === 'offline' && offlineUnavailable)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#151923] px-4 py-3 text-sm font-bold text-white hover:bg-[#303744] disabled:opacity-50">{generating ? t('proposal.generating') : entry ? t('proposal.regenerate') : t('proposal.generate')}<ArrowRight className="h-4 w-4" /></button>
           </> : (
             <button type="button" onClick={() => void findTargets()} disabled={!activeRepo || !requirement.trim() || findingTargets || generating || (providerMode === 'live' && !providerStatus?.live_available) || (providerMode === 'offline' && offlineUnavailable)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#151923] px-4 py-3 text-sm font-bold text-white hover:bg-[#303744] disabled:opacity-50">{findingTargets ? t('proposal.generating') : t('proposal.find_targets')}<ArrowRight className="h-4 w-4" /></button>

@@ -13,7 +13,7 @@ from app.ai.ui_spec import StructuredUISpecV1
 from app.ai.provider import AIProviderResponse, BaseMetaAIProvider
 from app.ai.routing import AIStage, ProviderCapabilities, ProviderConfig, ProviderRegistry, StageProviderRouter
 from app.api.routes import ui_proposals
-from app.ai.ui_proposal_v2 import UIChangesV2, UIIntentV2
+from app.ai.ui_proposal_v2 import UIChangesV2, UIIntentV2, find_related_ui_targets
 from app.core.sessions import optional_session_user
 from app.db.models import User
 from pydantic import ValidationError
@@ -461,6 +461,60 @@ def target_client(tmp_path, monkeypatch):
     finally:
         app.dependency_overrides.pop(get_db, None)
         engine.dispose()
+
+
+def _find_related_db(tmp_path, dummy_py_files=0):
+    """In-memory DB pointing at a workspace with a multi-line Sign In button."""
+    engine = create_engine(f"sqlite:///{tmp_path / 'related.db'}", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine)
+    workspace = tmp_path / "ws"
+    (workspace / "src").mkdir(parents=True)
+    (workspace / "src" / "Login.tsx").write_text(
+        'export function LoginPage() {\n'
+        '  return (\n'
+        '    <button type="submit" className="rounded-xl bg-ink">\n'
+        '      <span>Sign In</span>\n'
+        '    </button>\n'
+        '  );\n'
+        '}\n', encoding="utf-8")
+    rows = [Repository(id="sg", name="scope-graph", description="x", status="ready", workspace_path=str(workspace)),
+            IndexedFile(id="login", repository_id="sg", path="src/Login.tsx")]
+    for i in range(dummy_py_files):
+        rows.append(IndexedFile(id=f"dummy{i}", repository_id="sg", path=f"src/dummy{i}.py"))
+    with factory() as db:
+        db.add_all(rows)
+        db.commit()
+    return factory(), workspace
+
+
+def test_find_related_multiline_sign_in_button_is_found_as_button(tmp_path):
+    db, _ = _find_related_db(tmp_path)
+    _, candidates, diagnostics = find_related_ui_targets(db, "sg", "I want to change the color of Sign In button to red")
+    assert candidates, "Multi-line <button> + <span>Sign In</span> must be found"
+    assert candidates[0].label == "Sign In"
+    assert candidates[0].component == "button"
+    assert diagnostics["needs_reindex"] is False
+
+
+def test_find_related_ui_files_survive_many_non_ui_files(tmp_path):
+    # Regression: capping the full file list at 500 used to cut UI files
+    # off in large repos before they were ever filtered by extension.
+    db, _ = _find_related_db(tmp_path, dummy_py_files=600)
+    _, candidates, diagnostics = find_related_ui_targets(db, "sg", "I want to change the color of Sign In button to red")
+    assert candidates and candidates[0].label == "Sign In"
+    assert diagnostics["ui_files_total"] == 1
+    assert diagnostics["files_scanned"] == 1
+
+
+def test_find_related_reports_needs_reindex_when_workspace_files_are_gone(tmp_path):
+    db, workspace = _find_related_db(tmp_path)
+    (workspace / "src" / "Login.tsx").unlink()
+    _, candidates, diagnostics = find_related_ui_targets(db, "sg", "I want to change the color of Sign In button to red")
+    assert candidates == []
+    assert diagnostics["ui_files_total"] == 1
+    assert diagnostics["files_scanned"] == 0
+    assert diagnostics["needs_reindex"] is True
 
 
 def test_targets_endpoint_finds_real_login_button_before_any_ai_call(target_client):
