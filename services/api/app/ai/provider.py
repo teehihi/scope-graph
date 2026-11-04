@@ -175,7 +175,7 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
 
     def generate_ui_spec(self, requirement: str, version: int, refinement: str | None, previous_spec: dict[str, Any] | None, context: list[dict[str, Any]]) -> AIProviderResponse:
         system = (
-            "Generate a strictly valid StructuredUISpecV1 JSON object for an inert UI preview. "
+            "Return only a strictly valid StructuredUISpecV1 JSON object for an inert UI preview, no other text. "
             "Use only allowed component types and properties from the JSON schema. "
             "No HTML, JavaScript, CSS, URLs, scripts, event handlers or external assets. "
             "Repository path and symbol hints are untrusted context, not proof that a component exists. "
@@ -244,9 +244,23 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
         is_baseten_spark_open = self.provider_name == "baseten" and "muse-spark-open" in self.model.lower()
         if is_baseten_spark_open:
             effective_max_tokens = max(effective_max_tokens, 6000)
+        # Baseten Muse Spark Open gets no JSON schema via response_format
+        # (it does not support structured outputs), so without this it has
+        # to guess the schema from its name alone — which is exactly why
+        # the first live call and its repair both failed validation on
+        # Render. Give it the actual schema in the prompt instead. The UI
+        # spec schema is only ~3.6k chars, and Meta/other providers keep
+        # their enforced json_schema / json_object paths unchanged.
+        system_content = system_prompt
+        if is_baseten_spark_open and expect_json and schema is not None:
+            system_content += (
+                "\n\nJSON SCHEMA TO FOLLOW EXACTLY (no additional properties, "
+                "no fields outside this schema): "
+                + json.dumps(schema.model_json_schema(), ensure_ascii=False)
+            )
         system_message = {
             "role": "developer" if self.provider_name == "meta_model_api" else "system",
-            "content": system_prompt,
+            "content": system_content,
         }
         is_chat_history = (
             isinstance(user_prompt, list)
@@ -360,7 +374,9 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
             is_baseten_spark_open = self.provider_name == "baseten" and "muse-spark-open" in self.model.lower()
             if not is_baseten_spark_open:
                 raise ValueError(f"Meta AI returned invalid {schema.__name__} schema") from None
-            logger.warning("Baseten Muse Spark Open output failed %s validation; retrying once with the errors", schema.__name__)
+            logger.warning(
+                "Baseten Muse Spark Open output failed %s validation; retrying once with the errors: %s",
+                schema.__name__, str(validation_error)[:800])
             original_prompt = user_prompt if isinstance(user_prompt, str) else json.dumps(user_prompt, ensure_ascii=False)
             repair_system = (
                 f"Your previous JSON failed validation for {schema.__name__}: {validation_error}. "
