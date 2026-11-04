@@ -1,0 +1,12 @@
+{
+  "name": "scopegraph-hackathon-video-tooling",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Local tools for the editable ScopeGraph demo film",
+  "dependencies": {
+    "@ffmpeg-installer/win32-x64": "4.1.0",
+    "@ffprobe-installer/win32-x64": "5.1.0",
+    "gsap": "3.15.0",
+    "hyperframes": "0.9.10"
+  }
+}

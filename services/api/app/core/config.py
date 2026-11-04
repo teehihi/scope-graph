@@ -69,6 +69,7 @@ class Settings(BaseSettings):
     META_AI_MAX_TOKENS: int = Field(default=6000, description="Max completion tokens")
     META_AI_MAX_RETRIES: int = Field(default=2, ge=0, le=5, description="Retries after transient inference failures")
     META_AI_RETRY_BACKOFF_SECONDS: float = Field(default=0.5, ge=0, le=10, description="Initial retry delay")
+    UI_PROPOSAL_LIVE_ENABLED: bool = Field(default=False, description="Explicit local opt-in for paid UI proposal inference")
 
     # Meta Voice / Speech-to-Text
     META_AI_ASR_MODEL: str = Field(default="muse-voice-transcribe-1.0", description="Meta ASR model for voice transcription")

@@ -9,12 +9,54 @@ import {
   RefineRequirementResponse,
   FollowUpResponse,
   ScreenshotPreviewResponse,
+  StructuredUISpec,
+  UIProposalResult,
+  UIProposalProviderStatus,
+  UITargetCandidate,
 } from '../types';
 
 const RAW_API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.trim() || '';
 const API_BASE = RAW_API_URL ? `${RAW_API_URL.replace(/\/$/, '')}/api/v1` : '/api/v1';
 
 export type SubscriptionPlan = 'free' | 'plus' | 'pro';
+
+export class UIProposalTargetConflict extends Error {
+  constructor(message: string, public candidates: UITargetCandidate[]) { super(message); }
+}
+
+export async function generateUIProposal(
+  repositoryId: string,
+  requirement: string,
+  version: number,
+  refinement?: string,
+  previousSpec?: StructuredUISpec,
+  sessionToken?: string,
+  mode: 'offline' | 'live' = 'offline',
+  targetLabel?: string,
+  selectedTargetPath?: string,
+): Promise<UIProposalResult> {
+  const res = await fetch(`${API_BASE}/repositories/${encodeURIComponent(repositoryId)}/ui-proposals/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}) },
+    body: JSON.stringify({ requirement, version, refinement: refinement || null, previous_spec: previousSpec || null,
+      mode, target_label: targetLabel || null, selected_target_path: selectedTargetPath || null }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 409 && Array.isArray(data.detail?.candidates)) {
+    throw new UIProposalTargetConflict(data.detail.message || 'Select a UI target', data.detail.candidates);
+  }
+  if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : `HTTP ${res.status}`);
+  return data as UIProposalResult;
+}
+
+export async function getUIProposalStatus(repositoryId: string, sessionToken?: string): Promise<UIProposalProviderStatus> {
+  const res = await fetch(`${API_BASE}/repositories/${encodeURIComponent(repositoryId)}/ui-proposals/status`, {
+    headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : `HTTP ${res.status}`);
+  return data as UIProposalProviderStatus;
+}
 
 // ---------------------------------------------------------------------------
 // Auth API

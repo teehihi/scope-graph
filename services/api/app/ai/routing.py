@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class AIStage(StrEnum):
+    UI_GENERATION = "ui_generation"
     VISION = "vision"
     REQUIREMENT_INTERPRETATION = "requirement_interpretation"
     IMPACT_REASONING = "impact_reasoning"
@@ -127,6 +128,7 @@ class StageProviderRouter:
 
     def execute(self, stage: AIStage, method: str, *args: Any, **kwargs: Any) -> Any:
         expected = {
+            AIStage.UI_GENERATION: "generate_ui_spec",
             AIStage.VISION: "interpret_screenshot",
             AIStage.REQUIREMENT_INTERPRETATION: "interpret_requirement",
             AIStage.IMPACT_REASONING: "reason_about_impact",
@@ -135,7 +137,7 @@ class StageProviderRouter:
             AIStage.VOICE_TRANSCRIPTION: "transcribe_audio",
             AIStage.REQUIREMENT_REFINEMENT: "refine_requirement",
         }
-        if expected[stage] != method:
+        if expected[stage] != method and not (stage == AIStage.UI_GENERATION and method == "generate_ui_patch"):
             raise StageExecutionError("invalid_stage_method", stage)
         provider_id = self.routes.get(stage)
         if not provider_id:
@@ -326,6 +328,7 @@ def build_stage_router(default_provider: BaseMetaAIProvider) -> StageProviderRou
         fallback_provider_id="meta_model_api" if settings.MODAL_REASONING_META_FALLBACK else None,
     ), modal)
     return StageProviderRouter(registry, {
+        AIStage.UI_GENERATION: "meta_model_api",
         AIStage.VISION: "baseten_vision",
         AIStage.REQUIREMENT_INTERPRETATION: "meta_model_api",
         AIStage.IMPACT_REASONING: "modal_reasoning",

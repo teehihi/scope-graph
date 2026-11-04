@@ -1,0 +1,6 @@
+hyperframes/node_modules/
+hyperframes/project/.hyperframes/
+hyperframes/project/.thumbnails/
+hyperframes/project/renders/
+hyperframes/capture-landing*/
+output/

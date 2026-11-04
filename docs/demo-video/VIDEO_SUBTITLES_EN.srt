@@ -1,0 +1,99 @@
+1
+00:00:00,450 --> 00:00:04,310
+A small code change can reach far beyond one file.
+
+2
+00:00:04,310 --> 00:00:10,490
+A route calls a service. A service touches a model. Tests may need a new contract.
+
+3
+00:00:10,490 --> 00:00:14,350
+Before editing, you need a map of what might move.
+
+4
+00:00:15,450 --> 00:00:20,700
+ScopeGraph turns a change request into a reviewable impact plan.
+
+5
+00:00:20,700 --> 00:00:29,100
+It connects the request to an indexed repository and shows why each cited source location matters.
+
+6
+00:00:29,100 --> 00:00:34,350
+The developer remains responsible for deciding which edits are needed.
+
+7
+00:00:35,450 --> 00:00:39,970
+Here is the bundled, public authentication sample.
+
+8
+00:00:39,970 --> 00:00:48,370
+ScopeGraph scans Python files, extracts symbols and relationships, and builds a dependency graph.
+
+9
+00:00:48,370 --> 00:00:59,350
+You can move from an API route to related services, models and tests before making a change.
+
+10
+00:01:00,450 --> 00:01:08,270
+Our request is to verify a new email address before changing a user's active email.
+
+11
+00:01:08,270 --> 00:01:15,050
+This recorded report uses ScopeGraph's deterministic offline provider, not a live model call.
+
+12
+00:01:15,050 --> 00:01:20,790
+The report separates proposed direct edits, downstream concerns and potential risks.
+
+13
+00:01:20,790 --> 00:01:34,350
+Opening an item reveals a real indexed path and numbered source lines. That verifies the reference exists; it does not prove every suggested edit is necessary.
+
+14
+00:01:35,450 --> 00:01:40,170
+You can also attach a screenshot to explain the visible interface.
+
+15
+00:01:40,170 --> 00:01:46,190
+A separately authorized Meta Muse Spark vision smoke test recognized this synthetic email-settings screen.
+
+16
+00:01:46,190 --> 00:01:54,350
+It did not run the full live impact pipeline. Visual observations alone cannot identify the exact files to edit.
+
+17
+00:01:55,450 --> 00:02:01,160
+An experimental UI Proposal workspace turns a description into an inert before-and-after preview.
+
+18
+00:02:01,160 --> 00:02:06,880
+The current local example uses an offline, deterministic generator and is labeled conceptual.
+
+19
+00:02:06,880 --> 00:02:14,350
+Developers can refine the proposal and separately request source-backed impact analysis; the preview never edits repository code.
+
+20
+00:02:15,450 --> 00:02:21,660
+In the configured Meta path, Muse Spark interprets requirements and proposes impact relationships.
+
+21
+00:02:21,660 --> 00:02:30,750
+Local retrieval, graph traversal and an evidence gate check those claims against indexed code before the brief is shown.
+
+22
+00:02:30,750 --> 00:02:39,350
+MCP tools expose grounded context to coding agents. Optional partner routing exists, but its live behavior remains unverified.
+
+23
+00:02:40,450 --> 00:02:46,580
+ScopeGraph is a planning aid, not an automatic proof of every dependency.
+
+24
+00:02:46,580 --> 00:02:54,750
+It gives developers a traceable starting point, with uncertainty visible and source evidence close at hand.
+
+25
+00:02:54,750 --> 00:02:59,350
+ScopeGraph. Understand the impact before you change the code.
