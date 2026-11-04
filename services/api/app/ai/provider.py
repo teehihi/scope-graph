@@ -105,6 +105,68 @@ class BaseMetaAIProvider:
         raise NotImplementedError
 
 
+def _extract_json_object(content: str) -> dict[str, Any]:
+    """Parse a model JSON object, tolerating the prose a provider without
+    JSON mode (Baseten Muse Spark Open) often wraps it in: markdown fences,
+    a lead-in sentence, or trailing commentary. Raises JSONDecodeError when
+    no balanced JSON object parses, so the caller keeps its existing error
+    code instead of inventing a partial object."""
+    text = content.strip()
+    if text.startswith("```json"):
+        text = text[7:]
+    if text.startswith("```"):
+        text = text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    text = text.strip()
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        parsed = None
+    if isinstance(parsed, dict):
+        return parsed
+    # First balanced {...} object in the text (brace counting that
+    # respects strings and escapes), then the widest first-to-last-brace
+    # span as a fallback for a truncated fence or an extra closing brace.
+    candidates: list[str] = []
+    depth = 0
+    in_string = False
+    escaped = False
+    start = -1
+    for index, char in enumerate(text):
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            if depth == 0:
+                start = index
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0 and start >= 0:
+                candidates.append(text[start:index + 1])
+                start = -1
+    first = text.find("{")
+    last = text.rfind("}")
+    if first >= 0 and last > first:
+        candidates.append(text[first:last + 1])
+    for candidate in candidates:
+        try:
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            return parsed
+    raise json.JSONDecodeError("No JSON object found in model output", text, 0)
+
+
 class MetaAIHttpProvider(BaseMetaAIProvider):
     """
     HTTP Provider compatible with Meta Model API and partner inference endpoints
@@ -278,17 +340,7 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
 
         if expect_json:
             try:
-                # Strip markdown code blocks if present
-                clean_content = content.strip()
-                if clean_content.startswith("```json"):
-                    clean_content = clean_content[7:]
-                if clean_content.startswith("```"):
-                    clean_content = clean_content[3:]
-                if clean_content.endswith("```"):
-                    clean_content = clean_content[:-3]
-                parsed = json.loads(clean_content.strip())
-                if not isinstance(parsed, dict):
-                    raise ValueError("Meta AI returned a non-object JSON response")
+                parsed = _extract_json_object(content)
                 return parsed, latency, actual_model, token_usage
             except json.JSONDecodeError:
                 raise ValueError("Meta AI returned malformed model JSON") from None
@@ -299,8 +351,29 @@ class MetaAIHttpProvider(BaseMetaAIProvider):
         data, latency, model, token_usage = self._call_model(system_prompt, user_prompt, schema=schema, max_tokens=max_tokens)
         try:
             validated = schema.model_validate(data)
-        except ValidationError:
-            raise ValueError(f"Meta AI returned invalid {schema.__name__} schema") from None
+        except ValidationError as validation_error:
+            # Without JSON mode, Baseten Muse Spark Open routinely returns a
+            # near-miss: an extra field, a wrong enum, a leaf with children.
+            # One repair attempt with the exact validation errors is far
+            # cheaper than a guaranteed 502, and the UI router gives this
+            # provider a request budget of 2 for exactly that attempt.
+            is_baseten_spark_open = self.provider_name == "baseten" and "muse-spark-open" in self.model.lower()
+            if not is_baseten_spark_open:
+                raise ValueError(f"Meta AI returned invalid {schema.__name__} schema") from None
+            logger.warning("Baseten Muse Spark Open output failed %s validation; retrying once with the errors", schema.__name__)
+            original_prompt = user_prompt if isinstance(user_prompt, str) else json.dumps(user_prompt, ensure_ascii=False)
+            repair_system = (
+                f"Your previous JSON failed validation for {schema.__name__}: {validation_error}. "
+                "Return ONLY a corrected JSON object for that schema, with no other text, "
+                "no markdown, no explanation, and no fields outside the schema."
+            )
+            repair_prompt = original_prompt + "\nPrevious output to correct: " + json.dumps(data, ensure_ascii=False)
+            try:
+                data, latency, model, token_usage = self._call_model(
+                    repair_system, repair_prompt, schema=schema, max_tokens=max_tokens)
+                validated = schema.model_validate(data)
+            except (ValidationError, ValueError):
+                raise ValueError(f"Meta AI returned invalid {schema.__name__} schema") from None
         return AIProviderResponse(
             data=validated.model_dump(), provider=self.provider_name, model=model,
             latency_seconds=latency, token_usage=token_usage,

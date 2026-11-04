@@ -86,15 +86,17 @@ def _ui_router(live: bool) -> StageProviderRouter:
         # BasetenVisionProvider is only a Baseten endpoint validator on top of
         # the generic OpenAI-compatible MetaAIHttpProvider transport: it
         # already implements generate_ui_spec / generate_ui_patch, with
-        # json_object responses validated against the UI schemas.
+        # responses validated against the UI schemas. Budget 2, not 1:
+        # Muse Spark Open has no JSON mode, so the provider gets one
+        # repair attempt when its first JSON fails schema validation.
         key, credential_ref = _baseten_ui_key()
         provider = BasetenVisionProvider(
             api_key=key, base_url=settings.BASETEN_UI_BASE_URL, model=settings.BASETEN_UI_MODEL,
-            timeout_seconds=60, max_retries=0, max_tokens=2500, request_budget=1,
+            timeout_seconds=60, max_retries=0, max_tokens=2500, request_budget=2,
         )
         config = ProviderConfig("baseten", settings.BASETEN_UI_MODEL, settings.BASETEN_UI_BASE_URL,
                                 credential_ref, ProviderCapabilities(frozenset({AIStage.UI_GENERATION})),
-                                60, 0, 2500, 1)
+                                60, 0, 2500, 2)
     elif live:
         provider = MetaAIHttpProvider(
             settings.META_AI_API_KEY, settings.META_AI_BASE_URL, settings.META_AI_MODEL,

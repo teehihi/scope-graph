@@ -233,6 +233,37 @@ def test_baseten_spark_open_omits_json_mode_and_raises_output_budget(provider_wi
     assert requests[0]["max_tokens"] >= 6000
 
 
+def test_baseten_spark_open_repairs_invalid_schema_once(provider_with_transport):
+    # First answer has an extra field the strict UI schema forbids, so
+    # validation fails; the repair prompt must mention the schema and the
+    # second answer must be returned, not a 502 invalid_schema.
+    requests = []
+
+    def handler(request):
+        requests.append(json.loads(request.content))
+        if len(requests) == 1:
+            return model_response(json.dumps({**INTERPRETATION, "surprise_field": True}))
+        return model_response(json.dumps(INTERPRETATION))
+
+    provider = provider_with_transport(handler)
+    provider.provider_name = "baseten"
+    provider.model = "meta-models/muse-spark-open-1026"
+    response = provider.interpret_requirement("Verify email")
+    assert len(requests) == 2
+    assert response.data["business_intent"] == "Protect email changes"
+    assert "failed validation" in requests[1]["messages"][0]["content"]
+    assert "response_format" not in requests[1]
+
+
+def test_json_extraction_tolerates_prose_around_object():
+    from app.ai.provider import _extract_json_object
+
+    assert _extract_json_object(
+        'Here is the JSON you asked for:\n```json\n{"a": 1}\n```\nHope that helps.'
+    ) == {"a": 1}
+    assert _extract_json_object('Some preamble {"a": 2} trailing text') == {"a": 2}
+
+
 @pytest.mark.parametrize("stage,payload", [
     ("interpret", INTERPRETATION),
     ("impact", IMPACT),
