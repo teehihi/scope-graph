@@ -34,7 +34,8 @@ export const UIProposalPage: React.FC = () => {
   const [providerStatus, setProviderStatus] = useState<UIProposalProviderStatus | null>(null);
   const [targetChoices, setTargetChoices] = useState<UITargetCandidate[]>([]);
   const [selectedTargetPath, setSelectedTargetPath] = useState('');
-  const [isRepoModalOpen, setIsRepoModalOpen] = useState(false);
+  const [isRepoDropdownOpen, setIsRepoDropdownOpen] = useState(false);
+  const repoDropdownRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const entry = history[selected];
   const storageKey = `scopegraph_ui_proposals_${user?.email || 'demo'}_${activeRepo?.id || 'none'}`;
@@ -83,13 +84,18 @@ export const UIProposalPage: React.FC = () => {
     if (providerStatus && !providerStatus.live_available && providerMode === 'live') setProviderMode('offline');
   }, [providerStatus, providerMode]);
 
-  // Escape closes the custom repository modal.
+  // Click outside or Escape closes the custom repository dropdown,
+  // following the RepoSelectorDropdown pattern used elsewhere in the app.
   useEffect(() => {
-    if (!isRepoModalOpen) return;
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') setIsRepoModalOpen(false); };
+    if (!isRepoDropdownOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (repoDropdownRef.current && !repoDropdownRef.current.contains(event.target as Node)) setIsRepoDropdownOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') setIsRepoDropdownOpen(false); };
+    document.addEventListener('mousedown', onPointerDown);
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isRepoModalOpen]);
+    return () => { document.removeEventListener('mousedown', onPointerDown); window.removeEventListener('keydown', onKeyDown); };
+  }, [isRepoDropdownOpen]);
 
   const persist = (items: ProposalEntry[]) => {
     setHistory(items);
@@ -150,38 +156,41 @@ export const UIProposalPage: React.FC = () => {
     <div className="h-full overflow-y-auto p-4 lg:p-6" data-testid="proposal-workspace">
       <div className="mb-5 flex flex-wrap items-center gap-2 rounded-2xl border border-[#DDE1DB] bg-white p-3 text-xs">
         <span className="font-bold text-[#56606E]">{t('proposal.repository')}</span>
-        <button type="button" aria-haspopup="dialog" aria-expanded={isRepoModalOpen} onClick={() => setIsRepoModalOpen(true)} className="flex min-w-44 items-center justify-between gap-2 rounded-lg border border-[#DDE1DB] bg-white px-3 py-2 font-semibold hover:bg-[#F7F8F5]">
-          <span className="truncate">{activeRepo?.name || t('proposal.select_repo')}</span>
-          <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${isRepoModalOpen ? 'rotate-180' : ''}`} />
-        </button>
+        <div className="relative" ref={repoDropdownRef}>
+          <button type="button" aria-haspopup="listbox" aria-expanded={isRepoDropdownOpen} onClick={() => setIsRepoDropdownOpen((open) => !open)} className="flex min-w-44 items-center justify-between gap-2 rounded-lg border border-[#DDE1DB] bg-white px-3 py-2 font-semibold hover:bg-[#F7F8F5]">
+            <span className="truncate">{activeRepo?.name || t('proposal.select_repo')}</span>
+            <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${isRepoDropdownOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {isRepoDropdownOpen && (
+            <div role="listbox" aria-label={t('proposal.select_repo')} className="absolute left-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-[#E4E7E1] bg-white shadow-xl">
+              <div className="flex items-center justify-between border-b border-[#E4E7E1] bg-[#F7F8F5] p-3">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[#8B929E]">{t('repo.dropdown_header')} ({repositories.length})</span>
+                <span className="font-mono text-[10px] text-[#8B929E]">ScopeGraph</span>
+              </div>
+              <div className="max-h-60 space-y-1 overflow-y-auto p-1.5">
+                {repositories.map((repo) => {
+                  const isSelected = activeRepo?.id === repo.id;
+                  return (
+                    <button key={repo.id} type="button" role="option" aria-selected={isSelected} onClick={() => { setActiveRepo(repo); setIsRepoDropdownOpen(false); }} className={`flex w-full items-center justify-between gap-2 rounded-xl p-2.5 text-left text-sm ${isSelected ? 'bg-[#151923] font-bold text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100 hover:text-[#151923]'}`}>
+                      <span className="min-w-0 pr-2">
+                        <span className="flex items-center gap-2">
+                          <span className="truncate font-mono text-xs">{repo.name}</span>
+                          {isSelected && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#C7F36B]" />}
+                        </span>
+                        {typeof repo.stats?.file_count === 'number' && <span className="mt-0.5 block font-mono text-[10px] opacity-75">{repo.stats.file_count} {t('repo.files')}</span>}
+                      </span>
+                      {isSelected && <Check className="h-4 w-4 shrink-0 text-[#C7F36B]" />}
+                    </button>
+                  );
+                })}
+                {repositories.length === 0 && <p className="p-3 text-sm text-[#697380]">{t('proposal.select_repo')}</p>}
+              </div>
+            </div>
+          )}
+        </div>
         <button type="button" onClick={() => void loadSample()} disabled={isLoadingSample} className="rounded-lg border border-[#DDE1DB] px-3 py-2 font-semibold hover:bg-[#F7F8F5]">{t('proposal.load_sample')}</button>
         <span className="ml-auto rounded-lg bg-[#EDF0F7] px-3 py-2 font-mono text-[10px] uppercase tracking-widest text-[#526BEE]">{t('proposal.local_only')}</span>
       </div>
-      {isRepoModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#151923]/50 backdrop-blur-xs" onClick={() => setIsRepoModalOpen(false)} role="presentation">
-          <div role="dialog" aria-modal="true" aria-label={t('proposal.select_repo')} className="w-full max-w-md rounded-2xl border border-[#E4E7E1] bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-sm font-bold">{t('proposal.select_repo')}</h2>
-              <button type="button" onClick={() => setIsRepoModalOpen(false)} aria-label={t('common.close')} className="rounded-lg p-1.5 text-[#697380] hover:bg-[#F7F8F5] hover:text-[#151923]"><X className="h-4 w-4" /></button>
-            </div>
-            <div className="max-h-72 space-y-1 overflow-y-auto">
-              {repositories.map((repo) => {
-                const isSelected = activeRepo?.id === repo.id;
-                return (
-                  <button key={repo.id} type="button" onClick={() => { setActiveRepo(repo); setIsRepoModalOpen(false); }} className={`flex w-full items-center justify-between gap-2 rounded-xl p-3 text-left text-sm ${isSelected ? 'bg-[#151923] font-bold text-white' : 'hover:bg-[#F7F8F5]'}`}>
-                    <span className="min-w-0">
-                      <span className="block truncate font-semibold">{repo.name}</span>
-                      {typeof repo.stats?.file_count === 'number' && <span className="block text-xs opacity-75">{repo.stats.file_count} {t('repo.files')}</span>}
-                    </span>
-                    {isSelected && <Check className="h-4 w-4 shrink-0 text-[#C7F36B]" />}
-                  </button>
-                );
-              })}
-              {repositories.length === 0 && <p className="p-3 text-sm text-[#697380]">{t('proposal.select_repo')}</p>}
-            </div>
-          </div>
-        </div>
-      )}
       <div className="mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-[#DDE1DB] bg-white p-3 text-xs" aria-label={t('proposal.mode')}>
         <strong className="mr-2">{t('proposal.mode')}</strong>
         <button type="button" aria-pressed={providerMode === 'offline'} onClick={() => setProviderMode('offline')} className={`rounded-lg border px-3 py-2 font-bold ${providerMode === 'offline' ? 'border-[#151923] bg-[#151923] text-white' : 'border-[#DDE1DB]'}`}>{t('proposal.offline')}</button>
