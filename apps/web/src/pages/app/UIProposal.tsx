@@ -228,22 +228,22 @@ export const UIProposalPage: React.FC = () => {
         <span role="status" className={`ml-auto ${providerStatus?.live_available ? 'text-green-700' : 'text-[#697380]'}`}>{providerStatus?.live_available ? t('proposal.provider_ready') : t('proposal.provider_unavailable')}</span>
       </div>}
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(260px,0.9fr)_minmax(420px,1.6fr)_minmax(290px,1fr)]">
-        <section className="space-y-4 rounded-2xl border border-[#DDE1DB] bg-white p-5" aria-label={t('proposal.requirement')}>
+        <section className="min-w-0 space-y-4 rounded-2xl border border-[#DDE1DB] bg-white p-5" aria-label={t('proposal.requirement')}>
           <div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-[#526BEE]" /><h2 className="text-sm font-bold">{t('proposal.requirement')}</h2></div>
           <textarea aria-label={t('proposal.requirement')} value={requirement} onChange={(event) => { setRequirement(event.target.value); setTargetChoices([]); setSelectedTargetPath(''); setTargetSuggestions([]); setNoTargetFound(false); setNeedsReindex(false); }} maxLength={2000} rows={6} placeholder={t('proposal.requirement_placeholder')} className="w-full resize-y rounded-xl border border-[#DDE1DB] p-3 text-sm outline-none focus:border-[#526BEE]" />
           {providerMode === 'live' && !providerStatus?.live_available && <p className="rounded-lg bg-amber-50 p-2 text-xs text-amber-900">{t('proposal.live_unavailable')}</p>}
           {providerMode === 'offline' && offlineUnavailable && <p role="status" className="rounded-lg bg-amber-50 p-2 text-xs text-amber-900">{t('proposal.offline_unavailable')}</p>}
           {targetChoices.length > 0 && <label className="block text-xs font-bold">{t('proposal.target_select')}<select value={selectedTargetPath} onChange={(event) => setSelectedTargetPath(event.target.value)} className="mt-2 w-full rounded-lg border border-[#DDE1DB] p-2"><option value="">{t('proposal.target_select')}</option>{targetChoices.map((candidate) => <option key={candidate.ref} value={candidate.ref}>{candidate.ref}</option>)}</select></label>}
           {targetSuggestions.length > 0 ? <>
-            <div className="rounded-xl border border-[#526BEE] bg-[#F7F8F5] p-3">
+            <div className="min-w-0 rounded-xl border border-[#526BEE] bg-[#F7F8F5] p-3">
               <p className="text-sm font-bold">{t('proposal.confirm_target')}</p>
               <p className="mt-1 text-xs text-[#697380]">{t('proposal.confirm_target_hint')}</p>
-              <div className="mt-3 space-y-2">
+              <div className="mt-3 min-w-0 space-y-2">
                 {targetSuggestions.map((candidate) => {
                   const isSelected = selectedTargetPath === candidate.ref;
-                  return <button key={candidate.ref} type="button" aria-pressed={isSelected} onClick={() => setSelectedTargetPath(candidate.ref)} className={`w-full rounded-lg border p-3 text-left ${isSelected ? 'border-[#151923] bg-[#151923] text-white' : 'border-[#DDE1DB] bg-white hover:bg-[#F7F8F5]'}`}>
-                    <span className="block text-sm font-bold">{candidate.label || candidate.evidence}</span>
-                    <span className={`mt-1 block font-mono text-[11px] ${isSelected ? 'opacity-80' : 'text-[#697380]'}`}>{candidate.path}:{candidate.line_start}{candidate.component ? ` · ${candidate.component}` : ''}</span>
+                  return <button key={candidate.ref} type="button" aria-pressed={isSelected} onClick={() => setSelectedTargetPath(candidate.ref)} className={`min-w-0 w-full overflow-hidden rounded-lg border p-3 text-left ${isSelected ? 'border-[#151923] bg-[#151923] text-white' : 'border-[#DDE1DB] bg-white hover:bg-[#F7F8F5]'}`}>
+                    <span className="block break-words text-sm font-bold">{candidate.label || candidate.evidence}</span>
+                    <span className={`mt-1 block break-all font-mono text-[11px] ${isSelected ? 'opacity-80' : 'text-[#697380]'}`}>{candidate.path}:{candidate.line_start}{candidate.component ? ` · ${candidate.component}` : ''}</span>
                     <span className={`mt-1 block truncate font-mono text-[11px] ${isSelected ? 'opacity-80' : 'text-[#697380]'}`}>{candidate.evidence}</span>
                   </button>;
                 })}
@@ -277,7 +277,7 @@ export const UIProposalPage: React.FC = () => {
             <div className="mt-4 rounded-xl border border-[#DDE1DB] bg-white p-3 text-xs text-[#56606E]"><strong>{t('proposal.assumptions')}</strong><ul className="mt-2 list-inside list-disc">{entry.result.spec.assumptions.map((item, index) => <li key={index}>{item}</li>)}{entry.result.spec.uncertainties.map((item, index) => <li key={`u${index}`}>{item}</li>)}</ul></div>
           </> : <div className="flex min-h-[420px] items-center justify-center rounded-2xl border border-dashed border-[#C8CEC5] bg-white p-8 text-center text-sm text-[#697380]">{t('proposal.empty')}</div>}
         </section>
-        <section className="space-y-4 rounded-2xl border border-[#DDE1DB] bg-white p-5" aria-label={t('proposal.impact')}>
+        <section className="min-w-0 space-y-4 rounded-2xl border border-[#DDE1DB] bg-white p-5" aria-label={t('proposal.impact')}>
           <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-[#526BEE]" /><h2 className="text-sm font-bold">{t('proposal.impact')}</h2></div><p className="text-xs leading-5 text-[#697380]">{t('proposal.impact_note')}</p>
           <button type="button" onClick={() => void analyze()} disabled={!entry || analyzing} className="w-full rounded-xl bg-[#C7F36B] px-4 py-3 text-sm font-bold hover:bg-[#B8E65A] disabled:opacity-50">{analyzing ? t('proposal.analyzing') : t('proposal.analyze')}</button>
           {!entry?.report && <div className="rounded-xl border border-dashed border-[#DDE1DB] p-5 text-center text-xs text-[#697380]">{t('proposal.no_impact')}</div>}
