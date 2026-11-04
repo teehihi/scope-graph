@@ -507,6 +507,29 @@ def test_find_related_ui_files_survive_many_non_ui_files(tmp_path):
     assert diagnostics["files_scanned"] == 1
 
 
+def test_find_related_ignores_docs_demo_html_and_substring_in(tmp_path):
+    """Regression from the 00:22 screenshot: docs/demo-video hyperframes
+    HTML lines like 'OFFLINE DEMO - NOT LIVE META INFERENCE' must not
+    appear as buttons just because 'in' is a substring of 'inference'."""
+    engine = create_engine(f"sqlite:///{tmp_path / 'noise.db'}", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine)
+    workspace = tmp_path / "ws2"
+    (workspace / "docs" / "demo-video").mkdir(parents=True)
+    (workspace / "docs" / "demo-video" / "scene04.html").write_text(
+        '<div data-hf-id="hf-dwhd" id="scene04">OFFLINE DEMO - NOT LIVE META INFERENCE</div>\n',
+        encoding="utf-8")
+    with factory() as db:
+        db.add_all([
+            Repository(id="sg2", name="scope-graph", description="x", status="ready", workspace_path=str(workspace)),
+            IndexedFile(id="scene", repository_id="sg2", path="docs/demo-video/scene04.html"),
+        ])
+        db.commit()
+    with factory() as db:
+        _, candidates, _ = find_related_ui_targets(db, "sg2", "I want to change the color of Sign In button to red")
+    assert candidates == []
+
+
 def test_find_related_reports_needs_reindex_when_workspace_files_are_gone(tmp_path):
     db, workspace = _find_related_db(tmp_path)
     (workspace / "src" / "Login.tsx").unlink()

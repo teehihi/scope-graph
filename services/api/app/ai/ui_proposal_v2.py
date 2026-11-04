@@ -245,6 +245,16 @@ def _localized_values(db: Session, repository_id: str, root: Path) -> dict[str, 
     return values
 
 
+def _keyword_matches(text: str, keyword: str) -> bool:
+    """Match a keyword in text. Short keywords (<=2 chars, e.g. 'in')
+    must match as a whole word: as a substring, 'in' matches almost
+    every line ('inference', 'login', 'compositions'), which flooded
+    the candidate list with unrelated demo HTML lines."""
+    if len(keyword) <= 2:
+        return re.search(rf"\b{re.escape(keyword)}\b", text) is not None
+    return keyword in text
+
+
 def _extract_button_label(line: str, localized: dict[str, str]) -> str | None:
     """Best-effort visible label of one UI line, from text or an i18n key."""
     key_match = re.search(r"t\(['\"]([^'\"]+)['\"]\)", line)
@@ -295,7 +305,12 @@ def find_related_ui_targets(db: Session, repository_id: str, requirement: str) -
     # Filter to UI files BEFORE capping: capping the full file list first
     # (files[:500]) could cut a UI file off in a large repo — scope-graph
     # itself has 817 tracked files, 61 of them UI files.
-    ui_files = [f for f in files if f.path.lower().endswith((".tsx", ".jsx", ".vue", ".html"))]
+    # docs/ is demo content and documentation, not app UI: a demo
+    # hyperframes HTML file must never appear as a "button" candidate.
+    ui_files = [f for f in files
+                if f.path.lower().endswith((".tsx", ".jsx", ".vue", ".html"))
+                and not f.path.lower().startswith("docs/")
+                and "/docs/" not in f.path.lower()]
     files_scanned = 0
     scored: list[UITargetCandidateV2] = []
     for file in ui_files[:500]:
@@ -319,13 +334,13 @@ def find_related_ui_targets(db: Session, repository_id: str, requirement: str) -
             score = 0
             reasons: list[str] = []
             for keyword in keywords:
-                if keyword in label_lower:
+                if _keyword_matches(label_lower, keyword):
                     score += 5
                     reasons.append(f"label contains '{keyword}'")
-                elif keyword in line_lower:
+                elif _keyword_matches(line_lower, keyword):
                     score += 3
                     reasons.append(f"source contains '{keyword}'")
-                if keyword in path_lower:
+                if _keyword_matches(path_lower, keyword):
                     score += 2
                     reasons.append(f"file path contains '{keyword}'")
             if "button" in line_lower:
