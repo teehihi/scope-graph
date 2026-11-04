@@ -44,11 +44,31 @@ class CheckoutSessionRequest(BaseModel):
         return cleaned
 
 
+def _is_production() -> bool:
+    return settings.ENVIRONMENT.lower() not in {"development", "test"}
+
+
+def _require_live_stripe_key() -> None:
+    """Fail closed in production: a test secret key makes Stripe test
+    cards (4242...) report 'paid' and would grant Plus/Pro for free.
+    Test keys are only allowed in development/test environments."""
+    if _is_production() and (settings.STRIPE_SECRET_KEY or "").startswith("sk_test_"):
+        raise HTTPException(status_code=503, detail="Stripe test mode is not allowed in production")
+
+
+def _require_live_mode(value) -> None:
+    """Reject a test-mode Stripe object in production, even if the key
+    itself is live: a test session/event must never grant a plan."""
+    if _is_production() and _value(value, "livemode") is False:
+        raise HTTPException(status_code=409, detail="Stripe test mode is not allowed in production")
+
+
 def _stripe_client():
     if stripe is None:
         raise HTTPException(status_code=503, detail="Stripe billing is unavailable")
     if not settings.STRIPE_SECRET_KEY:
         raise HTTPException(status_code=503, detail="Stripe billing is not configured")
+    _require_live_stripe_key()
     stripe.api_key = settings.STRIPE_SECRET_KEY
     return stripe
 
@@ -236,6 +256,7 @@ def confirm_checkout_session(
         logger.warning("Stripe checkout verification failed (%s)", type(exc).__name__)
         raise HTTPException(status_code=502, detail="Could not verify the Stripe Checkout session") from exc
 
+    _require_live_mode(session)
     session_email = _email(
         _value(_value(session, "customer_details", {}), "email") or _value(session, "customer_email")
     )
@@ -297,6 +318,10 @@ async def stripe_webhook(
     event_type = _value(event, "type")
     event_data = _value(event, "data", {}) or {}
     event_object = _value(event_data, "object", {}) or {}
+    # A test-mode event must never move a plan in production, even if
+    # its signature somehow validates against a test webhook secret.
+    if _is_production() and _value(event, "livemode") is False:
+        raise HTTPException(status_code=400, detail="Stripe test mode is not allowed in production")
 
     if event_type == "checkout.session.completed":
         metadata = _value(event_object, "metadata", {}) or {}

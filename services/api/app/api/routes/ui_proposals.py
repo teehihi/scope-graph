@@ -12,6 +12,7 @@ from app.ai.routing import AIStage, BasetenVisionProvider, ProviderCapabilities,
 from app.ai.ui_spec import StructuredUISpecV1, UIComponentV1
 from app.ai.ui_proposal_v2 import UIChangesV2, UIIntentV2, UIPatchV2, apply_ui_patch, find_related_ui_targets, interpret_ui_intent, resolve_ui_targets
 from app.analysis.retriever import HybridRetriever
+from app.billing.entitlements import enforce_ui_live_limit, record_ui_live_usage
 from app.core.config import settings
 from app.core.sessions import optional_session_user
 from app.db.database import get_db
@@ -307,6 +308,9 @@ def generate_ui_proposal(
 
     if live and (not owns_repo or _live_provider_id() is None):
         raise HTTPException(503, "Live UI generation requires an owned repository and an approved Meta or Baseten configuration")
+    if live:
+        # Check before any AI call, so a capped account spends nothing.
+        enforce_ui_live_limit(db, repo)
 
     instruction = payload.refinement or payload.requirement
     intent = interpret_ui_intent(instruction, refining=payload.refinement is not None)
@@ -440,6 +444,10 @@ def generate_ui_proposal(
             spec = StructuredUISpecV1.model_validate(response.data)
         if spec.requirement != payload.requirement or spec.version != payload.version:
             raise HTTPException(502, "Provider changed proposal identity")
+        if live:
+            # Only successful generations count; failed attempts (409,
+            # 422, 502 above) never eat the daily quota.
+            record_ui_live_usage(db, repo)
         metadata = stage_router.metadata[-1].as_dict() if stage_router.metadata else {"request_count": 0}
         return {"spec": spec.model_dump(), "generation": {
             "mode": "offline" if response.is_mock_or_demo else "live",

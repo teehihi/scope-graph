@@ -270,6 +270,56 @@ def test_webhook_validates_signature_when_secret_is_configured(billing_client, m
     assert valid.status_code == 200
 
 
+def test_production_rejects_test_stripe_key(billing_client, monkeypatch):
+    client, _, _, _, _ = billing_client
+    monkeypatch.setattr(settings, "ENVIRONMENT", "production", raising=False)
+    monkeypatch.setattr(settings, "STRIPE_SECRET_KEY", "sk_test_placeholder", raising=False)
+    response = client.post(
+        "/api/v1/billing/create-checkout-session",
+        json={"plan": "plus", "email": "dev@example.com"},
+    )
+    assert response.status_code == 503
+
+
+def test_production_rejects_test_mode_session(billing_client, monkeypatch):
+    client, _, _, _, sessions = billing_client
+    monkeypatch.setattr(settings, "ENVIRONMENT", "production", raising=False)
+    monkeypatch.setattr(settings, "STRIPE_SECRET_KEY", "sk_live_placeholder", raising=False)
+    sessions["cs_test_mode"] = {
+        "id": "cs_test_mode",
+        "mode": "subscription",
+        "status": "complete",
+        "payment_status": "paid",
+        "livemode": False,
+        "customer_details": {"email": "dev@example.com"},
+        "metadata": {"plan": "plus", "email": "dev@example.com"},
+        "subscription": {"id": "sub_123", "status": "active"},
+        "customer": "cus_123",
+    }
+    response = client.get("/api/v1/billing/checkout-session/cs_test_mode?email=dev%40example.com")
+    assert response.status_code == 409
+
+
+def test_production_accepts_live_mode_session(billing_client, monkeypatch):
+    client, _, _, _, sessions = billing_client
+    monkeypatch.setattr(settings, "ENVIRONMENT", "production", raising=False)
+    monkeypatch.setattr(settings, "STRIPE_SECRET_KEY", "sk_live_placeholder", raising=False)
+    sessions["cs_live"] = {
+        "id": "cs_live",
+        "mode": "subscription",
+        "status": "complete",
+        "payment_status": "paid",
+        "livemode": True,
+        "customer_details": {"email": "dev@example.com"},
+        "metadata": {"plan": "plus", "email": "dev@example.com"},
+        "subscription": {"id": "sub_123", "status": "active"},
+        "customer": "cus_123",
+    }
+    response = client.get("/api/v1/billing/checkout-session/cs_live?email=dev%40example.com")
+    assert response.status_code == 200
+    assert response.json() == {"plan": "plus", "subscription_status": "active"}
+
+
 def test_webhook_requires_signature_secret_in_production(billing_client, monkeypatch):
     client, _, _, _, _ = billing_client
     monkeypatch.setattr(settings, "ENVIRONMENT", "production", raising=False)

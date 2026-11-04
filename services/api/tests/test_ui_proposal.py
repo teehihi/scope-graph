@@ -273,6 +273,38 @@ def test_production_live_baseten_passes_environment_gate_with_mocked_router(clie
         app.dependency_overrides.pop(optional_session_user, None)
 
 
+def test_live_ui_daily_limit_is_10_per_account_regardless_of_plan(client, monkeypatch):
+    _owner_session()
+    monkeypatch.setattr(settings, "UI_PROPOSAL_LIVE_ENABLED", True)
+    monkeypatch.setattr(settings, "UI_PROPOSAL_LIVE_PROVIDER", "baseten")
+    monkeypatch.setattr(settings, "BASETEN_UI_API_KEY", "baseten-test-key-never-sent")
+    monkeypatch.setattr(settings, "BASETEN_UI_BASE_URL", "https://inference.baseten.co/v1")
+
+    valid_spec = {"schema_version": "1", "version": 1,
+                  "requirement": "Redesign the account login page with clear errors",
+                  "title": "Login", "description": "Preview", "root": {"type": "Container"}}
+
+    class FakeProvider(BaseMetaAIProvider):
+        def generate_ui_spec(self, *args, **kwargs):
+            return AIProviderResponse(valid_spec, "baseten", "meta-models/muse-spark-open-1026", 0.01)
+
+    def mocked_router(_live):
+        registry = ProviderRegistry()
+        registry.register(ProviderConfig("baseten", "meta-models/muse-spark-open-1026", "", "NONE",
+            ProviderCapabilities(frozenset({AIStage.UI_GENERATION})), 1, 0, 100, 1), FakeProvider())
+        return StageProviderRouter(registry, {AIStage.UI_GENERATION: "baseten"})
+
+    monkeypatch.setattr(ui_proposals, "_ui_router", mocked_router)
+    try:
+        for _ in range(10):
+            assert generate(client, repo="private", mode="live").status_code == 200
+        capped = generate(client, repo="private", mode="live")
+        assert capped.status_code == 429
+        assert "10 per day" in capped.json()["detail"]
+    finally:
+        app.dependency_overrides.pop(optional_session_user, None)
+
+
 def test_production_live_without_configuration_still_fails_closed(client, monkeypatch):
     _owner_session()
     monkeypatch.setattr(settings, "ENVIRONMENT", "production")
