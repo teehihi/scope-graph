@@ -6,6 +6,7 @@ import { UpgradeModal } from '../components/UpgradeModal';
 import { ScopeGraphLogoMark } from '../components/BrandIcons';
 import { LanguageSelectorDropdown } from '../components/LanguageSelectorDropdown';
 import { FloatingAssistant } from '../components/FloatingAssistant';
+import { useHideHeaderOnScroll } from '../hooks/useHideHeaderOnScroll';
 import AOS from 'aos';
 import 'aos/dist/aos.css';
 import { Sparkles, Code2, ShieldCheck, ArrowRight, Zap, Play, Network, FlaskConical } from 'lucide-react';
@@ -17,6 +18,7 @@ export const Landing: React.FC = () => {
 
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const isHeaderVisible = useHideHeaderOnScroll();
 
   useEffect(() => {
     const params = new URLSearchParams(search);
@@ -59,9 +61,13 @@ export const Landing: React.FC = () => {
   };
 
   return (
-    <div className="font-['Poppins',sans-serif] text-slate-700 bg-white antialiased overflow-x-hidden selection:bg-[#C7F36B] selection:text-[#151923]">
-      {/* 1. NAVBAR (ScopeGraph Branding) */}
-      <div className="w-full text-slate-800 bg-[#F7F8F5] border-b border-[#E4E7E1]/60 relative z-50">
+    <div className="font-['Poppins',sans-serif] text-slate-700 bg-white antialiased overflow-x-clip max-md:touch-pan-y selection:bg-[#C7F36B] selection:text-[#151923]">
+      {/* 1. NAVBAR (ScopeGraph Branding) — sticky, hides on scroll down, returns on scroll up */}
+      <div
+        className={`w-full text-slate-800 bg-[#F7F8F5] border-b border-[#E4E7E1]/60 sticky top-0 z-50 transition-transform duration-300 will-change-transform ${
+          isHeaderVisible ? 'translate-y-0' : '-translate-y-full'
+        }`}
+      >
         <div className="max-w-screen-xl px-4 sm:px-6 mx-auto flex items-center justify-between py-4 relative">
           {/* Left: Brand Logo */}
           <div className="flex items-center shrink-0">

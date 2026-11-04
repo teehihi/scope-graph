@@ -7,6 +7,7 @@ import { Github, ArrowRight, Sparkles } from 'lucide-react';
 import { LanguageSelectorDropdown } from '../LanguageSelectorDropdown';
 import { UpgradeModal } from '../UpgradeModal';
 import { FloatingAssistant } from '../FloatingAssistant';
+import { useHideHeaderOnScroll } from '../../hooks/useHideHeaderOnScroll';
 
 interface MarketingLayoutProps {
   children: React.ReactNode;
@@ -18,6 +19,7 @@ export const MarketingLayout: React.FC<MarketingLayoutProps> = ({ children, onOp
   const { navigate } = useRouter();
   const { t } = useLanguage();
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+  const isHeaderVisible = useHideHeaderOnScroll();
 
   const handleOpenPricing = () => {
     if (onOpenUpgradeModal) {
@@ -28,9 +30,13 @@ export const MarketingLayout: React.FC<MarketingLayoutProps> = ({ children, onOp
   };
 
   return (
-    <div className="min-h-screen bg-[#F7F8F5] text-[#151923] flex flex-col font-sans selection:bg-[#C7F36B] selection:text-[#151923]">
-      {/* Slim Top Bar */}
-      <header className="h-16 border-b border-[#E4E7E1] bg-[#F7F8F5]/90 backdrop-blur sticky top-0 z-40 px-6 sm:px-12 flex items-center justify-between">
+    <div className="min-h-screen bg-[#F7F8F5] text-[#151923] flex flex-col font-sans overflow-x-clip max-md:touch-pan-y selection:bg-[#C7F36B] selection:text-[#151923]">
+      {/* Slim Top Bar — sticky, hides on scroll down, returns on scroll up */}
+      <header
+        className={`h-16 border-b border-[#E4E7E1] bg-[#F7F8F5]/90 backdrop-blur sticky top-0 z-40 px-6 sm:px-12 flex items-center justify-between transition-transform duration-300 will-change-transform ${
+          isHeaderVisible ? 'translate-y-0' : '-translate-y-full'
+        }`}
+      >
         <Link to="/" className="flex items-center gap-2.5 group">
           <ScopeGraphLogoMark size={36} dark={false} className="shrink-0 group-hover:scale-105 transition-transform" />
           <span className="font-extrabold text-xl tracking-[-0.5px] text-[#151923]">
