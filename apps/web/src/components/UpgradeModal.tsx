@@ -28,12 +28,16 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose }) =
   const { user, isLoading: isAuthLoading, updateUser } = useAuth();
   const { navigate } = useRouter();
   const dialogRef = useRef<HTMLDialogElement | null>(null);
+  const [isEntering, setIsEntering] = useState(false);
   const [checkoutPlan, setCheckoutPlan] = useState<'plus' | 'pro' | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const activePlan = user ? user.plan : 'free';
   const autoCheckoutHandled = useRef(false);
 
-  // Manage native <dialog> lifecycle
+  // Manage native <dialog> lifecycle + entrance animation.
+  // The dialog starts in its "entering" state and only flips to
+  // "entered" on the next animation frame, so the CSS transition
+  // in index.css (fade + rise + slight scale) actually runs on open.
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
@@ -42,7 +46,17 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose }) =
       if (!dialog.open) {
         dialog.showModal();
       }
+      setIsEntering(false);
+      let frame2 = 0;
+      const frame1 = requestAnimationFrame(() => {
+        frame2 = requestAnimationFrame(() => setIsEntering(true));
+      });
+      return () => {
+        cancelAnimationFrame(frame1);
+        cancelAnimationFrame(frame2);
+      };
     } else {
+      setIsEntering(false);
       if (dialog.open) {
         dialog.close();
       }
@@ -110,13 +124,15 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose }) =
       onClick={handleDialogClick}
       aria-labelledby="upgrade-dialog-title"
       aria-describedby="upgrade-dialog-desc"
-      className="m-auto rounded-[32px] border border-slate-200/80 bg-white/95 backdrop-blur-xl p-0 text-[#151923] shadow-2xl shadow-slate-900/30 backdrop:bg-slate-950/70 backdrop:backdrop-blur-md max-w-5xl w-full max-h-[92vh] overflow-y-auto overscroll-contain outline-none transition-all"
+      className={`upgrade-modal m-auto rounded-[32px] border border-slate-200/80 bg-white/95 backdrop-blur-xl p-0 text-[#151923] shadow-2xl shadow-slate-900/30 backdrop:bg-slate-950/70 backdrop:backdrop-blur-md max-w-5xl w-full max-sm:max-w-[calc(100vw-2rem)] max-h-[92vh] overflow-y-auto overflow-x-clip overscroll-contain outline-none ${
+        isEntering ? 'upgrade-modal-entered' : ''
+      }`}
     >
       <div className="relative p-6 sm:p-10">
         {/* Subtle Ambient Background Glow */}
         <div
           aria-hidden="true"
-          className="absolute -top-24 left-1/2 -translate-x-1/2 w-[600px] h-[250px] bg-gradient-to-b from-[#C7F36B]/15 via-[#526BEE]/10 to-transparent blur-3xl pointer-events-none rounded-full"
+          className="absolute -top-24 left-1/2 -translate-x-1/2 w-[600px] max-w-full h-[250px] bg-gradient-to-b from-[#C7F36B]/15 via-[#526BEE]/10 to-transparent blur-3xl pointer-events-none rounded-full"
         />
 
         {/* Close Button */}

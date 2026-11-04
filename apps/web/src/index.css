@@ -100,6 +100,53 @@ code, pre, .font-mono {
   background-size: 24px 24px;
 }
 
+/* Upgrade / Pricing modal entrance effect.
+   UpgradeModal starts with .upgrade-modal and gains
+   .upgrade-modal-entered one animation frame after showModal(),
+   so the panel fades in while rising slightly and scaling up,
+   and the backdrop fades in with it. */
+.upgrade-modal {
+  opacity: 0;
+  transform: translateY(16px) scale(0.97);
+  transform-origin: center top;
+  transition: opacity 0.28s ease-out, transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.upgrade-modal-entered {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.upgrade-modal::backdrop {
+  opacity: 0;
+  transition: opacity 0.28s ease-out;
+}
+
+.upgrade-modal-entered::backdrop {
+  opacity: 1;
+}
+
+/* No sideways scrolling: clip horizontal overflow everywhere, and on
+   phones restrict touch gestures to vertical panning on the marketing
+   pages (Landing / MarketingLayout add max-md:touch-pan-y). Using
+   `clip` instead of `hidden` keeps position: sticky headers working. */
+html,
+body {
+  overflow-x: clip;
+}
+
+@media (max-width: 767px) {
+  body {
+    overscroll-behavior-x: none;
+  }
+
+  img,
+  video,
+  iframe {
+    max-width: 100%;
+  }
+}
+
 /* Custom interactive controls bar in Bottom toolbar */
 .scopegraph-floating-dock {
   background: rgba(255, 255, 255, 0.95);
@@ -234,6 +281,15 @@ code, pre, .font-mono {
   .assistant-typing-dot,
   .assistant-launcher:not(.rotate-90) {
     animation: none;
+  }
+
+  .upgrade-modal,
+  .upgrade-modal::backdrop {
+    transition: none;
+  }
+
+  .upgrade-modal {
+    transform: none;
   }
 }
 
