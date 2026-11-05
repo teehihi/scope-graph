@@ -292,8 +292,6 @@ scope-graph/
   </p>
 </div>
 
-*Push the Frontier* is the intended project theme; the official submission track and video URL remain to be confirmed. [Submission draft](docs/HACKATHON_SUBMISSION.md)
-
 ## License
 
 ScopeGraph is released under the [MIT License](LICENSE). The separately included FastAPI RealWorld holdout snapshot has its own MIT attribution; see its repository manifest before reusing or redistributing it.
