@@ -197,7 +197,7 @@ AI agents can call the three MCP tools for the same indexed context. [MCP setup]
 
 The historical **three-case** live Meta evaluation reported macro impact F1 **0.282** and indirect recall **0.111**; 27 of 38 accepted impact claims were unsupported by those manual labels. A separate deterministic replay of saved predictions on a **17-case provisional development fixture** yielded strict micro F1 **0.4651** (20 TP / 31 FP / 15 FN) as reported in the [submission draft](docs/HACKATHON_SUBMISSION.md). The replay documented in [evaluation methodology](docs/EVALUATION.md) is a different scoring view on the same fixture and yields F1 **0.434** (23 TP / 42 FP / 18 FN). The datasets and scoring views differ; these numbers do **not** establish improvement or generalization. The separate RealWorld holdout labels remain provisional and should not be tuned against.
 
-[Evaluation methodology and denominators](docs/EVALUATION.md) · [AI Core progress](docs/AI_CORE_PLAN_AND_PROGRESS.md)
+[Evaluation methodology and denominators](docs/EVALUATION.md) · [AI Core progress](docs/AI_CORE_PLAN_AND_PROGRESS.md) · [Documentation index](docs/README.md)
 
 ## Limitations and security
 

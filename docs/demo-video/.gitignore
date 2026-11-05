@@ -1,6 +1,7 @@
 hyperframes/node_modules/
 hyperframes/project/.hyperframes/
 hyperframes/project/.thumbnails/
+hyperframes/project/debug.log
 hyperframes/project/renders/
 hyperframes/capture-landing*/
 output/
